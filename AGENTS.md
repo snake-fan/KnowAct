@@ -8,8 +8,7 @@
 - 项目定位：KnowAct 是一个面向研究的 benchmark 与 evaluation framework，用于评估 AI agents 在知识驱动人机交互中是否能使用功能性心智理论（Functional Theory of Mind）进行用户建模和行动选择。
 - 核心目标：通过隐藏的 ground-truth user profile、LLM user simulator、多轮交互、profile reconstruction 与 scoring，评估 agent 是否能推断用户知识状态并据此做出更好的交互决策。
 - 主要文档：
-  - `README.md`：英文项目说明。
-  - `README.zh-CN.md`：中文项目说明。
+  - `README.md`：项目说明。
   - `docs/KnowledgeGraph.md`：知识图谱、知识地图、概念关系和画像结构设计记录。
   - `AGENTS.md`：面向 AI agents 的协作约定。
 
@@ -18,25 +17,7 @@
 - Frontend：React。
 - Backend：FastAPI。
 - Python 包管理：`uv`。
-- Python 版本：以 `.python-version` 和 `pyproject.toml` 为准，当前为 Python 3.13。
-
-新增依赖时优先使用 `uv`，例如：
-
-```bash
-uv add fastapi uvicorn
-```
-
-运行 Python 命令时优先使用：
-
-```bash
-uv run python main.py
-```
-
-如果后续引入测试工具，优先使用：
-
-```bash
-uv run pytest
-```
+- Python 版本：以 `.python-version` 和 `pyproject.toml` 为准，当前为 Python 3.12。
 
 ## Expected Architecture
 
@@ -55,7 +36,8 @@ uv run pytest
 - Ground-truth user profile：隐藏的真实用户知识画像。
 - User simulator：基于真实画像进行多轮回答的模拟用户。
 - Tested agent：被评估的 agent，不能直接访问真实画像。
-- Knowledge map：表示用户概念掌握、误解、关系和置信度的结构。
+- Knowledge graph：用户无关的客观知识结构，由可诊断的 knowledge nodes 和严格限制的 knowledge edges 组成。
+- Knowledge map：某个用户或被测 agent 在 knowledge graph 上的知识状态视图，用户状态只维护 node-level state。
 - Profile reconstruction：agent 在交互中或交互后重建出的用户画像。
 - Evaluation metrics：用于比较真实画像与重建画像，并衡量交互效率和行动质量的指标。
 
@@ -72,7 +54,7 @@ uv run pytest
 - 使用 React 构建前端。
 - 优先实现真实可用的研究工作流界面，而不是营销式首页。
 - 面向 benchmark / research tooling 的界面应保持清晰、克制、可扫描，适合配置、对比和反复实验。
-- 知识地图相关 UI 应突出概念、关系、状态、证据和置信度。
+- 知识图谱 / 知识地图相关 UI 应区分客观 node/edge 结构与用户状态，并突出概念、边、状态、证据和置信度。
 - 前端新增启动、构建、测试命令后，必须记录到 README 或本文件。
 
 ## Backend Guidelines

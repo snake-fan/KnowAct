@@ -95,52 +95,64 @@ KnowAct 使用半合成的基准构造流程：
 
 ---
 
-## 知识地图
+## 知识图谱与知识地图
 
-KnowAct 的核心对象之一是 **知识地图**。
+KnowAct 区分用户无关的 **知识图谱** 与用户相关的 **知识地图**。
 
-知识地图表示用户在一组概念、关系和知识属性上的状态。
+**知识图谱** 表示稳定的领域知识结构：
 
-一个可能的结构如下：
+- `nodes`：可诊断的知识单位。
+- `edges`：node 之间的客观关系。
+
+**知识地图** 表示某个用户或被测 agent 在这张图谱上的知识状态。用户状态只维护 node-level state；edge 用于探索和诊断路径，不用于描述用户状态。
+
+一个可能的图谱结构如下：
 
 ```json
 {
-  "concepts": [
+  "nodes": [
     {
-      "name": "RAG",
-      "status": "known",
-      "confidence": 0.85,
-      "evidence": "User correctly explained retrieval-augmented generation."
+      "id": "epistemic_uncertainty",
+      "name": "Epistemic Uncertainty",
+      "type": "concept"
     },
     {
-      "name": "Theory of Mind",
-      "status": "partial",
-      "confidence": 0.55,
-      "evidence": "User understands mental-state modeling but not evaluation design."
-    },
-    {
-      "name": "KL Divergence",
-      "status": "unknown",
-      "confidence": 0.30,
-      "evidence": "User asked for clarification about distribution comparison."
+      "id": "active_learning",
+      "name": "Active Learning",
+      "type": "concept"
     }
   ],
-  "relations": [
+  "edges": [
     {
-      "source": "User Modeling",
-      "target": "Theory of Mind",
-      "relation": "related_to"
-    },
-    {
-      "source": "Knowledge Map",
-      "target": "Profile Reconstruction",
-      "relation": "used_for"
+      "id": "edge_epistemic_uncertainty_prerequisite_for_active_learning",
+      "source": "epistemic_uncertainty",
+      "target": "active_learning",
+      "type": "prerequisite_for",
+      "rationale": "Understanding reducible model uncertainty helps explain why active learning queries informative samples.",
+      "weight": 0.85,
+      "curation_confidence": 0.95
     }
   ]
 }
 ```
 
-知识地图既可以支持评估，也可以支持 agent 的决策过程。
+一个可能的用户知识地图结构如下：
+
+```json
+{
+  "user_id": "u_001",
+  "userstate": [
+    {
+      "node_id": "active_learning",
+      "mastery_level": "L2",
+      "confidence": 0.72,
+      "evidence_refs": ["ev_104"]
+    }
+  ]
+}
+```
+
+知识图谱与知识地图既可以支持评估，也可以支持 agent 的决策过程。
 
 ---
 

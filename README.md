@@ -95,52 +95,64 @@ KnowAct uses a semi-synthetic benchmark construction process:
 
 ---
 
-## Knowledge Map
+## Knowledge Graph and Knowledge Map
 
-A central object in KnowAct is the **Knowledge Map**.
+KnowAct separates the user-independent **Knowledge Graph** from the user-specific **Knowledge Map**.
 
-A knowledge map represents the user's state over a set of concepts, relations, and knowledge attributes.
+The **Knowledge Graph** contains stable domain knowledge:
 
-A possible structure is:
+- `nodes`: diagnosable knowledge units.
+- `edges`: objective relationships between nodes.
+
+The **Knowledge Map** represents a user's or tested agent's knowledge state over that graph. User state is tracked at the node level; edges guide exploration and diagnosis but do not describe user state.
+
+A possible graph structure is:
 
 ```json
 {
-  "concepts": [
+  "nodes": [
     {
-      "name": "RAG",
-      "status": "known",
-      "confidence": 0.85,
-      "evidence": "User correctly explained retrieval-augmented generation."
+      "id": "epistemic_uncertainty",
+      "name": "Epistemic Uncertainty",
+      "type": "concept"
     },
     {
-      "name": "Theory of Mind",
-      "status": "partial",
-      "confidence": 0.55,
-      "evidence": "User understands mental-state modeling but not evaluation design."
-    },
-    {
-      "name": "KL Divergence",
-      "status": "unknown",
-      "confidence": 0.30,
-      "evidence": "User asked for clarification about distribution comparison."
+      "id": "active_learning",
+      "name": "Active Learning",
+      "type": "concept"
     }
   ],
-  "relations": [
+  "edges": [
     {
-      "source": "User Modeling",
-      "target": "Theory of Mind",
-      "relation": "related_to"
-    },
-    {
-      "source": "Knowledge Map",
-      "target": "Profile Reconstruction",
-      "relation": "used_for"
+      "id": "edge_epistemic_uncertainty_prerequisite_for_active_learning",
+      "source": "epistemic_uncertainty",
+      "target": "active_learning",
+      "type": "prerequisite_for",
+      "rationale": "Understanding reducible model uncertainty helps explain why active learning queries informative samples.",
+      "weight": 0.85,
+      "curation_confidence": 0.95
     }
   ]
 }
 ```
 
-The knowledge map can support both evaluation and agent decision-making.
+A possible user map structure is:
+
+```json
+{
+  "user_id": "u_001",
+  "userstate": [
+    {
+      "node_id": "active_learning",
+      "mastery_level": "L2",
+      "confidence": 0.72,
+      "evidence_refs": ["ev_104"]
+    }
+  ]
+}
+```
+
+The graph and map can support both evaluation and agent decision-making.
 
 ---
 
