@@ -1,0 +1,82 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.pyre/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+coverage/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python packaging and build outputs
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# uv local state
+.uv-cache/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+
+# FastAPI / backend runtime artifacts
+*.log
+logs/
+tmp/
+temp/
+
+# React / frontend dependencies and build outputs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vite/
+.turbo/
+.next/
+out/
+frontend/dist/
+frontend/build/
+
+# Local benchmark, simulation, and evaluation outputs
+artifacts/
+outputs/
+runs/
+results/
+reports/generated/
+*.sqlite
+*.sqlite3
+*.db
+
+# Notebooks and interactive analysis checkpoints
+.ipynb_checkpoints/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
