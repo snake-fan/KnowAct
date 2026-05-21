@@ -69,9 +69,13 @@ The ground-truth user profile is hidden from the tested agent. The agent must in
 
 KnowAct uses a semi-synthetic benchmark construction process:
 
-1. **Static User Profile Generation**
+V1 starts with a single benchmark domain, `classical_supervised_ml_algorithms`, so the first implementation can validate data authoring, simulation, active diagnosis, final reconstruction, and scoring before adding cross-domain calibration. The first graph targets 30-50 knowledge nodes grounded in *An Introduction to Statistical Learning with Applications in Python*, enough to distinguish different user knowledge structures while keeping authoring and review feasible. Deep learning, reinforcement learning, and unsupervised learning stay outside the first slice.
 
-   LLMs are used to generate initial user profiles, including the user's background, known concepts, missing concepts, misconceptions, preferences, and task goals.
+1. **Benchmark Data Authoring**
+
+   A project-owned graph authoring agent workflow will use model API calls to generate candidate knowledge graphs and candidate knowledge maps. One step extracts source-grounded node skeletons; a later node rubric step completes diagnostic goals, L0-L5 rubrics, diagnostic signals, and simulator behavior; a later edge step uses the complete candidate nodes and rubrics to propose candidate edges. The graph authoring workflow's final review output is two JSON list files, one for nodes and one for edges; candidate status belongs to filenames or review state, not to the node or edge objects themselves. After review, authored graph data remains split into separate node and edge JSON list files. Candidate nodes must be extracted from selected authoritative sources and carry source locators; they should not be brainstormed from model memory. Persona, background, preferences, and task goals can guide map generation, but v1 evaluation uses only benchmark-author reviewed authored knowledge graphs and ground-truth knowledge maps for scoring.
+
+   Each v1 evaluation episode is declared by an explicit manifest that binds the authored graph, hidden map, optional profile context, `max_turns`, interaction rule, and the fixed `squared_mastery_distance_v1` scoring profile.
 
 2. **Human Verification**
 
@@ -79,7 +83,7 @@ KnowAct uses a semi-synthetic benchmark construction process:
 
 3. **User Simulation**
 
-   An LLM-based user simulator is conditioned on the static profile and plays the role of the user during interaction.
+   An LLM-based user simulator is conditioned on the hidden knowledge map and evidence, then answers diagnostic questions naturally without revealing mastery labels, hidden evidence ids, or the full ground-truth map. It may be uncertain, partially correct, or reveal misconceptions, but its answers should remain consistent with the hidden map and evidence.
 
 4. **Agent Interaction**
 
@@ -87,11 +91,11 @@ KnowAct uses a semi-synthetic benchmark construction process:
 
 5. **Profile Reconstruction**
 
-   After or during the conversation, the tested agent produces an inferred user profile or knowledge map.
+   After the conversation, the tested agent submits a final reconstructed knowledge map. Per-turn reconstruction traces are optional analysis artifacts.
 
 6. **Evaluation**
 
-   The inferred profile is compared against the ground-truth profile using quantitative and qualitative metrics.
+   The final reconstructed knowledge map is compared against the hidden ground-truth knowledge map using structured map comparison.
 
 ---
 
@@ -158,24 +162,24 @@ The graph and map can support both evaluation and agent decision-making.
 
 ## Evaluation
 
-KnowAct evaluates agents along several dimensions.
+KnowAct v1 keeps evaluation focused on automatic comparison between the hidden ground-truth knowledge map and the tested agent's reconstructed knowledge map.
 
 ### 1. Profile Reconstruction Accuracy
 
-The agent's inferred profile is compared with the ground-truth profile.
+The agent's reconstructed map is compared with the ground-truth map over structured user-state fields. The primary v1 result is `episode_mastery_distance`: the mean squared distance between inferred and hidden `mastery_level` values across all nodes in the episode's authored knowledge graph. Lower is better.
 
-Possible metrics include:
+Possible supporting metrics include:
 
-* KL divergence between profile distributions
-* Concept-level precision, recall, and F1
 * Misconception detection accuracy
-* Graph similarity between knowledge maps
+* Missing prediction rate
+* Unsupported inference rate, based on missing visible evidence references
 * Calibration error of confidence scores
-* Attribute-level matching accuracy
+
+V1 does not require a separate evaluator agent or LLM judge for primary scoring. Evidence records are used to make reconstruction more grounded and auditable, not to add another subjective evaluation layer. Unsupported inference is reported separately from mastery-level distance.
 
 ### 2. Interaction Efficiency
 
-The agent should recover useful information with limited interaction.
+The agent should recover useful information within an explicit turn budget. V1 episodes configure `max_turns` directly instead of deriving it from the number of graph nodes. One turn contains one primary diagnostic question and one simulator answer.
 
 Possible metrics include:
 
@@ -187,18 +191,13 @@ Possible metrics include:
 
 ### 3. Action Quality
 
-The benchmark also evaluates whether the agent uses the inferred profile to make better decisions.
+Later versions may evaluate whether the agent uses the inferred profile to make better teaching or recommendation decisions. In v1, the interaction is limited to active knowledge-state diagnosis.
 
-Possible action types include:
+The main v1 action type is:
 
 * Ask a diagnostic question
-* Explain a missing concept
-* Verify an uncertain belief
-* Challenge a misconception
-* Summarize the user's current understanding
-* Recommend the next learning step
 
-The goal is not only to infer the user's state, but to act appropriately based on that state.
+The goal is to infer the user's state efficiently and with evidence-backed reconstruction.
 
 ---
 
@@ -240,23 +239,27 @@ KnowAct is designed to compare a ToM-aware agent with simpler baselines, such as
 
 ### Direct Chat Baseline
 
-The model chats with the user normally and produces a final profile after the conversation.
+Out of scope for v1. It may be revisited after the active diagnosis loop is stable.
 
 ### Passive Summarization Baseline
 
-The model summarizes the user's knowledge state based only on observed dialogue, without actively choosing diagnostic questions.
+Out of scope for v1. Passive reconstruction may be useful later, but v1 focuses on diagnostic question selection.
 
 ### Fixed-Question Baseline
 
-The agent follows a predefined questionnaire and does not adapt its questions based on previous answers.
+The agent follows a predefined diagnostic question order and does not adapt its questions based on previous answers.
 
-### Random Action Baseline
+### Random-Question Baseline
 
-The agent randomly selects from available interaction actions.
+The agent randomly selects diagnostic questions within the episode constraints.
+
+### Simple LLM Agent
+
+The agent sees the authored knowledge graph and dialogue history, uses a simple prompt to choose the next diagnostic question, and submits a final reconstructed knowledge map.
 
 ### Oracle Profile Baseline
 
-The agent has access to the ground-truth profile. This serves as an upper-bound reference for action quality.
+Out of scope for v1. An oracle may be useful later as an upper bound, but it is not needed to validate the first benchmark loop.
 
 ---
 

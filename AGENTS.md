@@ -46,6 +46,7 @@
 - 先读上下文，再动手修改。优先查看 `README.md`、`README.zh-CN.md`、相关 `docs/` 文档和目标文件附近实现。
 - 保持改动小而清晰。不要顺手重构无关文件，也不要替用户撤销未明确要求撤销的改动。
 - 技术实现应服务于研究问题：用户建模、知识地图、交互行动选择、画像重建和评估。
+- v1 设计不追求一次性穷尽所有细节。核心问题和边界大体确定后，优先实现可运行的窄切片，再通过代码、测试和实验结果反复打磨。
 - 新增约定、命令、目录或实验流程时，同步更新对应文档。
 - 命名应表达业务意图，避免只描述实现细节。
 
@@ -86,6 +87,7 @@
 
 当前仓库尚未形成完整测试体系。添加前后端代码后，优先建立以下验证入口：
 
+- Current Python schema checks：`uv run python -m unittest`
 - Backend：`uv run pytest`
 - Backend dev server：`uv run fastapi dev backend/main.py` 或项目实际入口命令
 - Frontend：按实际包管理器记录 `npm` / `pnpm` / `bun` 命令
