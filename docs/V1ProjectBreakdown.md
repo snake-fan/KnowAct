@@ -36,7 +36,7 @@ Before the formal research workbench is complete, the backend exposes a narrow a
 Current opened endpoint:
 
 - `GET /health`: backend process health.
-- `POST /api/authoring/graph-candidates`: reads one local textbook PDF by relative path under repository-level `storage/`, sends it to the OpenAI Responses API as a base64 `input_file` for the `Graph Authoring Agent Workflow` steps, and returns `Source-Grounded Node Skeletons`, candidate `Knowledge Nodes`, and candidate `Knowledge Edges`. It writes exactly `candidate_nodes.json` and `candidate_edges.json` under a candidate graph run directory by default.
+- `POST /api/authoring/graph-candidates`: reads one local textbook PDF by relative path under repository-level `storage/`, sends it to the OpenAI Responses API as a base64 `input_file` for the `Graph Authoring Agent Workflow` steps, and returns `Source-Grounded Node Skeletons`, candidate `Knowledge Nodes`, candidate `Knowledge Edges`, and a compact run log summary. When `write_artifacts=true`, it writes `candidate_nodes.json`, `candidate_edges.json`, and the sidecar `workflow_log.json` under a candidate graph run directory by default; only the node and edge files are candidate graph review artifacts.
 
 Guardrails:
 
@@ -122,7 +122,7 @@ Implementation note:
 - PDF source-material graph authoring runs use the OpenAI Responses API `input_file` shape with `data:application/pdf;base64,...`, selected from local `storage/` by relative path during authoring API use.
 - Development and test runs should use deterministic or fake model clients unless the author explicitly chooses to run the OpenAI-backed workflow.
 - Structures to implement: `backend/knowact/authoring/schemas.py`, `workflow.py`, `steps.py`, `templates/graph_authoring.py`, `parsers/graph_authoring.py`, `validation.py`, `output.py`, and `openai_workflow.py`; `backend/knowact/llm/` supplies the model boundary.
-- Opened authoring interface: `POST /api/authoring/graph-candidates`. It accepts `pdf_path`, optional `benchmark_domain`, optional `source_id`, optional `source_title`, optional `run_id`, and `write_artifacts`; it returns workflow outputs and, by default, writes only `candidate_nodes.json` and `candidate_edges.json` under `benchmark/domains/{benchmark_domain}/candidate_graphs/api/{run_id}/`.
+- Opened authoring interface: `POST /api/authoring/graph-candidates`. It accepts `pdf_path`, optional `benchmark_domain`, optional `source_id`, optional `source_title`, optional `run_id`, and `write_artifacts`; it returns workflow outputs plus compact run log summary and, by default, writes `candidate_nodes.json`, `candidate_edges.json`, and sidecar `workflow_log.json` under `benchmark/domains/{benchmark_domain}/candidate_graphs/api/{run_id}/`.
 - Stable workbench interface: defer formal authoring write APIs until candidate review and promotion semantics are clearer.
 
 ## Phase 3: Authored Graph Review and Promotion

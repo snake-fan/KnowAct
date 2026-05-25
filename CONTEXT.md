@@ -12,6 +12,10 @@ _Avoid_: node state, user node
 A selected textbook, course material, paper, or reference used as the source basis for graph authoring.
 _Avoid_: general knowledge, model memory, unsourced topic list
 
+**Source Material Catalog**:
+An authoring-only registry that gives uploaded or local source materials stable identities and storage paths.
+_Avoid_: benchmark graph manifest, reviewed graph data, book-only library
+
 **Source Locator**:
 A minimal structured reference that identifies where a **Knowledge Node** is mentioned in an **Authoritative Source**.
 _Avoid_: vague source label, invented citation, generic textbook reference, required quote span
@@ -19,6 +23,10 @@ _Avoid_: vague source label, invented citation, generic textbook reference, requ
 **Source-Grounded Candidate Node**:
 A draft **Knowledge Node** extracted from an **Authoritative Source** with a **Source Locator**.
 _Avoid_: brainstormed node, common-sense topic, unsourced candidate
+
+**Graph Authoring Run Log**:
+A structured sidecar record of one **Graph Authoring Agent Workflow** run, capturing source metadata, step status, validation checkpoints, counts, artifact paths, and redacted failure metadata.
+_Avoid_: candidate graph artifact, raw model trace, prompt log, reviewed graph
 
 **User Knowledge State**:
 A user-specific state describing how a particular user appears to understand a **Knowledge Node**.
@@ -260,6 +268,10 @@ _Avoid_: v1 schema requirement, implicit domain versioning, hardcoded path conve
 A draft graph produced during authoring before benchmark-author review.
 _Avoid_: authored graph, evaluation graph, benchmark ground truth
 
+**Candidate Graph Review Workbench**:
+A research workbench surface where a benchmark author reviews, visualizes, and edits a **Candidate Knowledge Graph** before any promotion decision.
+_Avoid_: automatic graph promotion, evaluation runtime, graph scoring UI
+
 **Candidate Node Inventory**:
 The source-grounded list of candidate **Knowledge Nodes** considered during graph authoring.
 _Avoid_: brainstormed topic list, final graph, unsourced curriculum outline
@@ -324,6 +336,7 @@ _Avoid_: ground-truth edge, authored edge
 
 - A **Knowledge Node** exists independently of any user.
 - A v1 **Knowledge Node** should be grounded in an **Authoritative Source** through a **Source Locator**.
+- A **Source Material Catalog** identifies available authoring inputs; it is not itself reviewed benchmark graph data.
 - A v1 **Source Locator** only needs to point to where the concept is mentioned, such as chapter, section, pages, URL, lecture, slide, paragraph, or reference entry.
 - A v1 **Source Locator** does not require quoted text, evidence spans, exact text offsets, or paragraph-level precision when coarser location is enough for review.
 - A **Candidate Node Inventory** contains **Source-Grounded Candidate Nodes**, not brainstormed topics.
@@ -403,6 +416,8 @@ _Avoid_: ground-truth edge, authored edge
 - **Effective Relationship Strength** is derived when needed and is not stored on the **Knowledge Edge**.
 - A **Derived Knowledge Relationship** must not be treated as part of the **Authored Knowledge Graph**.
 - A **Candidate Knowledge Graph** must be reviewed before it becomes an **Authored Knowledge Graph**.
+- A **Candidate Graph Review Workbench** may edit candidate graph artifacts, but it does not make them reviewed **Authored Graph Data Files**.
+- Review edits in a **Candidate Graph Review Workbench** may update the current **Candidate Knowledge Graph** artifacts in place while preserving candidate status.
 - A **Candidate Knowledge Graph** should be built from a **Candidate Node Inventory** extracted from **Authoritative Sources**.
 - An **Authored Knowledge Graph** is stored as separate **Authored Graph Data Files** for nodes and edges.
 - V1 **Authored Graph Data Files** are typically `authored_nodes.json` and `authored_edges.json`.
