@@ -67,6 +67,10 @@ reports/generated/
 *.sqlite3
 *.db
 
+# Local source materials used by test API PDF upload checks
+storage/*
+!storage/.gitkeep
+
 # Notebooks and interactive analysis checkpoints
 .ipynb_checkpoints/
 

@@ -277,17 +277,66 @@ This project tests whether that hypothesis holds under controlled knowledge-grou
 
 KnowAct is currently in the design and prototyping stage.
 
+The V1 implementation has started with the schema and validation spine:
+
+- `backend/knowact/core/`: Pydantic schemas for knowledge graphs, evidence records, knowledge maps, episode manifests, and scoring reports.
+- `backend/knowact/validation/`: cross-object validators for graph references, map coverage/evidence support, and episode manifest constraints.
+- `backend/knowact/authoring/`: the Phase 2 graph authoring workflow spine, with node extraction, node rubric authoring, edge proposal, candidate file export boundaries, and separate `templates/` and `parsers/` modules for agent prompts and raw model outputs.
+- `backend/knowact/llm/`: a model-client interface plus OpenAI SDK-backed clients for chat-completions authoring steps and Responses API PDF-backed graph authoring runs.
+- `backend/knowact/storage/`: local artifact and material path helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
+- `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
+- `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`: a 5-node development fixture for schema and validator checks, not the formal 30-50 node v1 graph.
+- `test/`: `unittest` coverage for the public schema and validation APIs.
+
+Configure local OpenAI API access by copying `.env.example` to `.env` and filling in:
+
+```bash
+OPENAI_API_KEY=...
+KNOWACT_OPENAI_MODEL=gpt-4.1-mini
+```
+
+The current tests use deterministic fixtures and fake clients; they do not call the OpenAI API.
+
+Run the current Python checks with:
+
+```bash
+uv run python -m unittest
+```
+
+Start the backend development API with:
+
+```bash
+uv run fastapi dev backend/main.py
+```
+
+Then open the local Swagger UI at `http://127.0.0.1:8000/docs`. The current authoring API includes:
+
+- `POST /api/authoring/graph-candidates`, which reads one PDF by relative path under `storage/`, sends it to the OpenAI Responses API as a base64 `input_file` (`data:application/pdf;base64,...`) for the graph authoring workflow steps, returns source-grounded skeletons, candidate nodes, and candidate edges, and writes `candidate_nodes.json` and `candidate_edges.json` for review by default. Example request:
+
+```json
+{
+  "pdf_path": "books/isl_python.pdf",
+  "run_id": "dev_run_001"
+}
+```
+
+PDF source material requests are constrained to `storage/` and reject absolute paths or `..` traversal. The Responses API PDF path should use a model with file/vision input support, and local files should stay within the 50 MB request limit used by the local resolver. The API produces Candidate Knowledge Graph artifacts only; it does not promote them into reviewed authored graph data.
+
 Implemented / planned components include:
 
-- [ ] User profile schema
-- [ ] Knowledge map representation
+- [x] V1 core schema and validation spine
+- [x] Knowledge map representation
+- [x] Phase 2 graph authoring workflow spine
+- [x] OpenAI SDK client boundary for LLM-backed steps
+- [x] FastAPI authoring API for real PDF-backed graph candidate runs
+- [ ] Ground-truth map authoring
 - [ ] LLM-based profile generation
 - [ ] Human verification protocol
 - [ ] User simulator
 - [ ] Tested agent interface
 - [ ] ToM-aware agent loop
 - [ ] Baseline agents
-- [ ] Profile comparison metrics
+- [ ] Structured map comparison metrics
 - [ ] Evaluation scripts
 - [ ] Experiment reports
 

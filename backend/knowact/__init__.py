@@ -1,0 +1,1 @@
+"""KnowAct benchmark backend package."""

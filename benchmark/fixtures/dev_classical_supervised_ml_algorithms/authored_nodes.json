@@ -1,0 +1,132 @@
+[
+  {
+    "id": "train_test_split",
+    "name": "Train Test Split",
+    "type": "concept",
+    "source_locators": [
+      {
+        "source_id": "isl_python",
+        "locator": "chapter_2",
+        "note": "Model assessment introduction"
+      }
+    ],
+    "diagnostic_goal": "Check whether the user understands why training and test data are separated.",
+    "levels": {
+      "L0": "Does not recognize train/test split as a model assessment idea.",
+      "L1": "Recognizes the term but cannot explain its purpose.",
+      "L2": "Can describe holding out data but gives procedural explanations only.",
+      "L3": "Explains test data as an estimate of generalization performance.",
+      "L4": "Connects split design to bias, variance, and evaluation leakage.",
+      "L5": "Can reason about split strategy under data size, class balance, and model selection constraints."
+    },
+    "diagnostic_signals": [
+      "Explains why test data should not guide model fitting.",
+      "Mentions generalization or out-of-sample performance."
+    ],
+    "simulator_behavior": "Answer with the user's practical experience and avoid naming mastery labels."
+  },
+  {
+    "id": "linear_regression",
+    "name": "Linear Regression",
+    "type": "concept",
+    "source_locators": [
+      {
+        "source_id": "isl_python",
+        "locator": "chapter_3",
+        "note": "Linear regression chapter"
+      }
+    ],
+    "diagnostic_goal": "Check whether the user can interpret a fitted linear model beyond running code.",
+    "levels": {
+      "L0": "Does not recognize linear regression.",
+      "L1": "Recognizes the term but cannot explain inputs, outputs, or coefficients.",
+      "L2": "Can fit a line in code but gives shallow coefficient interpretations.",
+      "L3": "Interprets coefficients and prediction errors for simple settings.",
+      "L4": "Connects assumptions, diagnostics, and feature effects to model validity.",
+      "L5": "Can reason about limitations, transformations, interactions, and assessment tradeoffs."
+    },
+    "diagnostic_signals": [
+      "Interprets coefficient direction and magnitude.",
+      "Notes residuals or assumptions."
+    ],
+    "simulator_behavior": "Show concrete examples the simulated user has tried."
+  },
+  {
+    "id": "logistic_regression",
+    "name": "Logistic Regression",
+    "type": "concept",
+    "source_locators": [
+      {
+        "source_id": "isl_python",
+        "locator": "chapter_4",
+        "note": "Classification chapter"
+      }
+    ],
+    "diagnostic_goal": "Check whether the user distinguishes probability modeling for classification from linear regression.",
+    "levels": {
+      "L0": "Does not recognize logistic regression.",
+      "L1": "Recognizes the term but treats it as ordinary linear regression.",
+      "L2": "Knows it is used for classification but cannot explain logits or probabilities.",
+      "L3": "Explains probability outputs and threshold-based classification.",
+      "L4": "Connects coefficients, odds, decision thresholds, and evaluation metrics.",
+      "L5": "Can reason about calibration, class imbalance, regularization, and model limitations."
+    },
+    "diagnostic_signals": [
+      "Mentions probability or log-odds.",
+      "Explains classification threshold tradeoffs."
+    ],
+    "simulator_behavior": "If uncertain, confuse the word regression with continuous prediction."
+  },
+  {
+    "id": "bias_variance_tradeoff",
+    "name": "Bias Variance Tradeoff",
+    "type": "concept",
+    "source_locators": [
+      {
+        "source_id": "isl_python",
+        "locator": "chapter_2",
+        "note": "Statistical learning overview"
+      }
+    ],
+    "diagnostic_goal": "Check whether the user can reason about underfitting, overfitting, and expected test error.",
+    "levels": {
+      "L0": "Does not recognize bias or variance as model error concepts.",
+      "L1": "Recognizes the phrase but cannot relate it to model behavior.",
+      "L2": "Associates high variance with overfitting but gives memorized explanations.",
+      "L3": "Explains how model flexibility affects bias, variance, and test error.",
+      "L4": "Uses the tradeoff to compare model choices and validation behavior.",
+      "L5": "Can reason quantitatively about expected error, data regimes, and model complexity."
+    },
+    "diagnostic_signals": [
+      "Distinguishes training error from test error.",
+      "Connects flexibility with overfitting or underfitting."
+    ],
+    "simulator_behavior": "Allow partial answers that mix intuition with terminology gaps."
+  },
+  {
+    "id": "confusion_matrix",
+    "name": "Confusion Matrix",
+    "type": "concept",
+    "source_locators": [
+      {
+        "source_id": "isl_python",
+        "locator": "chapter_4",
+        "note": "Classification assessment"
+      }
+    ],
+    "diagnostic_goal": "Check whether the user can interpret classification errors from structured counts.",
+    "levels": {
+      "L0": "Does not recognize a confusion matrix.",
+      "L1": "Recognizes the table but cannot map entries to prediction outcomes.",
+      "L2": "Can identify correct and incorrect counts with support.",
+      "L3": "Computes or explains accuracy, false positives, and false negatives.",
+      "L4": "Connects confusion matrix entries to precision, recall, thresholds, and costs.",
+      "L5": "Can reason about imbalanced data, operating points, and stakeholder-specific error costs."
+    },
+    "diagnostic_signals": [
+      "Explains false positives and false negatives.",
+      "Connects counts to threshold or metric choices."
+    ],
+    "simulator_behavior": "Use everyday classification examples when answering."
+  }
+]

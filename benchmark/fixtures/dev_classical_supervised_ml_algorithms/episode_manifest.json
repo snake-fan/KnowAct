@@ -1,0 +1,17 @@
+{
+  "episode_id": "dev_classical_ml_episode_001",
+  "benchmark_domain": "classical_supervised_ml_algorithms",
+  "graph": {
+    "id": "dev_classical_ml_graph",
+    "uri": "benchmark/fixtures/dev_classical_supervised_ml_algorithms",
+    "review_status": "reviewed"
+  },
+  "hidden_map": {
+    "id": "dev_user_001_ground_truth_map",
+    "uri": "benchmark/fixtures/dev_classical_supervised_ml_algorithms/ground_truth_map.json",
+    "review_status": "reviewed"
+  },
+  "max_turns": 3,
+  "interaction_rule": "single_diagnostic_question_per_turn",
+  "scoring_profile": "squared_mastery_distance_v1"
+}

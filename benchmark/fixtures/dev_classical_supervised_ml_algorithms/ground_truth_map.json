@@ -1,0 +1,78 @@
+{
+  "user_id": "dev_user_001",
+  "kind": "ground_truth",
+  "states": [
+    {
+      "node_id": "train_test_split",
+      "mastery_level": "L2",
+      "confidence": 0.76,
+      "evidence_refs": ["ev_train_test_split_self_report"]
+    },
+    {
+      "node_id": "linear_regression",
+      "mastery_level": "L3",
+      "confidence": 0.82,
+      "evidence_refs": ["ev_linear_regression_prior_answer"]
+    },
+    {
+      "node_id": "logistic_regression",
+      "mastery_level": "L1",
+      "confidence": 0.68,
+      "evidence_refs": ["ev_logistic_regression_misconception"]
+    },
+    {
+      "node_id": "bias_variance_tradeoff",
+      "mastery_level": "L2",
+      "confidence": 0.72,
+      "evidence_refs": ["ev_bias_variance_worked_example"]
+    },
+    {
+      "node_id": "confusion_matrix",
+      "mastery_level": "L3",
+      "confidence": 0.79,
+      "evidence_refs": ["ev_confusion_matrix_prior_answer"]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ev_train_test_split_self_report",
+      "node_id": "train_test_split",
+      "type": "ground_truth",
+      "kind": "self_report",
+      "visibility": "hidden",
+      "summary": "The user reports using train/test split by copying examples but cannot explain leakage risks."
+    },
+    {
+      "id": "ev_linear_regression_prior_answer",
+      "node_id": "linear_regression",
+      "type": "ground_truth",
+      "kind": "prior_answer",
+      "visibility": "hidden",
+      "summary": "The user interprets simple slopes correctly but gives weak answers about assumptions."
+    },
+    {
+      "id": "ev_logistic_regression_misconception",
+      "node_id": "logistic_regression",
+      "type": "ground_truth",
+      "kind": "misconception_trace",
+      "visibility": "hidden",
+      "summary": "The user thinks logistic regression is mainly linear regression with a categorical target column."
+    },
+    {
+      "id": "ev_bias_variance_worked_example",
+      "node_id": "bias_variance_tradeoff",
+      "type": "ground_truth",
+      "kind": "worked_example",
+      "visibility": "hidden",
+      "summary": "The user can identify overfitting from training and test error but cannot explain expected error terms."
+    },
+    {
+      "id": "ev_confusion_matrix_prior_answer",
+      "node_id": "confusion_matrix",
+      "type": "ground_truth",
+      "kind": "prior_answer",
+      "visibility": "hidden",
+      "summary": "The user correctly explains false positives and false negatives in a binary classifier example."
+    }
+  ]
+}

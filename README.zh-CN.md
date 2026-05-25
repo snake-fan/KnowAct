@@ -277,17 +277,66 @@ KnowAct 基于以下假设：
 
 KnowAct 目前处于设计和原型阶段。
 
+V1 实现已经从 schema 与 validation spine 开始：
+
+- `backend/knowact/core/`：知识图谱、evidence record、知识地图、episode manifest 和 scoring report 的 Pydantic schema。
+- `backend/knowact/validation/`：用于 graph 引用、map coverage/evidence support 和 episode manifest 约束的跨对象 validator。
+- `backend/knowact/authoring/`：Phase 2 graph authoring workflow spine，包含 node extraction、node rubric authoring、edge proposal、candidate file export 边界，以及分离的 `templates/` 和 `parsers/` 模块来管理 agent prompts 与 raw model outputs。
+- `backend/knowact/llm/`：model-client interface，以及基于 OpenAI SDK 的 clients，用于 chat-completions authoring steps 和 Responses API PDF-backed graph authoring runs。
+- `backend/knowact/storage/`：local artifact 与 material path helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
+- `backend/knowact/api/` 与 `backend/main.py`：FastAPI 入口，以及可从本地教材 PDF 运行真实 graph authoring workflow 的 authoring API。
+- `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`：用于 schema 与 validator 检查的 5-node development fixture，不是正式的 30-50 node v1 graph。
+- `test/`：覆盖公开 schema 与 validation API 的 `unittest` 测试。
+
+本地 OpenAI API 配置可以复制 `.env.example` 为 `.env`，并填写：
+
+```bash
+OPENAI_API_KEY=...
+KNOWACT_OPENAI_MODEL=gpt-4.1-mini
+```
+
+当前测试使用 deterministic fixtures 和 fake clients，不会调用 OpenAI API。
+
+当前 Python 检查命令：
+
+```bash
+uv run python -m unittest
+```
+
+启动后端开发 API：
+
+```bash
+uv run fastapi dev backend/main.py
+```
+
+然后打开本地 Swagger UI：`http://127.0.0.1:8000/docs`。当前 authoring API 包含：
+
+- `POST /api/authoring/graph-candidates`：按 `storage/` 下的相对路径读取一个 PDF，把它作为 OpenAI Responses API 的 base64 `input_file`（`data:application/pdf;base64,...`）发送给 graph authoring workflow 的各个 step，返回 source-grounded skeletons、candidate nodes 和 candidate edges，并默认写出用于 review 的 `candidate_nodes.json` 与 `candidate_edges.json`。示例请求：
+
+```json
+{
+  "pdf_path": "books/isl_python.pdf",
+  "run_id": "dev_run_001"
+}
+```
+
+PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `..` 路径穿越。Responses API 的 PDF 路径应使用支持 file/vision input 的模型，本地文件需保持在本地 resolver 使用的 50 MB request limit 内。该 API 只生成 Candidate Knowledge Graph artifacts，不会把它们 promote 成 reviewed authored graph data。
+
 已实现或计划中的组件包括：
 
-- [ ] 用户画像 schema
-- [ ] 知识地图表示
+- [x] V1 core schema 与 validation spine
+- [x] 知识地图表示
+- [x] Phase 2 graph authoring workflow spine
+- [x] OpenAI SDK client boundary for LLM-backed steps
+- [x] FastAPI authoring API，用于真实 PDF-backed graph candidate runs
+- [ ] Ground-truth map authoring
 - [ ] 基于 LLM 的画像生成
 - [ ] 人工校验协议
 - [ ] 用户模拟器
 - [ ] 被测 agent 接口
 - [ ] ToM-aware agent 循环
 - [ ] 基线 agent
-- [ ] 画像比较指标
+- [ ] 结构化 map comparison 指标
 - [ ] 评估脚本
 - [ ] 实验报告
 

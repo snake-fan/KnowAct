@@ -1,0 +1,47 @@
+[
+  {
+    "id": "edge_bias_variance_tradeoff_supports_train_test_split",
+    "source": "bias_variance_tradeoff",
+    "target": "train_test_split",
+    "type": "supports",
+    "rationale": "Understanding bias and variance helps explain why held-out evaluation estimates generalization behavior.",
+    "weight": 0.75,
+    "curation_confidence": 0.9
+  },
+  {
+    "id": "edge_train_test_split_supports_linear_regression",
+    "source": "train_test_split",
+    "target": "linear_regression",
+    "type": "supports",
+    "rationale": "Train/test split supports assessing whether a fitted linear regression model generalizes.",
+    "weight": 0.7,
+    "curation_confidence": 0.9
+  },
+  {
+    "id": "edge_train_test_split_supports_logistic_regression",
+    "source": "train_test_split",
+    "target": "logistic_regression",
+    "type": "supports",
+    "rationale": "Classification models also require held-out assessment to estimate generalization performance.",
+    "weight": 0.7,
+    "curation_confidence": 0.9
+  },
+  {
+    "id": "edge_confusion_matrix_supports_logistic_regression",
+    "source": "confusion_matrix",
+    "target": "logistic_regression",
+    "type": "supports",
+    "rationale": "Confusion matrices help evaluate classification decisions produced from logistic regression probabilities.",
+    "weight": 0.8,
+    "curation_confidence": 0.92
+  },
+  {
+    "id": "edge_linear_regression_contrasts_with_logistic_regression",
+    "source": "linear_regression",
+    "target": "logistic_regression",
+    "type": "contrasts_with",
+    "rationale": "Comparing continuous prediction with probability-based classification clarifies the boundary between the two models.",
+    "weight": 0.85,
+    "curation_confidence": 0.95
+  }
+]

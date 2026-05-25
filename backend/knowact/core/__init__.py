@@ -1,0 +1,1 @@
+"""Core KnowAct domain schemas."""

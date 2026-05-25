@@ -29,6 +29,22 @@ The implementation should prioritize a narrow vertical slice first, but any smal
 | 10. Research workbench | M10: reviewable UI/API surface | A minimal research interface supports graph/map inspection, episode review, and report browsing |
 | 11. Post-v1 expansion | M11: next benchmark question selected | Multi-domain, teaching actions, real users, or richer agents are considered after v1 evidence |
 
+## Graph Authoring API Surface
+
+Before the formal research workbench is complete, the backend exposes a narrow authoring run endpoint for manually exercising the real graph authoring workflow. This surface is for producing reviewable candidate graph artifacts, not for formal evaluation runtime or automatic promotion into reviewed benchmark data.
+
+Current opened endpoint:
+
+- `GET /health`: backend process health.
+- `POST /api/authoring/graph-candidates`: reads one local textbook PDF by relative path under repository-level `storage/`, sends it to the OpenAI Responses API as a base64 `input_file` for the `Graph Authoring Agent Workflow` steps, and returns `Source-Grounded Node Skeletons`, candidate `Knowledge Nodes`, and candidate `Knowledge Edges`. It writes exactly `candidate_nodes.json` and `candidate_edges.json` under a candidate graph run directory by default.
+
+Guardrails:
+
+- The authoring API may call graph authoring workflows but must not promote artifacts into reviewed benchmark data.
+- The authoring API must stay visibly separate from future evaluation runtime routes.
+- Evaluation runtime endpoints must continue to load only reviewed `Authored Knowledge Graphs` and reviewed `Ground-Truth Knowledge Maps`.
+- PDF material requests must remain constrained to `storage/`, reject path traversal, and treat local books as authoring inputs rather than reviewed benchmark artifacts.
+
 ## Phase 0: Domain Decision Baseline
 
 Goal: keep implementation aligned with the domain language already established in `CONTEXT.md`.
@@ -43,6 +59,11 @@ Exit criteria:
 
 - New implementation work can cite existing terms instead of inventing parallel names such as "user graph", "node state", or "profile score".
 - Remaining open questions are execution details, not unresolved domain boundaries.
+
+Implementation note:
+
+- Structures to maintain: `CONTEXT.md` for glossary-only terminology, `docs/adr/` for hard-to-reverse decisions, and this breakdown for implementation sequencing.
+- Opened interfaces: none. API names introduced later should reuse glossary terms such as `Knowledge Graph`, `Knowledge Map`, `Evaluation Episode Manifest`, and `Graph Authoring Agent Workflow`.
 
 ## Phase 1: Schema and Validation Spine
 
@@ -67,6 +88,11 @@ Do not include yet:
 - Per-episode custom scoring rules.
 - User state on edges.
 
+Implementation note:
+
+- Structures to implement: `backend/knowact/core/` schemas, `backend/knowact/validation/` validators, `benchmark/fixtures/` development artifacts, and `test/` schema/validation checks.
+- Opened interfaces: no HTTP API required. The public interface is the Python schema and validation API used by later authoring, runtime, scoring, and API endpoints.
+
 ## Phase 2: Graph Authoring Workflow
 
 Goal: build the project-owned authoring workflow that turns authoritative source material into reviewable candidate graph files.
@@ -90,6 +116,15 @@ Guardrails:
 - Edge proposal should omit weak, speculative, or merely related pairs.
 - Candidate status belongs to filenames, directories, or review state, not inside node or edge objects.
 
+Implementation note:
+
+- Phase 2 keeps LLM calls behind a `ModelClient` interface. The initial concrete adapter uses the OpenAI Python SDK and reads local API settings from environment variables documented in `.env.example`.
+- PDF source-material graph authoring runs use the OpenAI Responses API `input_file` shape with `data:application/pdf;base64,...`, selected from local `storage/` by relative path during authoring API use.
+- Development and test runs should use deterministic or fake model clients unless the author explicitly chooses to run the OpenAI-backed workflow.
+- Structures to implement: `backend/knowact/authoring/schemas.py`, `workflow.py`, `steps.py`, `templates/graph_authoring.py`, `parsers/graph_authoring.py`, `validation.py`, `output.py`, and `openai_workflow.py`; `backend/knowact/llm/` supplies the model boundary.
+- Opened authoring interface: `POST /api/authoring/graph-candidates`. It accepts `pdf_path`, optional `benchmark_domain`, optional `source_id`, optional `source_title`, optional `run_id`, and `write_artifacts`; it returns workflow outputs and, by default, writes only `candidate_nodes.json` and `candidate_edges.json` under `benchmark/domains/{benchmark_domain}/candidate_graphs/api/{run_id}/`.
+- Stable workbench interface: defer formal authoring write APIs until candidate review and promotion semantics are clearer.
+
 ## Phase 3: Authored Graph Review and Promotion
 
 Goal: separate generated candidate graph data from reviewed benchmark graph data.
@@ -112,6 +147,12 @@ Review checklist:
 Decision point:
 
 - Resolve a lightweight `Graph File Layout` before promoting the first reviewed graph, because ADRs intentionally deferred directory paths.
+
+Implementation note:
+
+- Structures to implement: `backend/knowact/storage/` repositories for candidate and reviewed graph files, review helpers for edited node/edge lists, and reviewed graph artifacts such as `graph_manifest.json`, `authored_nodes.json`, and `authored_edges.json`.
+- Interfaces to open: initially read-only inspection of candidate and reviewed graphs through the future stable API; promotion should remain manual or review-gated until the review workflow is explicit.
+- Authoring API boundary: the Phase 2 candidate endpoint may create candidate files for review, but it must not create reviewed `authored_nodes.json` or `authored_edges.json`.
 
 ## Phase 4: Ground-Truth Map Authoring
 
@@ -139,6 +180,12 @@ Do not include yet:
 - Real user data.
 - User-specific edge state.
 
+Implementation note:
+
+- Structures to implement: map authoring helpers under `backend/knowact/authoring/`, map/evidence loaders under `backend/knowact/storage/`, reviewed `ground_truth_maps/`, optional profile context artifacts, and validation checks for coverage and hidden evidence visibility.
+- Interfaces to open: read-only map inspection can be exposed after hidden/visible redaction rules are implemented; write or generation APIs should stay gated because generated maps are `Candidate Knowledge Maps` until reviewed.
+- Authoring API boundary: any future map authoring endpoint must clearly return candidate maps and must not make them evaluation-ready.
+
 ## Phase 5: Episode Runtime Contract
 
 Goal: make each evaluation run reproducible and explicit.
@@ -154,6 +201,12 @@ Recommended development fixture:
 
 - One small development episode can be used to test runtime wiring.
 - Formal v1 episodes must use reviewed graph and reviewed ground-truth maps.
+
+Implementation note:
+
+- Structures to implement: `backend/knowact/runtime/episode_loader.py`, `runtime/visibility.py`, storage repositories for manifests/graphs/maps, and manifest validation tests.
+- Interfaces to open: stable read-only endpoints for `GET /episodes` and `GET /episodes/{episode_id}` once repositories exist; run-trigger endpoints should wait until simulator, agent, and scoring wiring can preserve the visibility boundary.
+- Development API boundary: runtime smoke endpoints may use development fixtures, but formal runtime paths must reject candidate graph/map artifacts.
 
 ## Phase 6: User Simulator
 
@@ -173,6 +226,12 @@ Validation focus:
 - Consistency checks against hidden mastery levels and evidence.
 - Regression fixtures for ambiguous but grounded answers.
 
+Implementation note:
+
+- Structures to implement: `backend/knowact/simulator/context_builder.py`, `prompting.py`, `policy.py`, `service.py`, and `checks.py`, with LLM calls behind `backend/knowact/llm/`.
+- Interfaces to open: no standalone public simulator oracle endpoint for formal evaluation. A development-only endpoint may be added later for single-turn simulator checks after leakage guards exist.
+- Stable API exposure should happen through episode run endpoints, where simulator answers become visible `Interaction Observations` rather than hidden state dumps.
+
 ## Phase 7: Tested Agent Interface and Baselines
 
 Goal: make agent comparison possible through a shared protocol.
@@ -191,6 +250,12 @@ Baseline boundaries:
 - Random-question baseline selects diagnostic questions randomly within episode constraints.
 - Simple LLM agent sees the authored graph and dialogue history, then chooses questions and submits a final map.
 - Oracle, passive summarization, teaching, and complex ToM agents stay out of the v1 baseline set.
+
+Implementation note:
+
+- Structures to implement: `backend/knowact/agents/protocol.py`, fixed/random/simple LLM baseline modules, question-bank support, and reconstructed-map assembly helpers.
+- Interfaces to open: no direct agent-control API is required at first; agents should be selected through episode run requests after the runtime contract exists.
+- Development API boundary: future baseline smoke-test endpoints may exist, but they must expose only tested-agent-visible context.
 
 ## Phase 8: Scoring and Reports
 
@@ -213,6 +278,12 @@ Report contents:
 - Unsupported inference rate.
 - Optional confidence calibration and misconception diagnostics.
 
+Implementation note:
+
+- Structures to implement: `backend/knowact/scoring/` for profile definition, distance, comparison, unsupported inference, and aggregation; `backend/knowact/reports/` for report shaping; `RunRepository` for persisted scoring reports.
+- Interfaces to open: `GET /runs/{run_id}/report` after run storage exists; an optional fixture-only scoring comparison endpoint can be added if it never leaks hidden maps from formal episodes.
+- Scoring APIs must report `Episode Mastery Distance`, missing prediction rate, and unsupported inference rate without using an LLM judge for the primary score.
+
 ## Phase 9: End-to-End V1 Benchmark Run
 
 Goal: produce the first interpretable research result from the full reviewed v1 loop.
@@ -231,6 +302,12 @@ Minimum review questions for the report:
 - Are unsupported inferences common enough to require stronger output constraints?
 - Are simulator answers diagnostic without becoming oracle-like?
 
+Implementation note:
+
+- Structures to implement: `backend/knowact/runtime/runner.py`, `runtime/turn_loop.py`, `runtime/transcript.py`, `experiments/runs/` output snapshots, and experiment-level report documents.
+- Interfaces to open: `POST /episodes/{episode_id}/runs`, `GET /runs/{run_id}`, and `GET /runs/{run_id}/report` once reviewed artifacts, simulator, agents, and scoring are wired.
+- Development API boundary: end-to-end fixture runs can appear in development-only routes first, but formal v1 runs should use stable routes and reviewed artifacts only.
+
 ## Phase 10: Research Workbench
 
 Goal: make authoring, review, and result inspection easier without blocking the benchmark core.
@@ -246,6 +323,12 @@ Recommended timing:
 
 - Build only minimal tooling before M8.
 - Expand the workbench after the first end-to-end scoring path is stable.
+
+Implementation note:
+
+- Structures to implement: `backend/knowact/api/` stable routers, frontend `src/app/`, `src/api/`, and feature modules for graphs, maps, episodes, runs, and reports.
+- Interfaces to open: stable `/api` routes for graph inspection, map inspection with visibility-aware redaction, episode manifests, run triggers, run status, and report browsing.
+- Development-only endpoints should either be retired or kept explicitly marked after equivalent stable workbench routes exist.
 
 ## Phase 11: Post-V1 Expansion
 
@@ -266,6 +349,12 @@ Do not start these before v1:
 - Real-user evaluation claims.
 - Teaching-quality claims.
 - Complex agent architecture comparisons as primary results.
+
+Implementation note:
+
+- Structures to implement: new benchmark domain directories, additional scoring profile versions only when justified, richer agent modules, and post-v1 ADRs for any irreversible expansion.
+- Interfaces to open: versioned stable APIs if multi-domain, real-user, or teaching workflows introduce incompatible contracts.
+- Development-only endpoints should remain narrow smoke-test windows, not a parallel product API.
 
 ## Dependency Map
 
