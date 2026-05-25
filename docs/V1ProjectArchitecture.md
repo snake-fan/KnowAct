@@ -173,7 +173,8 @@ core
 - `templates/node_extraction.py`, `templates/node_rubric_authoring.py`, `templates/edge_proposal.py`: prompt/message builders for each Graph Authoring Agent Workflow step. `templates/graph_authoring.py` can remain as a compatibility re-export only; step-specific prompt content should live in the step-specific template file.
 - `parsers/graph_authoring.py`: raw model-output parsers that turn JSON text into source skeletons, candidate nodes, and candidate edges.
 - `validation.py`: authoring-specific validation around skeleton grounding, complete candidate node rubrics, and candidate edge graph validity.
-- `output.py`: candidate graph file export, especially `candidate_nodes.json` and `candidate_edges.json`.
+- `logging.py`: authoring run log schemas and helpers for structured, redacted `Graph Authoring Run Log` records.
+- `output.py`: candidate graph file export, especially `candidate_nodes.json` and `candidate_edges.json`, plus sidecar `workflow_log.json` export.
 - `openai_workflow.py`: OpenAI-backed graph authoring workflow wiring behind the shared `ModelClient` interface.
 - Later, add `sources.py` only if source loading and locator helpers outgrow `schemas.py` / caller-owned loading.
 - Later, add `map_authoring.py` and `review_export.py` when ground-truth map generation and human review promotion need concrete workflow support.
@@ -181,6 +182,7 @@ core
 边界：
 
 - graph authoring final output 只能是 `candidate_nodes.json` 和 `candidate_edges.json` 两个 JSON list files。
+- `workflow_log.json` 可以作为 run directory 中的 sidecar artifact 存在，但它不是 candidate graph final review output，也不改变 node/edge JSON list schema。
 - `candidate` 状态不写进 node/edge object。
 - rubric authoring 不读取 unreviewed candidate edges。
 - edge proposal 可以读取 complete candidate nodes 和 rubrics，但仍然只产生 candidate edges。
@@ -347,7 +349,8 @@ benchmark/
         ├── candidate_graphs/
         │   └── run_001/
         │       ├── candidate_nodes.json
-        │       └── candidate_edges.json
+        │       ├── candidate_edges.json
+        │       └── workflow_log.json
         ├── graphs/
         │   └── v1/
         │       ├── graph_manifest.json

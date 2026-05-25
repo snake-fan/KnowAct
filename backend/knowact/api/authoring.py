@@ -1,17 +1,27 @@
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
 import re
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.knowact.authoring.output import write_graph_authoring_output
+from backend.knowact.authoring.logging import (
+    GraphAuthoringLogArtifactPaths,
+    GraphAuthoringRunLogSummary,
+    GraphAuthoringWorkflowRunError,
+    RunLogSourceMaterial,
+    WORKFLOW_LOG_FILENAME,
+    default_graph_authoring_run_id,
+    summarize_run_log,
+    with_artifact_paths,
+)
+from backend.knowact.authoring.output import write_graph_authoring_output, write_graph_authoring_run_log
 from backend.knowact.authoring.parsers.graph_authoring import AuthoringOutputParseError
 from backend.knowact.authoring.schemas import SourceGroundedNodeSkeleton, SourceMaterial
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeNode
 from backend.knowact.llm.client import ModelClientError
+from backend.knowact.logging_config import get_knowact_logger
 from backend.knowact.storage.materials import (
     LocalPDFMaterial,
     MaterialFileError,
@@ -28,6 +38,7 @@ _DEFAULT_BENCHMARK_DOMAIN = "classical_supervised_ml_algorithms"
 _DEFAULT_SOURCE_ID = "isl_python"
 _DEFAULT_SOURCE_TITLE = "An Introduction to Statistical Learning with Applications in Python"
 PDFGraphAuthoringWorkflowFactory = Callable[[Path, str | None], GraphAuthoringAgentWorkflow]
+_LOGGER = get_knowact_logger("api.authoring")
 
 
 class GraphCandidateAuthoringRequest(BaseModel):
@@ -77,6 +88,7 @@ class GraphCandidateArtifactPaths(BaseModel):
     output_dir_uri: str
     candidate_nodes_uri: str
     candidate_edges_uri: str
+    workflow_log_uri: str
 
 
 class GraphCandidateAuthoringResponse(BaseModel):
@@ -84,6 +96,7 @@ class GraphCandidateAuthoringResponse(BaseModel):
 
     workflow: str
     material: SourceMaterialInfo
+    run_log_summary: GraphAuthoringRunLogSummary
     source_grounded_node_skeletons: tuple[SourceGroundedNodeSkeleton, ...]
     candidate_nodes: tuple[KnowledgeNode, ...]
     candidate_edges: tuple[KnowledgeEdge, ...]
@@ -107,14 +120,36 @@ def build_authoring_router(
     def create_graph_candidates(
         request: GraphCandidateAuthoringRequest,
     ) -> GraphCandidateAuthoringResponse:
+        run_id = request.run_id or default_graph_authoring_run_id()
+        output_dir = _candidate_graph_output_dir(root, request.benchmark_domain, run_id)
+        _LOGGER.info(
+            "Graph candidate authoring request received run_id=%s benchmark_domain=%s pdf_path=%s write_artifacts=%s",
+            run_id,
+            request.benchmark_domain,
+            request.pdf_path,
+            request.write_artifacts,
+        )
+
         try:
             material = resolve_pdf_material(storage_root=storage_root, storage_path=request.pdf_path)
+            _LOGGER.info(
+                "Graph candidate authoring source resolved run_id=%s storage_uri=%s filename=%s size_bytes=%d",
+                run_id,
+                material.storage_uri,
+                material.filename,
+                material.size_bytes,
+            )
             workflow = _build_pdf_graph_authoring_workflow(
                 pdf_graph_authoring_workflow_factory,
                 material.path,
                 material.filename,
             )
-            result = workflow.run((_source_material_from_pdf(material, request),))
+            source_material = _source_material_from_pdf(material, request)
+            run_result = workflow.run_with_log(
+                (source_material,),
+                run_id=run_id,
+                source_metadata=(_run_log_source_material_from_pdf(material, request),),
+            )
         except MaterialFileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except MaterialFileTypeError as exc:
@@ -123,6 +158,23 @@ def build_authoring_router(
             raise HTTPException(status_code=413, detail=str(exc)) from exc
         except MaterialFileError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except GraphAuthoringWorkflowRunError as exc:
+            workflow_log_uri = None
+            if request.write_artifacts:
+                workflow_log_uri = _write_failed_workflow_log(
+                    exc,
+                    output_dir=output_dir,
+                    root=root,
+                )
+            error = exc.run_log.error
+            _LOGGER.error(
+                "Graph candidate authoring failed run_id=%s error_type=%s message=%s workflow_log_uri=%s",
+                run_id,
+                error.error_type if error is not None else type(exc.cause).__name__,
+                error.message if error is not None else str(exc.cause),
+                workflow_log_uri,
+            )
+            raise _http_exception_from_workflow_run_error(exc, workflow_log_uri=workflow_log_uri) from exc
         except KnowActValidationError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except AuthoringOutputParseError as exc:
@@ -130,25 +182,46 @@ def build_authoring_router(
         except ModelClientError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+        result = run_result.workflow_result
+        run_log = run_result.run_log
         artifact_paths = None
         if request.write_artifacts:
-            run_id = request.run_id or _default_run_id()
-            output_dir = (
-                root
-                / "benchmark"
-                / "domains"
-                / request.benchmark_domain
-                / "candidate_graphs"
-                / "api"
-                / run_id
-            )
             nodes_path, edges_path = write_graph_authoring_output(result, output_dir)
+            _LOGGER.info(
+                "Graph candidate artifacts written run_id=%s candidate_nodes_uri=%s candidate_edges_uri=%s",
+                run_id,
+                _relative_uri(nodes_path, root),
+                _relative_uri(edges_path, root),
+            )
+            workflow_log_path = output_dir / WORKFLOW_LOG_FILENAME
+            log_artifact_paths = GraphAuthoringLogArtifactPaths(
+                output_dir_uri=_relative_uri(output_dir, root),
+                candidate_nodes_uri=_relative_uri(nodes_path, root),
+                candidate_edges_uri=_relative_uri(edges_path, root),
+                workflow_log_uri=_relative_uri(workflow_log_path, root),
+            )
+            run_log = with_artifact_paths(run_log, log_artifact_paths)
+            log_path = write_graph_authoring_run_log(run_log, output_dir)
+            _LOGGER.info(
+                "Graph authoring run log written run_id=%s workflow_log_uri=%s",
+                run_id,
+                _relative_uri(log_path, root),
+            )
             artifact_paths = GraphCandidateArtifactPaths(
                 output_dir_uri=_relative_uri(output_dir, root),
                 candidate_nodes_uri=_relative_uri(nodes_path, root),
                 candidate_edges_uri=_relative_uri(edges_path, root),
+                workflow_log_uri=_relative_uri(log_path, root),
             )
 
+        _LOGGER.info(
+            "Graph candidate authoring succeeded run_id=%s skeletons=%d candidate_nodes=%d candidate_edges=%d write_artifacts=%s",
+            run_id,
+            len(result.source_grounded_node_skeletons),
+            len(result.candidate_nodes),
+            len(result.candidate_edges),
+            request.write_artifacts,
+        )
         return GraphCandidateAuthoringResponse(
             workflow="Graph Authoring Agent Workflow",
             material=SourceMaterialInfo(
@@ -158,6 +231,7 @@ def build_authoring_router(
                 source_id=request.source_id,
                 title=request.source_title,
             ),
+            run_log_summary=summarize_run_log(run_log),
             source_grounded_node_skeletons=result.source_grounded_node_skeletons,
             candidate_nodes=result.candidate_nodes,
             candidate_edges=result.candidate_edges,
@@ -193,12 +267,70 @@ def _source_material_from_pdf(
     )
 
 
+def _run_log_source_material_from_pdf(
+    material: LocalPDFMaterial,
+    request: GraphCandidateAuthoringRequest,
+) -> RunLogSourceMaterial:
+    return RunLogSourceMaterial(
+        source_id=request.source_id,
+        title=request.source_title,
+        citation=request.citation or material.storage_uri,
+        storage_uri=material.storage_uri,
+        filename=material.filename,
+        size_bytes=material.size_bytes,
+    )
+
+
 def _default_workspace_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def _default_run_id() -> str:
-    return f"run_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}"
+def _candidate_graph_output_dir(root: Path, benchmark_domain: str, run_id: str) -> Path:
+    return root / "benchmark" / "domains" / benchmark_domain / "candidate_graphs" / "api" / run_id
+
+
+def _write_failed_workflow_log(
+    exc: GraphAuthoringWorkflowRunError,
+    *,
+    output_dir: Path,
+    root: Path,
+) -> str:
+    workflow_log_path = output_dir / WORKFLOW_LOG_FILENAME
+    artifact_paths = GraphAuthoringLogArtifactPaths(
+        output_dir_uri=_relative_uri(output_dir, root),
+        workflow_log_uri=_relative_uri(workflow_log_path, root),
+    )
+    run_log = with_artifact_paths(exc.run_log, artifact_paths)
+    log_path = write_graph_authoring_run_log(run_log, output_dir)
+    _LOGGER.info(
+        "Failed graph authoring run log written run_id=%s workflow_log_uri=%s",
+        exc.run_log.run_id,
+        _relative_uri(log_path, root),
+    )
+    return _relative_uri(log_path, root)
+
+
+def _http_exception_from_workflow_run_error(
+    exc: GraphAuthoringWorkflowRunError,
+    *,
+    workflow_log_uri: str | None,
+) -> HTTPException:
+    cause = exc.cause
+    if isinstance(cause, KnowActValidationError):
+        status_code = 422
+    elif isinstance(cause, (AuthoringOutputParseError, ModelClientError)):
+        status_code = 502
+    else:
+        status_code = 500
+
+    message = exc.run_log.error.message if exc.run_log.error is not None else str(cause)
+    detail: str | dict[str, str] = message
+    if workflow_log_uri is not None:
+        detail = {
+            "message": message,
+            "workflow_log_uri": workflow_log_uri,
+        }
+    return HTTPException(status_code=status_code, detail=detail)
 
 
 def _relative_uri(path: Path, root: Path) -> str:

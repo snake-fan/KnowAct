@@ -311,7 +311,7 @@ uv run fastapi dev backend/main.py
 
 Then open the local Swagger UI at `http://127.0.0.1:8000/docs`. The current authoring API includes:
 
-- `POST /api/authoring/graph-candidates`, which reads one PDF by relative path under `storage/`, sends it to the OpenAI Responses API as a base64 `input_file` (`data:application/pdf;base64,...`) for the graph authoring workflow steps, returns source-grounded skeletons, candidate nodes, and candidate edges, and writes `candidate_nodes.json` and `candidate_edges.json` for review by default. Example request:
+- `POST /api/authoring/graph-candidates`, which reads one PDF by relative path under `storage/`, sends it to the OpenAI Responses API as a base64 `input_file` (`data:application/pdf;base64,...`) for the graph authoring workflow steps, returns source-grounded skeletons, candidate nodes, candidate edges, and a compact run log summary, and writes `candidate_nodes.json`, `candidate_edges.json`, and sidecar `workflow_log.json` by default. Only the node and edge files are candidate graph review artifacts. Example request:
 
 ```json
 {

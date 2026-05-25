@@ -311,7 +311,7 @@ uv run fastapi dev backend/main.py
 
 然后打开本地 Swagger UI：`http://127.0.0.1:8000/docs`。当前 authoring API 包含：
 
-- `POST /api/authoring/graph-candidates`：按 `storage/` 下的相对路径读取一个 PDF，把它作为 OpenAI Responses API 的 base64 `input_file`（`data:application/pdf;base64,...`）发送给 graph authoring workflow 的各个 step，返回 source-grounded skeletons、candidate nodes 和 candidate edges，并默认写出用于 review 的 `candidate_nodes.json` 与 `candidate_edges.json`。示例请求：
+- `POST /api/authoring/graph-candidates`：按 `storage/` 下的相对路径读取一个 PDF，把它作为 OpenAI Responses API 的 base64 `input_file`（`data:application/pdf;base64,...`）发送给 graph authoring workflow 的各个 step，返回 source-grounded skeletons、candidate nodes、candidate edges 和 compact run log summary，并默认写出 `candidate_nodes.json`、`candidate_edges.json` 以及 sidecar `workflow_log.json`。其中只有 node 和 edge 文件是 candidate graph review artifacts。示例请求：
 
 ```json
 {

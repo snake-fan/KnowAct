@@ -3,7 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from backend.knowact.authoring.output import write_graph_authoring_output
+from backend.knowact.authoring.logging import GraphAuthoringWorkflowRunError
+from backend.knowact.authoring.output import write_graph_authoring_output, write_graph_authoring_run_log
 from backend.knowact.authoring.openai_workflow import build_openai_graph_authoring_workflow
 from backend.knowact.authoring.schemas import SourceGroundedNodeSkeleton, SourceMaterial
 from backend.knowact.authoring.templates.edge_proposal import build_edge_proposal_messages
@@ -57,6 +58,66 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
             )
             validate_knowledge_graph(graph)
 
+    def test_graph_authoring_workflow_records_structured_run_log(self):
+        workflow = GraphAuthoringAgentWorkflow(
+            node_extraction_step=FixtureNodeExtractionStep(),
+            node_rubric_authoring_step=FixtureNodeRubricAuthoringStep(),
+            edge_proposal_step=FixtureEdgeProposalStep(),
+        )
+        source_material = _source_material()
+
+        run_result = workflow.run_with_log([source_material], run_id="dev_run_001")
+
+        run_log = run_result.run_log
+        self.assertEqual("dev_run_001", run_log.run_id)
+        self.assertEqual("Graph Authoring Agent Workflow", run_log.workflow_name)
+        self.assertEqual("succeeded", run_log.status)
+        self.assertIsNotNone(run_log.completed_at)
+        self.assertEqual(1, len(run_log.source_materials))
+        self.assertEqual("isl_python", run_log.source_materials[0].source_id)
+        self.assertEqual("Development fixture excerpt", run_log.source_materials[0].citation)
+        self.assertFalse(hasattr(run_log.source_materials[0], "text"))
+
+        entries_by_name = {entry.entry_name: entry for entry in run_log.entries}
+        self.assertEqual(
+            {
+                "node_extraction",
+                "validate_source_grounded_node_skeletons",
+                "node_rubric_authoring",
+                "validate_complete_candidate_nodes",
+                "edge_proposal",
+                "validate_candidate_edges",
+            },
+            set(entries_by_name),
+        )
+        self.assertEqual({"source_materials": 1}, entries_by_name["node_extraction"].input_counts)
+        self.assertEqual({"skeletons": 5}, entries_by_name["node_extraction"].output_counts)
+        self.assertEqual({"candidate_nodes": 5}, entries_by_name["node_rubric_authoring"].output_counts)
+        self.assertEqual({"candidate_edges": 4}, entries_by_name["edge_proposal"].output_counts)
+        self.assertEqual("passed", entries_by_name["validate_candidate_edges"].validation_result)
+
+        serialized_log = json.dumps(run_log.model_dump(mode="json", exclude_none=True))
+        self.assertNotIn(source_material.text, serialized_log)
+        self.assertNotIn("Source material:", serialized_log)
+
+    def test_graph_authoring_run_log_can_be_written_as_sidecar_artifact(self):
+        workflow = GraphAuthoringAgentWorkflow(
+            node_extraction_step=FixtureNodeExtractionStep(),
+            node_rubric_authoring_step=FixtureNodeRubricAuthoringStep(),
+            edge_proposal_step=FixtureEdgeProposalStep(),
+        )
+        run_result = workflow.run_with_log([_source_material()], run_id="dev_run_001")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            log_path = write_graph_authoring_run_log(run_result.run_log, output_dir)
+
+            self.assertEqual("workflow_log.json", log_path.name)
+            raw_log = _load_json(log_path)
+            self.assertEqual("dev_run_001", raw_log["run_id"])
+            self.assertEqual("succeeded", raw_log["status"])
+            self.assertEqual(6, len(raw_log["entries"]))
+
     def test_graph_authoring_workflow_rejects_incomplete_candidate_node_rubrics(self):
         workflow = GraphAuthoringAgentWorkflow(
             node_extraction_step=FixtureNodeExtractionStep(),
@@ -64,8 +125,33 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
             edge_proposal_step=FixtureEdgeProposalStep(),
         )
 
-        with self.assertRaisesRegex(KnowActValidationError, "exactly L0-L5"):
+        with self.assertRaises(GraphAuthoringWorkflowRunError) as context:
             workflow.run([_source_material()])
+        self.assertIsInstance(context.exception.cause, KnowActValidationError)
+        self.assertEqual("failed", context.exception.run_log.status)
+        failed_entry = context.exception.run_log.entries[-1]
+        self.assertEqual("validate_complete_candidate_nodes", failed_entry.entry_name)
+        self.assertEqual("failed", failed_entry.status)
+        self.assertEqual("failed", failed_entry.validation_result)
+        self.assertEqual("KnowActValidationError", failed_entry.error.error_type)
+        self.assertIn("exactly L0-L5", failed_entry.error.message)
+
+    def test_graph_authoring_workflow_redacts_sensitive_error_messages_in_run_log(self):
+        workflow = GraphAuthoringAgentWorkflow(
+            node_extraction_step=SecretFailingNodeExtractionStep(),
+            node_rubric_authoring_step=FixtureNodeRubricAuthoringStep(),
+            edge_proposal_step=FixtureEdgeProposalStep(),
+        )
+
+        with self.assertRaises(GraphAuthoringWorkflowRunError) as context:
+            workflow.run_with_log([_source_material()], run_id="bad_run_001")
+
+        raw_log = context.exception.run_log.model_dump(mode="json", exclude_none=True)
+        serialized_log = json.dumps(raw_log)
+        self.assertIn("sk-[REDACTED]", serialized_log)
+        self.assertIn("api_key=[REDACTED]", serialized_log)
+        self.assertNotIn("sk-testsecret123456", serialized_log)
+        self.assertNotIn("api_key=visible-secret", serialized_log)
 
     def test_openai_workflow_builder_wires_llm_steps_behind_model_client_interface(self):
         model_client = FakeRawJSONWorkflowModelClient()
@@ -161,6 +247,11 @@ class FixtureNodeExtractionStep:
     def _assert_source_material(self, source_materials):
         if len(source_materials) != 1 or source_materials[0].source_id != "isl_python":
             raise AssertionError("fixture expected ISL Python source material")
+
+
+class SecretFailingNodeExtractionStep:
+    def run(self, source_materials):
+        raise RuntimeError("failed with sk-testsecret123456 and api_key=visible-secret")
 
 
 class FixtureNodeRubricAuthoringStep:
