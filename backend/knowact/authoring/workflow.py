@@ -19,6 +19,7 @@ from backend.knowact.authoring.validation import (
     validate_complete_candidate_nodes,
     validate_source_grounded_node_skeletons,
 )
+from backend.knowact.llm.client import ModelClientMetadata
 from backend.knowact.logging_config import get_knowact_logger
 
 
@@ -33,10 +34,12 @@ class GraphAuthoringAgentWorkflow:
         node_extraction_step: NodeExtractionStep,
         node_rubric_authoring_step: NodeRubricAuthoringStep,
         edge_proposal_step: EdgeProposalStep,
+        model_metadata: ModelClientMetadata | None = None,
     ) -> None:
         self._node_extraction_step = node_extraction_step
         self._node_rubric_authoring_step = node_rubric_authoring_step
         self._edge_proposal_step = edge_proposal_step
+        self._model_metadata = model_metadata
 
     def run(self, source_materials: Sequence[SourceMaterial]) -> GraphAuthoringWorkflowResult:
         return self.run_with_log(
@@ -62,6 +65,7 @@ class GraphAuthoringAgentWorkflow:
             workflow_name=GRAPH_AUTHORING_WORKFLOW_NAME,
             source_materials=source_materials,
             source_metadata=source_metadata,
+            model_metadata=self._model_metadata,
         )
 
         skeletons = _run_logged_entry(

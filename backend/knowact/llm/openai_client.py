@@ -2,16 +2,23 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel
 
-from backend.knowact.llm.client import ModelClientError
+from backend.knowact.llm.client import ModelClientError, ModelClientMetadata
 from backend.knowact.llm.config import OpenAIModelConfig
-from backend.knowact.llm.messages import ModelMessage
+from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage, render_messages_for_profile
 
 
 class OpenAIChatModelClient:
     """OpenAI SDK-backed client that returns raw model text."""
 
+    message_profile = OPENAI_MESSAGE_PROFILE
+
     def __init__(self, config: OpenAIModelConfig, client: object | None = None) -> None:
         self._config = config
+        self.metadata = ModelClientMetadata(
+            provider="openai",
+            model_name=config.model,
+            message_profile=self.message_profile.name,
+        )
         if client is not None:
             self._client = client
             return
@@ -37,7 +44,7 @@ class OpenAIChatModelClient:
     ) -> str:
         params: dict[str, object] = {
             "model": self._config.model,
-            "messages": [message.model_dump(mode="json") for message in messages],
+            "messages": render_messages_for_profile(messages, self.message_profile),
             "response_format": {"type": "json_object"},
         }
         if self._config.temperature is not None:

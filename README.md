@@ -282,7 +282,7 @@ The V1 implementation has started with the schema and validation spine:
 - `backend/knowact/core/`: Pydantic schemas for knowledge graphs, evidence records, knowledge maps, episode manifests, and scoring reports.
 - `backend/knowact/validation/`: cross-object validators for graph references, map coverage/evidence support, and episode manifest constraints.
 - `backend/knowact/authoring/`: the Phase 2 graph authoring workflow spine, with node extraction, node rubric authoring, edge proposal, candidate file export boundaries, and separate `templates/` and `parsers/` modules for agent prompts and raw model outputs.
-- `backend/knowact/llm/`: a model-client interface plus OpenAI SDK-backed clients for text-based authoring steps.
+- `backend/knowact/llm/`: a model-client interface plus OpenAI and DeepSeek SDK-backed clients for text-based authoring steps.
 - `backend/knowact/storage/`: local artifact and material path helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
 - `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
 - `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`: a 5-node development fixture for schema and validator checks, not the formal 30-50 node v1 graph.
@@ -295,7 +295,17 @@ OPENAI_API_KEY=...
 KNOWACT_OPENAI_MODEL=gpt-4.1-mini
 ```
 
-The current tests use deterministic fixtures and fake clients; they do not call the OpenAI API.
+DeepSeek can be selected per authoring request with `client_provider="deepseek"` and is configured through environment variables rather than request-body secrets:
+
+```bash
+DEEPSEEK_API_KEY=...
+KNOWACT_DEEPSEEK_MODEL=deepseek-v4-flash
+KNOWACT_DEEPSEEK_BASE_URL=https://api.deepseek.com
+KNOWACT_DEEPSEEK_TIMEOUT_SECONDS=120
+KNOWACT_DEEPSEEK_MAX_TOKENS=8000
+```
+
+The current tests use deterministic fixtures and fake clients; they do not call the OpenAI or DeepSeek APIs.
 
 Run the current Python checks with:
 
@@ -322,19 +332,20 @@ Then open the local Swagger UI at `http://127.0.0.1:8000/docs`. The current auth
 ```json
 {
   "pdf_path": "books/isl_python.pdf",
+  "client_provider": "openai",
   "run_id": "dev_run_001",
   "force_reparse": false
 }
 ```
 
-PDF source material requests are constrained to `storage/` and reject absolute paths or `..` traversal. For `storage/books/isl_python.pdf`, the default Markdown cache path is `storage/books/isl_python.md`; existing Markdown is reused unless `force_reparse=true`. The LLM path uses Markdown text, not PDF base64 `input_file` or OpenAI `file_id`. OSS staging objects are temporary, private-bucket transport for MinerU URL parsing; signed URLs are not returned in API responses or workflow logs. The API produces Candidate Knowledge Graph artifacts only; it does not promote them into reviewed authored graph data.
+PDF source material requests are constrained to `storage/` and reject absolute paths or `..` traversal. For `storage/books/isl_python.pdf`, the default Markdown cache path is `storage/books/isl_python.md`; existing Markdown is reused unless `force_reparse=true`. The LLM path uses Markdown text, not PDF base64 `input_file` or OpenAI `file_id`, and `client_provider` currently accepts `openai` or `deepseek` with `openai` as the default. OSS staging objects are temporary, private-bucket transport for MinerU URL parsing; signed URLs are not returned in API responses or workflow logs. The API produces Candidate Knowledge Graph artifacts only; it does not promote them into reviewed authored graph data.
 
 Implemented / planned components include:
 
 - [x] V1 core schema and validation spine
 - [x] Knowledge map representation
 - [x] Phase 2 graph authoring workflow spine
-- [x] OpenAI SDK client boundary for LLM-backed steps
+- [x] OpenAI and DeepSeek SDK client boundaries for LLM-backed steps
 - [x] FastAPI authoring API for real source-backed graph candidate runs
 - [ ] Ground-truth map authoring
 - [ ] LLM-based profile generation

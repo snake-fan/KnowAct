@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.knowact.authoring.schemas import GraphAuthoringWorkflowResult, SourceMaterial
+from backend.knowact.llm.client import ModelClientMetadata
 
 
 GRAPH_AUTHORING_WORKFLOW_NAME = "Graph Authoring Agent Workflow"
@@ -133,6 +134,9 @@ class GraphAuthoringRunLog(BaseModel):
 
     run_id: str
     workflow_name: str
+    model_provider: str | None = None
+    model_name: str | None = None
+    message_profile: str | None = None
     started_at: datetime
     completed_at: datetime | None = None
     status: RunLogStatus
@@ -141,10 +145,10 @@ class GraphAuthoringRunLog(BaseModel):
     artifact_paths: GraphAuthoringLogArtifactPaths | None = None
     error: WorkflowRunError | None = None
 
-    @field_validator("run_id", "workflow_name")
+    @field_validator("run_id", "workflow_name", "model_provider", "model_name", "message_profile")
     @classmethod
-    def _must_not_be_blank(cls, value: str) -> str:
-        if not value.strip():
+    def _must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
             raise ValueError("must not be blank")
         return value
 
@@ -190,6 +194,7 @@ class GraphAuthoringRunLogBuilder:
         workflow_name: str = GRAPH_AUTHORING_WORKFLOW_NAME,
         source_materials: Sequence[SourceMaterial],
         source_metadata: Sequence[RunLogSourceMaterial] | None = None,
+        model_metadata: ModelClientMetadata | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._run_id = run_id
@@ -202,6 +207,7 @@ class GraphAuthoringRunLogBuilder:
         self._clock = clock or _utc_now
         self._started_at = self._clock()
         self._entries: list[WorkflowRunLogEntry] = []
+        self._model_metadata = model_metadata
 
     def start_entry(
         self,
@@ -266,6 +272,7 @@ class GraphAuthoringRunLogBuilder:
         return GraphAuthoringRunLog(
             run_id=self._run_id,
             workflow_name=self._workflow_name,
+            **_model_metadata_fields(self._model_metadata),
             started_at=self._started_at,
             completed_at=self._clock(),
             status="succeeded",
@@ -277,6 +284,7 @@ class GraphAuthoringRunLogBuilder:
         return GraphAuthoringRunLog(
             run_id=self._run_id,
             workflow_name=self._workflow_name,
+            **_model_metadata_fields(self._model_metadata),
             started_at=self._started_at,
             completed_at=self._clock(),
             status="failed",
@@ -288,6 +296,16 @@ class GraphAuthoringRunLogBuilder:
 
 def default_graph_authoring_run_id() -> str:
     return f"run_{_utc_now().strftime('%Y%m%dT%H%M%S%fZ')}"
+
+
+def _model_metadata_fields(model_metadata: ModelClientMetadata | None) -> dict[str, str | None]:
+    if model_metadata is None:
+        return {}
+    return {
+        "model_provider": model_metadata.provider,
+        "model_name": model_metadata.model_name,
+        "message_profile": model_metadata.message_profile,
+    }
 
 
 def workflow_run_error_from_exception(

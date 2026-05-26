@@ -14,6 +14,7 @@ from backend.knowact.authoring.templates.node_rubric_authoring import (
 )
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeNode
 from backend.knowact.llm.client import ModelClient
+from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessageProfile
 
 
 class NodeExtractionStep(Protocol):
@@ -44,7 +45,12 @@ class LLMNodeExtractionStep:
         self._model_client = model_client
 
     def run(self, source_materials: Sequence[SourceMaterial]) -> tuple[SourceGroundedNodeSkeleton, ...]:
-        raw_output = self._model_client.complete(messages=build_node_extraction_messages(source_materials))
+        raw_output = self._model_client.complete(
+            messages=build_node_extraction_messages(
+                source_materials,
+                message_profile=_message_profile_for(self._model_client),
+            )
+        )
         return parse_node_extraction_output(raw_output)
 
 
@@ -58,7 +64,11 @@ class LLMNodeRubricAuthoringStep:
         source_materials: Sequence[SourceMaterial],
     ) -> tuple[KnowledgeNode, ...]:
         raw_output = self._model_client.complete(
-            messages=build_node_rubric_authoring_messages(skeletons, source_materials)
+            messages=build_node_rubric_authoring_messages(
+                skeletons,
+                source_materials,
+                message_profile=_message_profile_for(self._model_client),
+            )
         )
         return parse_node_rubric_authoring_output(raw_output)
 
@@ -73,6 +83,14 @@ class LLMEdgeProposalStep:
         source_materials: Sequence[SourceMaterial],
     ) -> tuple[KnowledgeEdge, ...]:
         raw_output = self._model_client.complete(
-            messages=build_edge_proposal_messages(candidate_nodes, source_materials)
+            messages=build_edge_proposal_messages(
+                candidate_nodes,
+                source_materials,
+                message_profile=_message_profile_for(self._model_client),
+            )
         )
         return parse_edge_proposal_output(raw_output)
+
+
+def _message_profile_for(model_client: ModelClient) -> ModelMessageProfile:
+    return getattr(model_client, "message_profile", OPENAI_MESSAGE_PROFILE)

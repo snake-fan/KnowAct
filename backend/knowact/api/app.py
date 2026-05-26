@@ -5,12 +5,15 @@ from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict
 
 from backend.knowact.api.authoring import build_authoring_router
-from backend.knowact.authoring.openai_workflow import build_openai_graph_authoring_workflow
+from backend.knowact.authoring.openai_workflow import (
+    GraphAuthoringClientProvider,
+    build_graph_authoring_workflow_for_provider,
+)
 from backend.knowact.authoring.sources import MinerUHTTPSourceParser, SourceParser
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 
 
-GraphAuthoringWorkflowFactory = Callable[[], GraphAuthoringAgentWorkflow]
+GraphAuthoringWorkflowFactory = Callable[[GraphAuthoringClientProvider], GraphAuthoringAgentWorkflow]
 
 
 class HealthResponse(BaseModel):
@@ -35,7 +38,7 @@ def create_app(
     app.include_router(
         build_authoring_router(
             graph_authoring_workflow_factory=graph_authoring_workflow_factory
-            or build_openai_graph_authoring_workflow,
+            or build_graph_authoring_workflow_for_provider,
             source_parser=source_parser or MinerUHTTPSourceParser(),
             workspace_root=workspace_root,
         ),

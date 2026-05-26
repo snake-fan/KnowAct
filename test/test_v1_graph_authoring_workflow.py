@@ -13,6 +13,7 @@ from backend.knowact.authoring.templates.node_rubric_authoring import build_node
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeGraph, KnowledgeNode, SourceLocator
 from backend.knowact.core.map import MasteryLevel
+from backend.knowact.llm.messages import DEEPSEEK_MESSAGE_PROFILE
 from backend.knowact.validation.exceptions import KnowActValidationError
 from backend.knowact.validation.graph import validate_knowledge_graph
 
@@ -197,6 +198,19 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
             self.assertIn('source_id "isl_python"', prompt)
             self.assertIn(source_materials[0].text, prompt)
             self.assertNotIn("uploaded original PDF", prompt)
+
+    def test_graph_authoring_templates_render_high_priority_instructions_for_message_profile(self):
+        source_materials = [_source_material()]
+
+        default_messages = build_node_extraction_messages(source_materials)
+        deepseek_messages = build_node_extraction_messages(
+            source_materials,
+            message_profile=DEEPSEEK_MESSAGE_PROFILE,
+        )
+
+        self.assertEqual("developer", default_messages[0].role)
+        self.assertEqual("system", deepseek_messages[0].role)
+        self.assertEqual("user", deepseek_messages[1].role)
 
 
 class FixtureNodeExtractionStep:

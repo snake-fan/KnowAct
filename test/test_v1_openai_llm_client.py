@@ -5,8 +5,9 @@ from pathlib import Path
 import tempfile
 from unittest.mock import patch
 
-from backend.knowact.llm.config import load_dotenv_file, openai_config_from_env
+from backend.knowact.llm.config import deepseek_config_from_env, load_dotenv_file, openai_config_from_env
 from backend.knowact.llm.messages import ModelMessage
+from backend.knowact.llm.deepseek_client import DeepSeekChatModelClient
 from backend.knowact.llm.openai_client import OpenAIChatModelClient
 
 
@@ -33,6 +34,21 @@ class V1OpenAILLMClientTest(unittest.TestCase):
     def test_openai_config_requires_api_key(self):
         with self.assertRaisesRegex(ValueError, "OPENAI_API_KEY"):
             openai_config_from_env({})
+
+    def test_deepseek_config_reads_env_with_repo_defaults(self):
+        config = deepseek_config_from_env(
+            {
+                "DEEPSEEK_API_KEY": "deepseek-test-key",
+                "KNOWACT_DEEPSEEK_TIMEOUT_SECONDS": "45",
+                "KNOWACT_DEEPSEEK_MAX_TOKENS": "4096",
+            }
+        )
+
+        self.assertEqual("deepseek-test-key", config.api_key)
+        self.assertEqual("deepseek-v4-flash", config.model)
+        self.assertEqual("https://api.deepseek.com", config.base_url)
+        self.assertEqual(45.0, config.timeout_seconds)
+        self.assertEqual(4096, config.max_tokens)
 
     def test_load_dotenv_file_populates_process_environment_without_overriding_existing_values(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -73,6 +89,34 @@ class V1OpenAILLMClientTest(unittest.TestCase):
         self.assertEqual(8000, fake_completions.last_params["max_completion_tokens"])
         self.assertEqual(
             [{"role": "developer", "content": "Return candidate nodes as JSON."}],
+            fake_completions.last_params["messages"],
+        )
+
+    def test_deepseek_client_uses_json_mode_max_tokens_and_system_instructions(self):
+        fake_completions = FakeCompletions()
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=fake_completions),
+        )
+        config = deepseek_config_from_env(
+            {
+                "DEEPSEEK_API_KEY": "deepseek-test-key",
+                "KNOWACT_DEEPSEEK_MODEL": "deepseek-test",
+                "KNOWACT_DEEPSEEK_MAX_TOKENS": "2048",
+            }
+        )
+        client = DeepSeekChatModelClient(config, client=fake_client)
+
+        response = client.complete(
+            messages=[ModelMessage(role="developer", content="Return candidate nodes as JSON.")],
+        )
+
+        self.assertEqual('{"nodes": []}', response)
+        self.assertEqual("deepseek-test", fake_completions.last_params["model"])
+        self.assertEqual({"type": "json_object"}, fake_completions.last_params["response_format"])
+        self.assertEqual(2048, fake_completions.last_params["max_tokens"])
+        self.assertNotIn("max_completion_tokens", fake_completions.last_params)
+        self.assertEqual(
+            [{"role": "system", "content": "Return candidate nodes as JSON."}],
             fake_completions.last_params["messages"],
         )
 
