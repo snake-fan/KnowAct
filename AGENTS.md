@@ -85,6 +85,20 @@
 - 若新增源码目录，请在 README 中补充项目结构与启动方式。
 - 若新增测试体系，请在 README 或本文件中记录测试命令。
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs for this repo are tracked in GitHub Issues for `snake-fan/KnowAct`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+This repo uses the default five-label triage vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repo uses a single-context domain documentation layout. See `docs/agents/domain.md`.
+
 ## Development Workflow
 
 1. 检查当前工作区状态，识别用户已有改动。
