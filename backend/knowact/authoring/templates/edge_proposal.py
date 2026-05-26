@@ -8,7 +8,7 @@ from backend.knowact.authoring.templates.common import (
     JSON_ONLY_RULES,
     SOURCE_GROUNDING_RULES,
     dump_model_list,
-    render_uploaded_pdf_source_reference,
+    render_parsed_source_markdown,
     render_sections,
 )
 from backend.knowact.core.graph import KnowledgeNode
@@ -32,7 +32,7 @@ def build_edge_proposal_messages(
 This step proposes precision-first candidate Knowledge Edges after complete candidate nodes exist.
 
 Input boundary:
-- You may use complete candidate nodes, including diagnostic_goal, L0-L5 levels, diagnostic_signals, simulator_behavior, source_locators, and relevant passages from the uploaded original PDF.
+- You may use complete candidate nodes, including diagnostic_goal, L0-L5 levels, diagnostic_signals, simulator_behavior, source_locators, and relevant passages from Parsed Source Markdown.
 - Do not change node objects.
 - Do not add node fields to edge objects.
 - Do not use edge objects to express user knowledge state, evidence, diagnostic questions, scoring, or probe strategy.
@@ -69,7 +69,7 @@ Return JSON with this exact top-level shape:
             role="user",
             content=render_sections(
                 "Propose precision-first candidate Knowledge Edges for the complete candidate node list.",
-                render_uploaded_pdf_source_reference(source_materials),
+                render_parsed_source_markdown(source_materials),
                 """
 Review each proposed edge before output:
 - Are source and target valid node ids from the candidate node list?

@@ -5,11 +5,12 @@ from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict
 
 from backend.knowact.api.authoring import build_authoring_router
-from backend.knowact.authoring.openai_workflow import build_openai_pdf_graph_authoring_workflow
+from backend.knowact.authoring.openai_workflow import build_openai_graph_authoring_workflow
+from backend.knowact.authoring.sources import MinerUHTTPSourceParser, SourceParser
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 
 
-PDFGraphAuthoringWorkflowFactory = Callable[[Path, str | None], GraphAuthoringAgentWorkflow]
+GraphAuthoringWorkflowFactory = Callable[[], GraphAuthoringAgentWorkflow]
 
 
 class HealthResponse(BaseModel):
@@ -21,7 +22,8 @@ class HealthResponse(BaseModel):
 
 def create_app(
     *,
-    pdf_graph_authoring_workflow_factory: PDFGraphAuthoringWorkflowFactory | None = None,
+    graph_authoring_workflow_factory: GraphAuthoringWorkflowFactory | None = None,
+    source_parser: SourceParser | None = None,
     workspace_root: Path | None = None,
 ) -> FastAPI:
     app = FastAPI(
@@ -32,8 +34,9 @@ def create_app(
 
     app.include_router(
         build_authoring_router(
-            pdf_graph_authoring_workflow_factory=pdf_graph_authoring_workflow_factory
-            or _build_openai_pdf_graph_authoring_workflow,
+            graph_authoring_workflow_factory=graph_authoring_workflow_factory
+            or build_openai_graph_authoring_workflow,
+            source_parser=source_parser or MinerUHTTPSourceParser(),
             workspace_root=workspace_root,
         ),
         prefix="/api/authoring",
@@ -45,10 +48,3 @@ def create_app(
         return HealthResponse(status="ok", service="knowact-backend")
 
     return app
-
-
-def _build_openai_pdf_graph_authoring_workflow(
-    pdf_path: Path,
-    filename: str | None = None,
-) -> GraphAuthoringAgentWorkflow:
-    return build_openai_pdf_graph_authoring_workflow(pdf_path=pdf_path, filename=filename)

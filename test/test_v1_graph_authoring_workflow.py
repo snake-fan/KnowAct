@@ -172,6 +172,7 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertIn("Source-Grounded Node Skeletons", extraction_prompt)
         self.assertIn("roughly 1-3 focused diagnostic questions", extraction_prompt)
         self.assertIn("Do not output diagnostic_goal", extraction_prompt)
+        self.assertIn("Parsed Source Markdown", extraction_prompt)
         self.assertIn('"skeletons"', extraction_prompt)
 
         skeletons = FixtureNodeExtractionStep().run(source_materials)
@@ -192,10 +193,10 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertIn("Omit weak, speculative, merely related", edge_prompt)
 
         for prompt in (extraction_prompt, rubric_prompt, edge_prompt):
-            self.assertIn("uploaded original PDF", prompt)
+            self.assertIn("Parsed Source Markdown", prompt)
             self.assertIn('source_id "isl_python"', prompt)
-            self.assertNotIn(source_materials[0].text, prompt)
-            self.assertNotIn("Source material:", prompt)
+            self.assertIn(source_materials[0].text, prompt)
+            self.assertNotIn("uploaded original PDF", prompt)
 
 
 class FixtureNodeExtractionStep:

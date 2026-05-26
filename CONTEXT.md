@@ -16,6 +16,10 @@ _Avoid_: general knowledge, model memory, unsourced topic list
 An authoring-only registry that gives uploaded or local source materials stable identities and storage paths.
 _Avoid_: benchmark graph manifest, reviewed graph data, book-only library
 
+**Parsed Source Markdown**:
+A Markdown representation of an **Authoritative Source** used as source material during graph authoring.
+_Avoid_: PDF input_file, OpenAI file_id, raw PDF prompt payload
+
 **Source Locator**:
 A minimal structured reference that identifies where a **Knowledge Node** is mentioned in an **Authoritative Source**.
 _Avoid_: vague source label, invented citation, generic textbook reference, required quote span

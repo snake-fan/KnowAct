@@ -282,7 +282,7 @@ V1 实现已经从 schema 与 validation spine 开始：
 - `backend/knowact/core/`：知识图谱、evidence record、知识地图、episode manifest 和 scoring report 的 Pydantic schema。
 - `backend/knowact/validation/`：用于 graph 引用、map coverage/evidence support 和 episode manifest 约束的跨对象 validator。
 - `backend/knowact/authoring/`：Phase 2 graph authoring workflow spine，包含 node extraction、node rubric authoring、edge proposal、candidate file export 边界，以及分离的 `templates/` 和 `parsers/` 模块来管理 agent prompts 与 raw model outputs。
-- `backend/knowact/llm/`：model-client interface，以及基于 OpenAI SDK 的 clients，用于 chat-completions authoring steps 和 Responses API PDF-backed graph authoring runs。
+- `backend/knowact/llm/`：model-client interface，以及基于 OpenAI SDK 的 clients，用于 text-based authoring steps。
 - `backend/knowact/storage/`：local artifact 与 material path helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
 - `backend/knowact/api/` 与 `backend/main.py`：FastAPI 入口，以及可从本地教材 PDF 运行真实 graph authoring workflow 的 authoring API。
 - `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`：用于 schema 与 validator 检查的 5-node development fixture，不是正式的 30-50 node v1 graph。
@@ -303,6 +303,12 @@ KNOWACT_OPENAI_MODEL=gpt-4.1-mini
 uv run python -m unittest
 ```
 
+手动验证阿里云 OSS signed URL 上传和公网访问：
+
+```bash
+uv run python scripts/manual_aliyun_oss_smoke.py
+```
+
 启动后端开发 API：
 
 ```bash
@@ -311,16 +317,17 @@ uv run fastapi dev backend/main.py
 
 然后打开本地 Swagger UI：`http://127.0.0.1:8000/docs`。当前 authoring API 包含：
 
-- `POST /api/authoring/graph-candidates`：按 `storage/` 下的相对路径读取一个 PDF，把它作为 OpenAI Responses API 的 base64 `input_file`（`data:application/pdf;base64,...`）发送给 graph authoring workflow 的各个 step，返回 source-grounded skeletons、candidate nodes、candidate edges 和 compact run log summary，并默认写出 `candidate_nodes.json`、`candidate_edges.json` 以及 sidecar `workflow_log.json`。其中只有 node 和 edge 文件是 candidate graph review artifacts。示例请求：
+- `POST /api/authoring/graph-candidates`：按 `storage/` 下的相对路径读取一个 PDF，解析或复用同目录同 stem 的 Parsed Source Markdown，必要时调用 MinerU 创建或重新生成 Markdown，再把 Markdown 文本发送给 graph authoring workflow 的各个 step，返回 source-grounded skeletons、candidate nodes、candidate edges、Markdown cache metadata 和 compact run log summary，并默认写出 `candidate_nodes.json`、`candidate_edges.json` 以及 sidecar `workflow_log.json`。MinerU standard mode 会先把本地 PDF 发布为私有阿里云 OSS staging object 的短期 signed URL，再把这个 URL 提交给 MinerU；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会拆成 chunks 并按页码顺序拼接 Markdown。其中只有 node 和 edge 文件是 candidate graph review artifacts。示例请求：
 
 ```json
 {
   "pdf_path": "books/isl_python.pdf",
-  "run_id": "dev_run_001"
+  "run_id": "dev_run_001",
+  "force_reparse": false
 }
 ```
 
-PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `..` 路径穿越。Responses API 的 PDF 路径应使用支持 file/vision input 的模型，本地文件需保持在本地 resolver 使用的 50 MB request limit 内。该 API 只生成 Candidate Knowledge Graph artifacts，不会把它们 promote 成 reviewed authored graph data。
+PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `..` 路径穿越。对于 `storage/books/isl_python.pdf`，默认 Markdown 缓存路径是 `storage/books/isl_python.md`；除非 `force_reparse=true`，已有 Markdown 会被复用。LLM 路径使用 Markdown text，不使用 PDF base64 `input_file` 或 OpenAI `file_id`。OSS staging object 只是 MinerU URL parsing 的私有临时传输层；signed URL 不会出现在 API response 或 workflow log 中。该 API 只生成 Candidate Knowledge Graph artifacts，不会把它们 promote 成 reviewed authored graph data。
 
 已实现或计划中的组件包括：
 
@@ -328,7 +335,7 @@ PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `.
 - [x] 知识地图表示
 - [x] Phase 2 graph authoring workflow spine
 - [x] OpenAI SDK client boundary for LLM-backed steps
-- [x] FastAPI authoring API，用于真实 PDF-backed graph candidate runs
+- [x] FastAPI authoring API，用于真实 source-backed graph candidate runs
 - [ ] Ground-truth map authoring
 - [ ] 基于 LLM 的画像生成
 - [ ] 人工校验协议

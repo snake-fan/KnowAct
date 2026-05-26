@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Protocol
 
 from backend.knowact.llm.messages import ModelMessage
@@ -16,15 +15,3 @@ class ModelClient(Protocol):
         messages: Sequence[ModelMessage],
     ) -> str:
         """Return raw model text for a rendered message list."""
-
-
-class PDFModelClient(Protocol):
-    def complete_with_pdf(
-        self,
-        *,
-        messages: Sequence[ModelMessage],
-        pdf_path: Path,
-        filename: str | None = None,
-        json_mode: bool = False,
-    ) -> str:
-        """Return raw model text for a rendered message list plus one local PDF."""

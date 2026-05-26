@@ -282,7 +282,7 @@ The V1 implementation has started with the schema and validation spine:
 - `backend/knowact/core/`: Pydantic schemas for knowledge graphs, evidence records, knowledge maps, episode manifests, and scoring reports.
 - `backend/knowact/validation/`: cross-object validators for graph references, map coverage/evidence support, and episode manifest constraints.
 - `backend/knowact/authoring/`: the Phase 2 graph authoring workflow spine, with node extraction, node rubric authoring, edge proposal, candidate file export boundaries, and separate `templates/` and `parsers/` modules for agent prompts and raw model outputs.
-- `backend/knowact/llm/`: a model-client interface plus OpenAI SDK-backed clients for chat-completions authoring steps and Responses API PDF-backed graph authoring runs.
+- `backend/knowact/llm/`: a model-client interface plus OpenAI SDK-backed clients for text-based authoring steps.
 - `backend/knowact/storage/`: local artifact and material path helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
 - `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
 - `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`: a 5-node development fixture for schema and validator checks, not the formal 30-50 node v1 graph.
@@ -303,6 +303,12 @@ Run the current Python checks with:
 uv run python -m unittest
 ```
 
+Manually smoke-test Aliyun OSS signed URL access with:
+
+```bash
+uv run python scripts/manual_aliyun_oss_smoke.py
+```
+
 Start the backend development API with:
 
 ```bash
@@ -311,16 +317,17 @@ uv run fastapi dev backend/main.py
 
 Then open the local Swagger UI at `http://127.0.0.1:8000/docs`. The current authoring API includes:
 
-- `POST /api/authoring/graph-candidates`, which reads one PDF by relative path under `storage/`, sends it to the OpenAI Responses API as a base64 `input_file` (`data:application/pdf;base64,...`) for the graph authoring workflow steps, returns source-grounded skeletons, candidate nodes, candidate edges, and a compact run log summary, and writes `candidate_nodes.json`, `candidate_edges.json`, and sidecar `workflow_log.json` by default. Only the node and edge files are candidate graph review artifacts. Example request:
+- `POST /api/authoring/graph-candidates`, which reads one PDF by relative path under `storage/`, resolves same-directory same-stem Parsed Source Markdown, calls MinerU to create or regenerate that Markdown when needed, sends the Markdown text through the graph authoring workflow steps, returns source-grounded skeletons, candidate nodes, candidate edges, Markdown cache metadata, and a compact run log summary, and writes `candidate_nodes.json`, `candidate_edges.json`, and sidecar `workflow_log.json` by default. MinerU standard mode publishes the local PDF through a private Aliyun OSS staging object and short-lived signed URL before submitting the URL to MinerU; PDFs above `KNOWACT_MINERU_MAX_PAGES_PER_TASK` are split into chunks and their Markdown results are joined in page order. Only the node and edge files are candidate graph review artifacts. Example request:
 
 ```json
 {
   "pdf_path": "books/isl_python.pdf",
-  "run_id": "dev_run_001"
+  "run_id": "dev_run_001",
+  "force_reparse": false
 }
 ```
 
-PDF source material requests are constrained to `storage/` and reject absolute paths or `..` traversal. The Responses API PDF path should use a model with file/vision input support, and local files should stay within the 50 MB request limit used by the local resolver. The API produces Candidate Knowledge Graph artifacts only; it does not promote them into reviewed authored graph data.
+PDF source material requests are constrained to `storage/` and reject absolute paths or `..` traversal. For `storage/books/isl_python.pdf`, the default Markdown cache path is `storage/books/isl_python.md`; existing Markdown is reused unless `force_reparse=true`. The LLM path uses Markdown text, not PDF base64 `input_file` or OpenAI `file_id`. OSS staging objects are temporary, private-bucket transport for MinerU URL parsing; signed URLs are not returned in API responses or workflow logs. The API produces Candidate Knowledge Graph artifacts only; it does not promote them into reviewed authored graph data.
 
 Implemented / planned components include:
 
@@ -328,7 +335,7 @@ Implemented / planned components include:
 - [x] Knowledge map representation
 - [x] Phase 2 graph authoring workflow spine
 - [x] OpenAI SDK client boundary for LLM-backed steps
-- [x] FastAPI authoring API for real PDF-backed graph candidate runs
+- [x] FastAPI authoring API for real source-backed graph candidate runs
 - [ ] Ground-truth map authoring
 - [ ] LLM-based profile generation
 - [ ] Human verification protocol
