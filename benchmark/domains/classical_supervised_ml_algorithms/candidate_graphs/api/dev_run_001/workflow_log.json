@@ -1,8 +1,11 @@
 {
   "run_id": "dev_run_001",
   "workflow_name": "Graph Authoring Agent Workflow",
-  "started_at": "2026-05-26T07:24:35.978027Z",
-  "completed_at": "2026-05-26T07:24:36.251112Z",
+  "model_provider": "deepseek",
+  "model_name": "deepseek-v4-pro",
+  "message_profile": "deepseek",
+  "started_at": "2026-05-26T08:25:00.758469Z",
+  "completed_at": "2026-05-26T08:27:25.594618Z",
   "status": "failed",
   "source_materials": [
     {
@@ -21,16 +24,16 @@
     {
       "entry_name": "node_extraction",
       "entry_type": "agent_step",
-      "started_at": "2026-05-26T07:24:35.978062Z",
-      "completed_at": "2026-05-26T07:24:36.251095Z",
+      "started_at": "2026-05-26T08:25:00.758493Z",
+      "completed_at": "2026-05-26T08:27:25.594600Z",
       "status": "failed",
       "input_counts": {
         "source_materials": 1
       },
       "output_counts": {},
       "error": {
-        "error_type": "BadRequestError",
-        "message": "Error code: 400 - {'error': {'message': 'Failed to deserialize the JSON body into the target type: messages[0].role: unknown variant `developer`, expected one of `system`, `user`, `assistant`, `tool`, `latest_reminder` at line 1 column 32', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_request_error'}}",
+        "error_type": "AuthoringOutputParseError",
+        "message": "Authoring agent output was not valid JSON",
         "step_name": "node_extraction"
       }
     }
@@ -40,8 +43,8 @@
     "workflow_log_uri": "benchmark/domains/classical_supervised_ml_algorithms/candidate_graphs/api/dev_run_001/workflow_log.json"
   },
   "error": {
-    "error_type": "BadRequestError",
-    "message": "Error code: 400 - {'error': {'message': 'Failed to deserialize the JSON body into the target type: messages[0].role: unknown variant `developer`, expected one of `system`, `user`, `assistant`, `tool`, `latest_reminder` at line 1 column 32', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_request_error'}}",
+    "error_type": "AuthoringOutputParseError",
+    "message": "Authoring agent output was not valid JSON",
     "step_name": "node_extraction"
   }
 }

@@ -11,16 +11,18 @@ from backend.knowact.authoring.templates.common import (
     render_parsed_source_markdown,
     render_sections,
 )
-from backend.knowact.llm.messages import ModelMessage
+from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage, ModelMessageProfile
 
 
 def build_node_rubric_authoring_messages(
     skeletons: Sequence[SourceGroundedNodeSkeleton],
     source_materials: Sequence[SourceMaterial],
+    *,
+    message_profile: ModelMessageProfile = OPENAI_MESSAGE_PROFILE,
 ) -> tuple[ModelMessage, ...]:
     return (
         ModelMessage(
-            role="developer",
+            role=message_profile.high_priority_instruction_role,
             content=render_sections(
                 "You are the KnowAct Node Rubric Authoring Agent Step.",
                 AUTHORING_CONTEXT,

@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 
 from backend.knowact.api.app import create_app
 from backend.knowact.authoring.openai_workflow import build_openai_graph_authoring_workflow
+from backend.knowact.llm.client import ModelClientMetadata
+from backend.knowact.llm.messages import DEEPSEEK_MESSAGE_PROFILE, OPENAI_MESSAGE_PROFILE
 
 
 class V1AuthoringApiTest(unittest.TestCase):
@@ -54,6 +56,9 @@ class V1AuthoringApiTest(unittest.TestCase):
             raw_log = _load_json(log_path)
             self.assertEqual("dev_run_001", raw_log["run_id"])
             self.assertEqual("succeeded", raw_log["status"])
+            self.assertEqual("openai", raw_log["model_provider"])
+            self.assertEqual("fixture-model", raw_log["model_name"])
+            self.assertEqual("openai", raw_log["message_profile"])
             self.assertEqual(6, len(raw_log["entries"]))
             self.assertEqual("storage/books/isl_python.md", raw_log["source_materials"][0]["parsed_markdown_uri"])
             self.assertEqual("hit", raw_log["source_materials"][0]["parsed_markdown_cache_status"])
@@ -130,6 +135,58 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertIn("Regenerated Markdown", _render_messages(fake_model_client.calls[0]))
             self.assertNotIn("Stale Markdown", _render_messages(fake_model_client.calls[0]))
 
+    def test_authoring_api_selects_deepseek_provider_per_request(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_fixture_pdf(workspace_root)
+            _write_fixture_markdown(workspace_root, "## Train Test Split\n\nCached Markdown.")
+            workflow_factory = ProviderRecordingWorkflowFactory()
+            client = TestClient(
+                create_app(
+                    graph_authoring_workflow_factory=workflow_factory,
+                    source_parser=FixtureSourceParser("unused"),
+                    workspace_root=workspace_root,
+                )
+            )
+
+            response = client.post(
+                "/api/authoring/graph-candidates",
+                json={
+                    "pdf_path": "books/isl_python.pdf",
+                    "client_provider": "deepseek",
+                    "write_artifacts": True,
+                    "run_id": "deepseek_run_001",
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            self.assertEqual(["deepseek"], workflow_factory.client_providers)
+            self.assertEqual("system", workflow_factory.model_client.calls[0][0].role)
+            log_path = workspace_root / response.json()["artifact_paths"]["workflow_log_uri"]
+            raw_log = _load_json(log_path)
+            self.assertEqual("deepseek", raw_log["model_provider"])
+            self.assertEqual("deepseek-fixture", raw_log["model_name"])
+            self.assertEqual("deepseek", raw_log["message_profile"])
+
+    def test_authoring_api_rejects_unknown_client_provider(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_fixture_pdf(workspace_root)
+            _write_fixture_markdown(workspace_root, "## Train Test Split\n\nCached Markdown.")
+            fake_model_client = FixtureGraphModelClient()
+            client = _test_client(workspace_root, fake_model_client, FixtureSourceParser("unused"))
+
+            response = client.post(
+                "/api/authoring/graph-candidates",
+                json={
+                    "pdf_path": "books/isl_python.pdf",
+                    "client_provider": "unknown",
+                },
+            )
+
+            self.assertEqual(422, response.status_code)
+            self.assertEqual([], fake_model_client.calls)
+
     def test_authoring_api_writes_failed_workflow_log_and_returns_uri(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -166,6 +223,9 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertEqual({"workflow_log.json"}, {path.name for path in output_dir.iterdir()})
             raw_log = _load_json(output_dir / "workflow_log.json")
             self.assertEqual("failed", raw_log["status"])
+            self.assertEqual("openai", raw_log["model_provider"])
+            self.assertEqual("fixture-model", raw_log["model_name"])
+            self.assertEqual("openai", raw_log["message_profile"])
             self.assertEqual(detail["workflow_log_uri"], raw_log["artifact_paths"]["workflow_log_uri"])
             failed_entry = raw_log["entries"][-1]
             self.assertEqual("validate_complete_candidate_nodes", failed_entry["entry_name"])
@@ -212,7 +272,7 @@ class V1AuthoringApiTest(unittest.TestCase):
     def test_old_test_api_route_is_not_registered(self):
         client = TestClient(
             create_app(
-                graph_authoring_workflow_factory=lambda: build_openai_graph_authoring_workflow(
+                graph_authoring_workflow_factory=lambda client_provider: build_openai_graph_authoring_workflow(
                     model_client=FixtureGraphModelClient()
                 ),
                 source_parser=FixtureSourceParser("unused"),
@@ -227,6 +287,12 @@ class V1AuthoringApiTest(unittest.TestCase):
 class FixtureGraphModelClient:
     def __init__(self):
         self.calls = []
+        self.message_profile = OPENAI_MESSAGE_PROFILE
+        self.metadata = ModelClientMetadata(
+            provider="openai",
+            model_name="fixture-model",
+            message_profile=OPENAI_MESSAGE_PROFILE.name,
+        )
         self._responses = [
             json.dumps(
                 {
@@ -310,6 +376,22 @@ class IncompleteNodeGraphModelClient(FixtureGraphModelClient):
         ]
 
 
+class ProviderRecordingWorkflowFactory:
+    def __init__(self):
+        self.client_providers = []
+        self.model_client = FixtureGraphModelClient()
+        self.model_client.message_profile = DEEPSEEK_MESSAGE_PROFILE
+        self.model_client.metadata = ModelClientMetadata(
+            provider="deepseek",
+            model_name="deepseek-fixture",
+            message_profile=DEEPSEEK_MESSAGE_PROFILE.name,
+        )
+
+    def __call__(self, client_provider):
+        self.client_providers.append(client_provider)
+        return build_openai_graph_authoring_workflow(model_client=self.model_client)
+
+
 class FixtureSourceParser:
     def __init__(self, markdown: str):
         self.markdown = markdown
@@ -329,7 +411,7 @@ class FixtureSourceParser:
 def _test_client(workspace_root: Path, model_client: FixtureGraphModelClient, parser: FixtureSourceParser) -> TestClient:
     return TestClient(
         create_app(
-            graph_authoring_workflow_factory=lambda: build_openai_graph_authoring_workflow(
+            graph_authoring_workflow_factory=lambda client_provider: build_openai_graph_authoring_workflow(
                 model_client=model_client
             ),
             source_parser=parser,

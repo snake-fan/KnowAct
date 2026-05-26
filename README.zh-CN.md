@@ -282,7 +282,7 @@ V1 实现已经从 schema 与 validation spine 开始：
 - `backend/knowact/core/`：知识图谱、evidence record、知识地图、episode manifest 和 scoring report 的 Pydantic schema。
 - `backend/knowact/validation/`：用于 graph 引用、map coverage/evidence support 和 episode manifest 约束的跨对象 validator。
 - `backend/knowact/authoring/`：Phase 2 graph authoring workflow spine，包含 node extraction、node rubric authoring、edge proposal、candidate file export 边界，以及分离的 `templates/` 和 `parsers/` 模块来管理 agent prompts 与 raw model outputs。
-- `backend/knowact/llm/`：model-client interface，以及基于 OpenAI SDK 的 clients，用于 text-based authoring steps。
+- `backend/knowact/llm/`：model-client interface，以及基于 OpenAI 和 DeepSeek SDK 的 clients，用于 text-based authoring steps。
 - `backend/knowact/storage/`：local artifact 与 material path helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
 - `backend/knowact/api/` 与 `backend/main.py`：FastAPI 入口，以及可从本地教材 PDF 运行真实 graph authoring workflow 的 authoring API。
 - `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`：用于 schema 与 validator 检查的 5-node development fixture，不是正式的 30-50 node v1 graph。
@@ -295,7 +295,17 @@ OPENAI_API_KEY=...
 KNOWACT_OPENAI_MODEL=gpt-4.1-mini
 ```
 
-当前测试使用 deterministic fixtures 和 fake clients，不会调用 OpenAI API。
+DeepSeek 可以在单次 authoring 请求中通过 `client_provider="deepseek"` 选择，API key 与模型默认值通过环境变量配置，不放入 request body：
+
+```bash
+DEEPSEEK_API_KEY=...
+KNOWACT_DEEPSEEK_MODEL=deepseek-v4-flash
+KNOWACT_DEEPSEEK_BASE_URL=https://api.deepseek.com
+KNOWACT_DEEPSEEK_TIMEOUT_SECONDS=120
+KNOWACT_DEEPSEEK_MAX_TOKENS=8000
+```
+
+当前测试使用 deterministic fixtures 和 fake clients，不会调用 OpenAI 或 DeepSeek API。
 
 当前 Python 检查命令：
 
@@ -322,19 +332,20 @@ uv run fastapi dev backend/main.py
 ```json
 {
   "pdf_path": "books/isl_python.pdf",
+  "client_provider": "openai",
   "run_id": "dev_run_001",
   "force_reparse": false
 }
 ```
 
-PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `..` 路径穿越。对于 `storage/books/isl_python.pdf`，默认 Markdown 缓存路径是 `storage/books/isl_python.md`；除非 `force_reparse=true`，已有 Markdown 会被复用。LLM 路径使用 Markdown text，不使用 PDF base64 `input_file` 或 OpenAI `file_id`。OSS staging object 只是 MinerU URL parsing 的私有临时传输层；signed URL 不会出现在 API response 或 workflow log 中。该 API 只生成 Candidate Knowledge Graph artifacts，不会把它们 promote 成 reviewed authored graph data。
+PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `..` 路径穿越。对于 `storage/books/isl_python.pdf`，默认 Markdown 缓存路径是 `storage/books/isl_python.md`；除非 `force_reparse=true`，已有 Markdown 会被复用。LLM 路径使用 Markdown text，不使用 PDF base64 `input_file` 或 OpenAI `file_id`；`client_provider` 当前接受 `openai` 或 `deepseek`，默认值为 `openai`。OSS staging object 只是 MinerU URL parsing 的私有临时传输层；signed URL 不会出现在 API response 或 workflow log 中。该 API 只生成 Candidate Knowledge Graph artifacts，不会把它们 promote 成 reviewed authored graph data。
 
 已实现或计划中的组件包括：
 
 - [x] V1 core schema 与 validation spine
 - [x] 知识地图表示
 - [x] Phase 2 graph authoring workflow spine
-- [x] OpenAI SDK client boundary for LLM-backed steps
+- [x] OpenAI 与 DeepSeek SDK client boundary for LLM-backed steps
 - [x] FastAPI authoring API，用于真实 source-backed graph candidate runs
 - [ ] Ground-truth map authoring
 - [ ] 基于 LLM 的画像生成

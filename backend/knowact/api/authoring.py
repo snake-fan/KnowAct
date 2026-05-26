@@ -5,6 +5,10 @@ import re
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from backend.knowact.authoring.openai_workflow import (
+    DEFAULT_GRAPH_AUTHORING_CLIENT_PROVIDER,
+    GraphAuthoringClientProvider,
+)
 from backend.knowact.authoring.logging import (
     GraphAuthoringLogArtifactPaths,
     GraphAuthoringRunLogSummary,
@@ -45,7 +49,7 @@ _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _DEFAULT_BENCHMARK_DOMAIN = "classical_supervised_ml_algorithms"
 _DEFAULT_SOURCE_ID = "isl_python"
 _DEFAULT_SOURCE_TITLE = "An Introduction to Statistical Learning with Applications in Python"
-GraphAuthoringWorkflowFactory = Callable[[], GraphAuthoringAgentWorkflow]
+GraphAuthoringWorkflowFactory = Callable[[GraphAuthoringClientProvider], GraphAuthoringAgentWorkflow]
 _LOGGER = get_knowact_logger("api.authoring")
 
 
@@ -60,6 +64,7 @@ class GraphCandidateAuthoringRequest(BaseModel):
     force_reparse: bool = False
     write_artifacts: bool = True
     run_id: str | None = None
+    client_provider: GraphAuthoringClientProvider = DEFAULT_GRAPH_AUTHORING_CLIENT_PROVIDER
 
     @field_validator("pdf_path", "source_title")
     @classmethod
@@ -137,10 +142,11 @@ def build_authoring_router(
         run_id = request.run_id or default_graph_authoring_run_id()
         output_dir = _candidate_graph_output_dir(root, request.benchmark_domain, run_id)
         _LOGGER.info(
-            "Graph candidate authoring request received run_id=%s benchmark_domain=%s pdf_path=%s write_artifacts=%s",
+            "Graph candidate authoring request received run_id=%s benchmark_domain=%s pdf_path=%s client_provider=%s write_artifacts=%s",
             run_id,
             request.benchmark_domain,
             request.pdf_path,
+            request.client_provider,
             request.write_artifacts,
         )
 
@@ -168,7 +174,10 @@ def build_authoring_router(
                 parsed_markdown.cache_status,
                 parsed_markdown.size_bytes,
             )
-            workflow = _build_graph_authoring_workflow(graph_authoring_workflow_factory)
+            workflow = _build_graph_authoring_workflow(
+                graph_authoring_workflow_factory,
+                client_provider=request.client_provider,
+            )
             source_material = _source_material_from_markdown(parsed_markdown, request)
             run_result = workflow.run_with_log(
                 (source_material,),
@@ -278,9 +287,11 @@ def build_authoring_router(
 
 def _build_graph_authoring_workflow(
     factory: GraphAuthoringWorkflowFactory,
+    *,
+    client_provider: GraphAuthoringClientProvider,
 ) -> GraphAuthoringAgentWorkflow:
     try:
-        return factory()
+        return factory(client_provider)
     except (ValueError, ModelClientError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

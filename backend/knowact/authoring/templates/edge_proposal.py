@@ -12,16 +12,18 @@ from backend.knowact.authoring.templates.common import (
     render_sections,
 )
 from backend.knowact.core.graph import KnowledgeNode
-from backend.knowact.llm.messages import ModelMessage
+from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage, ModelMessageProfile
 
 
 def build_edge_proposal_messages(
     candidate_nodes: Sequence[KnowledgeNode],
     source_materials: Sequence[SourceMaterial],
+    *,
+    message_profile: ModelMessageProfile = OPENAI_MESSAGE_PROFILE,
 ) -> tuple[ModelMessage, ...]:
     return (
         ModelMessage(
-            role="developer",
+            role=message_profile.high_priority_instruction_role,
             content=render_sections(
                 "You are the KnowAct Edge Proposal Agent Step.",
                 AUTHORING_CONTEXT,

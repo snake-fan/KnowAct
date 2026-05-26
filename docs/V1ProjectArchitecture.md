@@ -176,7 +176,7 @@ core
 - `logging.py`: authoring run log schemas and helpers for structured, redacted `Graph Authoring Run Log` records.
 - `output.py`: candidate graph file export, especially `candidate_nodes.json` and `candidate_edges.json`, plus sidecar `workflow_log.json` export.
 - `sources.py`: authoring source preparation, including resolving cached `Parsed Source Markdown`, splitting PDFs that exceed MinerU's per-task page limit into local chunks, temporarily publishing local PDFs or PDF chunks through private Aliyun OSS signed URLs for MinerU standard-mode parsing, joining chunk Markdown in page order, calling MinerU when a same-directory same-stem Markdown file is missing or explicitly regenerated, and keeping source parsing outside the `llm/` completion boundary.
-- `openai_workflow.py`: OpenAI-backed graph authoring workflow wiring behind the shared `ModelClient` interface.
+- `openai_workflow.py`: shared graph authoring workflow wiring behind the `ModelClient` interface, with provider selection for OpenAI and DeepSeek clients.
 - Later, add `map_authoring.py` and `review_export.py` when ground-truth map generation and human review promotion need concrete workflow support.
 
 边界：
@@ -208,7 +208,7 @@ core
 - prompt templates 输入输出尽量结构化，并优先放在调用方所属 workflow 的 `templates/` 目录中。
 - model client 返回原始模型文本；workflow-specific parser 负责把输出解析成 domain schema。
 - hidden map、hidden evidence、visible transcript 的边界在调用前显式构造。
-- Phase 2 初始实现使用 OpenAI Python SDK adapter，通过 `.env.example` 中记录的环境变量配置 API key、model、base URL、timeout 和 max completion tokens。
+- Phase 2 初始实现使用 OpenAI Python SDK-compatible adapters，通过 `.env.example` 中记录的环境变量配置 OpenAI 或 DeepSeek API key、model、base URL、timeout 和 token limits；`POST /api/authoring/graph-candidates` 通过 `client_provider` 在请求级选择 provider，默认 `openai`。
 - 测试阶段的 PDF source material 可以放在仓库根目录 `storage/` 下，由 `/api/authoring` 按相对路径选择；authoring source preparation 先复用或生成同目录同 stem 的 `Parsed Source Markdown`，再通过普通 text `ModelClient` 发送给 LLM。
 - v1 graph authoring 不使用 PDF base64 `input_file`、OpenAI Files API `file_id` 或 PDF-specific LLM client path；MinerU 解析属于 `authoring/sources.py` 的 source preparation。
 - MinerU standard mode 通过私有阿里云 OSS bucket 的临时 staging object 生成短期 signed URL，再将 URL 提交给 MinerU v4；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会先在本地拆分为多个 chunk，逐块解析后按页码顺序拼接为一个 `Parsed Source Markdown`；OSS object 默认 best-effort 删除，signed URL 不进入 API response、workflow log 或 candidate graph artifacts。

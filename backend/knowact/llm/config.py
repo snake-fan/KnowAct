@@ -23,6 +23,23 @@ class OpenAIModelConfig(BaseModel):
         return value
 
 
+class DeepSeekModelConfig(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    api_key: str = Field(repr=False)
+    model: str = "deepseek-v4-flash"
+    base_url: str = "https://api.deepseek.com"
+    timeout_seconds: float = Field(default=120.0, gt=0.0)
+    max_tokens: int | None = Field(default=8000, gt=0)
+
+    @field_validator("api_key", "model", "base_url")
+    @classmethod
+    def _must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
 def openai_config_from_env(environ: Mapping[str, str] | None = None) -> OpenAIModelConfig:
     env = os.environ if environ is None else environ
     api_key = _optional_env(env, "KNOWACT_OPENAI_API_KEY") or _optional_env(env, "OPENAI_API_KEY")
@@ -36,6 +53,21 @@ def openai_config_from_env(environ: Mapping[str, str] | None = None) -> OpenAIMo
         temperature=_optional_float_env(env, "KNOWACT_OPENAI_TEMPERATURE", default=0.0),
         timeout_seconds=_float_env(env, "KNOWACT_OPENAI_TIMEOUT_SECONDS", default=120.0),
         max_completion_tokens=_optional_int_env(env, "KNOWACT_OPENAI_MAX_COMPLETION_TOKENS", default=8000),
+    )
+
+
+def deepseek_config_from_env(environ: Mapping[str, str] | None = None) -> DeepSeekModelConfig:
+    env = os.environ if environ is None else environ
+    api_key = _optional_env(env, "KNOWACT_DEEPSEEK_API_KEY") or _optional_env(env, "DEEPSEEK_API_KEY")
+    if api_key is None:
+        raise ValueError("DEEPSEEK_API_KEY or KNOWACT_DEEPSEEK_API_KEY is required")
+
+    return DeepSeekModelConfig(
+        api_key=api_key,
+        model=_optional_env(env, "KNOWACT_DEEPSEEK_MODEL") or "deepseek-v4-flash",
+        base_url=_optional_env(env, "KNOWACT_DEEPSEEK_BASE_URL") or "https://api.deepseek.com",
+        timeout_seconds=_float_env(env, "KNOWACT_DEEPSEEK_TIMEOUT_SECONDS", default=120.0),
+        max_tokens=_optional_int_env(env, "KNOWACT_DEEPSEEK_MAX_TOKENS", default=8000),
     )
 
 
