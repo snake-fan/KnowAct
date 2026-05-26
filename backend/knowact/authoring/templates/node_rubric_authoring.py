@@ -8,7 +8,7 @@ from backend.knowact.authoring.templates.common import (
     NODE_SCHEMA_CONTRACT,
     SOURCE_GROUNDING_RULES,
     dump_model_list,
-    render_uploaded_pdf_source_reference,
+    render_parsed_source_markdown,
     render_sections,
 )
 from backend.knowact.llm.messages import ModelMessage
@@ -31,7 +31,7 @@ def build_node_rubric_authoring_messages(
 This step turns source-grounded skeletons into complete candidate Knowledge Nodes.
 
 Input boundary:
-- Use only the skeletons, their source locators, the uploaded original PDF, and the global MasteryScale.
+- Use only the skeletons, their source locators, Parsed Source Markdown, and the global MasteryScale.
 - Do not use candidate edges, unreviewed neighboring nodes, graph traversal context, or outside memory.
 - If the authoritative source itself explains a concept through a contrast or dependency, you may reflect that source-grounded context in the rubric.
 - Preserve each skeleton's id, name, type, definition, and source_locators unless the input is internally inconsistent.
@@ -84,7 +84,7 @@ Return JSON with this exact top-level shape:
             role="user",
             content=render_sections(
                 "Author complete candidate Knowledge Nodes for every skeleton.",
-                render_uploaded_pdf_source_reference(source_materials),
+                render_parsed_source_markdown(source_materials),
                 """
 Quality checklist:
 - Every input skeleton has exactly one output node.

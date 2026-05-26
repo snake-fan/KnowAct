@@ -6,7 +6,7 @@ from backend.knowact.authoring.templates.common import (
     JSON_ONLY_RULES,
     NODE_DESIGN_RULES,
     SOURCE_GROUNDING_RULES,
-    render_uploaded_pdf_source_reference,
+    render_parsed_source_markdown,
     render_sections,
 )
 from backend.knowact.llm.messages import ModelMessage
@@ -24,7 +24,7 @@ def build_node_extraction_messages(
                 SOURCE_GROUNDING_RULES,
                 NODE_DESIGN_RULES,
                 """
-This step extracts only Source-Grounded Node Skeletons from the uploaded original PDF.
+This step extracts only Source-Grounded Node Skeletons from Parsed Source Markdown.
 It is not the rubric-writing step and it is not the edge proposal step.
 
 Extract skeletons that can later become benchmark Knowledge Nodes:
@@ -32,7 +32,7 @@ Extract skeletons that can later become benchmark Knowledge Nodes:
 - Prefer stable domain concepts over section headings, implementation details, examples, or isolated formula notation.
 - Merge obvious duplicates and near-synonyms into one canonical skeleton id.
 - Use snake_case ids that are stable and meaningful.
-- Write definitions from the uploaded original PDF, not from outside memory.
+- Write definitions from the Parsed Source Markdown, not from outside memory.
 - Do not output diagnostic_goal, levels, diagnostic_signals, simulator_behavior, edges, user states, or evidence.
 """.strip(),
                 """
@@ -61,8 +61,8 @@ Return JSON with this exact top-level shape:
         ModelMessage(
             role="user",
             content=render_sections(
-                "Extract reviewable Source-Grounded Node Skeletons from the uploaded original PDF.",
-                render_uploaded_pdf_source_reference(source_materials),
+                "Extract reviewable Source-Grounded Node Skeletons from Parsed Source Markdown.",
+                render_parsed_source_markdown(source_materials),
                 """
 Before returning JSON, check each skeleton:
 - Is it source-grounded by an explicit locator?

@@ -175,8 +175,8 @@ core
 - `validation.py`: authoring-specific validation around skeleton grounding, complete candidate node rubrics, and candidate edge graph validity.
 - `logging.py`: authoring run log schemas and helpers for structured, redacted `Graph Authoring Run Log` records.
 - `output.py`: candidate graph file export, especially `candidate_nodes.json` and `candidate_edges.json`, plus sidecar `workflow_log.json` export.
+- `sources.py`: authoring source preparation, including resolving cached `Parsed Source Markdown`, splitting PDFs that exceed MinerU's per-task page limit into local chunks, temporarily publishing local PDFs or PDF chunks through private Aliyun OSS signed URLs for MinerU standard-mode parsing, joining chunk Markdown in page order, calling MinerU when a same-directory same-stem Markdown file is missing or explicitly regenerated, and keeping source parsing outside the `llm/` completion boundary.
 - `openai_workflow.py`: OpenAI-backed graph authoring workflow wiring behind the shared `ModelClient` interface.
-- Later, add `sources.py` only if source loading and locator helpers outgrow `schemas.py` / caller-owned loading.
 - Later, add `map_authoring.py` and `review_export.py` when ground-truth map generation and human review promotion need concrete workflow support.
 
 边界：
@@ -199,7 +199,6 @@ core
 - `client.py`: `ModelClient` protocol。
 - `messages.py`: prompt/message data structures。
 - `openai_client.py`: Chat Completions-backed raw text adapter for current JSON authoring steps.
-- `openai_responses_client.py`: Responses API adapter for local PDF source-material inputs using base64 `input_file` payloads.
 - Later, `adapters.py` can collect or split concrete provider adapters if provider support broadens.
 - `tracing.py`: request/response metadata, redaction, replay hooks。
 
@@ -210,7 +209,9 @@ core
 - model client 返回原始模型文本；workflow-specific parser 负责把输出解析成 domain schema。
 - hidden map、hidden evidence、visible transcript 的边界在调用前显式构造。
 - Phase 2 初始实现使用 OpenAI Python SDK adapter，通过 `.env.example` 中记录的环境变量配置 API key、model、base URL、timeout 和 max completion tokens。
-- 测试阶段的 PDF source material 可以放在仓库根目录 `storage/` 下，由 `/api/authoring` 按相对路径选择；OpenAI Responses 调用必须使用 base64 `input_file`，并在 storage/path resolver 中限制路径边界。
+- 测试阶段的 PDF source material 可以放在仓库根目录 `storage/` 下，由 `/api/authoring` 按相对路径选择；authoring source preparation 先复用或生成同目录同 stem 的 `Parsed Source Markdown`，再通过普通 text `ModelClient` 发送给 LLM。
+- v1 graph authoring 不使用 PDF base64 `input_file`、OpenAI Files API `file_id` 或 PDF-specific LLM client path；MinerU 解析属于 `authoring/sources.py` 的 source preparation。
+- MinerU standard mode 通过私有阿里云 OSS bucket 的临时 staging object 生成短期 signed URL，再将 URL 提交给 MinerU v4；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会先在本地拆分为多个 chunk，逐块解析后按页码顺序拼接为一个 `Parsed Source Markdown`；OSS object 默认 best-effort 删除，signed URL 不进入 API response、workflow log 或 candidate graph artifacts。
 - 测试和 development fixture 默认使用 fake 或 deterministic model clients，不应在普通 validation checks 中调用真实 OpenAI API。
 
 ### `simulator/`
@@ -468,7 +469,7 @@ uv run python -m unittest
    - 推荐：接受，但默认不要提交大体积 run outputs；只提交精选 reports 或小型 fixture outputs。
 
 4. authoring workflow 是否应该通过 API 暴露？
-   - 推荐：暴露一条窄的 PDF-backed candidate graph run API，用于真实运行和人工检查生成质量；它只能写 candidate artifacts，不能 promote reviewed graph data。review workflow 稳定后再扩展 UI/API。
+   - 推荐：暴露一条窄的 source-backed candidate graph run API，用于真实运行和人工检查生成质量；它以本地 PDF 为入口，先解析或复用同目录 Markdown，再把 Markdown 作为 LLM text input。它只能写 candidate artifacts，不能 promote reviewed graph data。review workflow 稳定后再扩展 UI/API。
 
 5. frontend 是否进入 v1 必需路径？
    - 推荐：不是 M1-M8 的必需路径。M10 再扩展 research workbench；早期可只做最小 inspection。

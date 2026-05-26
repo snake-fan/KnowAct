@@ -18,6 +18,14 @@ from backend.knowact.authoring.logging import (
 from backend.knowact.authoring.output import write_graph_authoring_output, write_graph_authoring_run_log
 from backend.knowact.authoring.parsers.graph_authoring import AuthoringOutputParseError
 from backend.knowact.authoring.schemas import SourceGroundedNodeSkeleton, SourceMaterial
+from backend.knowact.authoring.sources import (
+    ParsedMarkdownMaterial,
+    ParsedMarkdownEmptyError,
+    ParsedMarkdownWriteError,
+    SourceParser,
+    SourcePreparationError,
+    resolve_or_create_parsed_markdown,
+)
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeNode
 from backend.knowact.llm.client import ModelClientError
@@ -37,7 +45,7 @@ _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _DEFAULT_BENCHMARK_DOMAIN = "classical_supervised_ml_algorithms"
 _DEFAULT_SOURCE_ID = "isl_python"
 _DEFAULT_SOURCE_TITLE = "An Introduction to Statistical Learning with Applications in Python"
-PDFGraphAuthoringWorkflowFactory = Callable[[Path, str | None], GraphAuthoringAgentWorkflow]
+GraphAuthoringWorkflowFactory = Callable[[], GraphAuthoringAgentWorkflow]
 _LOGGER = get_knowact_logger("api.authoring")
 
 
@@ -49,6 +57,7 @@ class GraphCandidateAuthoringRequest(BaseModel):
     source_id: str = _DEFAULT_SOURCE_ID
     source_title: str = _DEFAULT_SOURCE_TITLE
     citation: str | None = None
+    force_reparse: bool = False
     write_artifacts: bool = True
     run_id: str | None = None
 
@@ -78,6 +87,10 @@ class SourceMaterialInfo(BaseModel):
     storage_uri: str
     filename: str
     size_bytes: int
+    markdown_storage_uri: str
+    markdown_filename: str
+    markdown_size_bytes: int
+    markdown_cache_status: str
     source_id: str
     title: str
 
@@ -105,7 +118,8 @@ class GraphCandidateAuthoringResponse(BaseModel):
 
 def build_authoring_router(
     *,
-    pdf_graph_authoring_workflow_factory: PDFGraphAuthoringWorkflowFactory,
+    graph_authoring_workflow_factory: GraphAuthoringWorkflowFactory,
+    source_parser: SourceParser,
     workspace_root: Path | None = None,
 ) -> APIRouter:
     root = workspace_root or _default_workspace_root()
@@ -139,16 +153,27 @@ def build_authoring_router(
                 material.filename,
                 material.size_bytes,
             )
-            workflow = _build_pdf_graph_authoring_workflow(
-                pdf_graph_authoring_workflow_factory,
-                material.path,
-                material.filename,
+            parsed_markdown = resolve_or_create_parsed_markdown(
+                pdf_path=material.path,
+                storage_root=storage_root,
+                parser=source_parser,
+                force_reparse=request.force_reparse,
+                run_id=run_id,
+                storage_uri=material.storage_uri,
             )
-            source_material = _source_material_from_pdf(material, request)
+            _LOGGER.info(
+                "Graph candidate authoring markdown resolved run_id=%s markdown_uri=%s cache_status=%s size_bytes=%d",
+                run_id,
+                parsed_markdown.storage_uri,
+                parsed_markdown.cache_status,
+                parsed_markdown.size_bytes,
+            )
+            workflow = _build_graph_authoring_workflow(graph_authoring_workflow_factory)
+            source_material = _source_material_from_markdown(parsed_markdown, request)
             run_result = workflow.run_with_log(
                 (source_material,),
                 run_id=run_id,
-                source_metadata=(_run_log_source_material_from_pdf(material, request),),
+                source_metadata=(_run_log_source_material(material, parsed_markdown, request),),
             )
         except MaterialFileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -158,6 +183,12 @@ def build_authoring_router(
             raise HTTPException(status_code=413, detail=str(exc)) from exc
         except MaterialFileError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ParsedMarkdownEmptyError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ParsedMarkdownWriteError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        except SourcePreparationError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
         except GraphAuthoringWorkflowRunError as exc:
             workflow_log_uri = None
             if request.write_artifacts:
@@ -228,6 +259,10 @@ def build_authoring_router(
                 storage_uri=material.storage_uri,
                 filename=material.filename,
                 size_bytes=material.size_bytes,
+                markdown_storage_uri=parsed_markdown.storage_uri,
+                markdown_filename=parsed_markdown.filename,
+                markdown_size_bytes=parsed_markdown.size_bytes,
+                markdown_cache_status=parsed_markdown.cache_status,
                 source_id=request.source_id,
                 title=request.source_title,
             ),
@@ -241,43 +276,42 @@ def build_authoring_router(
     return router
 
 
-def _build_pdf_graph_authoring_workflow(
-    factory: PDFGraphAuthoringWorkflowFactory,
-    pdf_path: Path,
-    filename: str,
+def _build_graph_authoring_workflow(
+    factory: GraphAuthoringWorkflowFactory,
 ) -> GraphAuthoringAgentWorkflow:
     try:
-        return factory(pdf_path, filename)
+        return factory()
     except (ValueError, ModelClientError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-def _source_material_from_pdf(
-    material: LocalPDFMaterial,
+def _source_material_from_markdown(
+    parsed_markdown: ParsedMarkdownMaterial,
     request: GraphCandidateAuthoringRequest,
 ) -> SourceMaterial:
     return SourceMaterial(
         source_id=request.source_id,
         title=request.source_title,
-        citation=request.citation or material.storage_uri,
-        text=(
-            "Uploaded original PDF content is provided through the OpenAI Responses "
-            "input_file attachment, not embedded in the prompt."
-        ),
+        citation=request.citation or parsed_markdown.storage_uri,
+        text=parsed_markdown.text,
     )
 
 
-def _run_log_source_material_from_pdf(
+def _run_log_source_material(
     material: LocalPDFMaterial,
+    parsed_markdown: ParsedMarkdownMaterial,
     request: GraphCandidateAuthoringRequest,
 ) -> RunLogSourceMaterial:
     return RunLogSourceMaterial(
         source_id=request.source_id,
         title=request.source_title,
-        citation=request.citation or material.storage_uri,
+        citation=request.citation or parsed_markdown.storage_uri,
         storage_uri=material.storage_uri,
         filename=material.filename,
         size_bytes=material.size_bytes,
+        parsed_markdown_uri=parsed_markdown.storage_uri,
+        parsed_markdown_cache_status=parsed_markdown.cache_status,
+        parsed_markdown_size_bytes=parsed_markdown.size_bytes,
     )
 
 

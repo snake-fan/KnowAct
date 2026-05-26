@@ -18,11 +18,11 @@ Keep these domain boundaries explicit:
 
 SOURCE_GROUNDING_RULES = """
 Source-grounding rules:
-- Use only the uploaded original PDF and source locators from earlier workflow steps.
+- Use only the Parsed Source Markdown and source locators from earlier workflow steps.
 - Do not brainstorm nodes, rubrics, or edges from model memory.
 - Every node or skeleton must be traceable to at least one source_id and locator.
 - Source locators are lightweight audit references, not quote stores. Chapter, section, page, slide, paragraph, or equivalent locator is enough when it lets a reviewer find the concept.
-- Do not invent quotes, exact spans, page numbers, or source metadata that are not visible in the PDF or provided as source_id metadata.
+- Do not invent quotes, exact spans, page numbers, or source metadata that are not visible in the Parsed Source Markdown or provided as source_id metadata.
 """.strip()
 
 
@@ -106,22 +106,32 @@ def dump_model_list(items: Sequence[object]) -> str:
     return json.dumps(payload, indent=2, sort_keys=True)
 
 
-def render_uploaded_pdf_source_reference(source_materials: Sequence[object]) -> str:
-    source_ids: list[str] = []
+def render_parsed_source_markdown(source_materials: Sequence[object]) -> str:
+    rendered_sources: list[str] = []
     for item in source_materials:
         source_id = getattr(item, "source_id", None)
-        if isinstance(source_id, str) and source_id.strip():
-            source_ids.append(source_id)
+        title = getattr(item, "title", None)
+        citation = getattr(item, "citation", None)
+        text = getattr(item, "text", None)
+        if not isinstance(source_id, str) or not source_id.strip():
+            continue
+        if not isinstance(title, str) or not title.strip():
+            title = "Untitled source"
+        if not isinstance(text, str) or not text.strip():
+            continue
 
-    if not source_ids:
-        return "Use the uploaded original PDF as the authoritative source."
-    if len(source_ids) == 1:
-        return (
-            "Use the uploaded original PDF as the authoritative source. "
-            f'For source_locators that cite it, write source_id "{source_ids[0]}".'
+        citation_line = f"Citation: {citation.strip()}" if isinstance(citation, str) and citation.strip() else None
+        rendered_sources.append(
+            render_sections(
+                f'Parsed Source Markdown for source_id "{source_id}": {title}',
+                citation_line or "",
+                text,
+            )
         )
-    formatted_source_ids = ", ".join(f'"{source_id}"' for source_id in source_ids)
-    return (
-        "Use the uploaded original PDFs as the authoritative sources. "
-        f"For source_locators, use the matching source_id from: {formatted_source_ids}."
+
+    if not rendered_sources:
+        return "No Parsed Source Markdown was provided."
+    return render_sections(
+        "Use the following Parsed Source Markdown as the authoritative source material.",
+        *rendered_sources,
     )

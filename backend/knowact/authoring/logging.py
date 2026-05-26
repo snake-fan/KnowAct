@@ -33,6 +33,9 @@ class RunLogSourceMaterial(BaseModel):
     storage_uri: str | None = None
     filename: str | None = None
     size_bytes: int | None = Field(default=None, ge=0)
+    parsed_markdown_uri: str | None = None
+    parsed_markdown_cache_status: str | None = None
+    parsed_markdown_size_bytes: int | None = Field(default=None, ge=0)
 
     @classmethod
     def from_source_material(cls, source_material: SourceMaterial) -> "RunLogSourceMaterial":
@@ -49,7 +52,7 @@ class RunLogSourceMaterial(BaseModel):
             raise ValueError("must not be blank")
         return value
 
-    @field_validator("citation", "storage_uri", "filename")
+    @field_validator("citation", "storage_uri", "filename", "parsed_markdown_uri", "parsed_markdown_cache_status")
     @classmethod
     def _optional_values_must_not_be_blank(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
