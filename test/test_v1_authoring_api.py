@@ -70,6 +70,31 @@ class V1AuthoringApiTest(unittest.TestCase):
             serialized_log = json.dumps(raw_log)
             self.assertNotIn("Cached Markdown", serialized_log)
             self.assertNotIn("Node Extraction Agent Step", serialized_log)
+            entries_by_name = {entry["entry_name"]: entry for entry in raw_log["entries"]}
+            node_trace = entries_by_name["node_extraction"]["agent_trace"]
+            self.assertNotIn("model_raw_output", node_trace)
+            self.assertNotIn("output", node_trace["parser_result"])
+            self.assertEqual(
+                "agent_traces/node_extraction/model_raw_output.txt",
+                node_trace["model_raw_output_uri"],
+            )
+            self.assertEqual(
+                "agent_traces/node_extraction/parser_output.json",
+                node_trace["parser_result"]["output_uri"],
+            )
+            self.assertIn(
+                '"skeletons"',
+                (log_path.parent / node_trace["model_raw_output_uri"]).read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                ["train_test_split"],
+                [
+                    node["id"]
+                    for node in _load_json(log_path.parent / node_trace["parser_result"]["output_uri"])[
+                        "skeletons"
+                    ]
+                ],
+            )
 
             self.assertEqual(3, len(fake_model_client.calls))
             self.assertIn("Node Extraction Agent Step", fake_model_client.calls[0][0].content)
@@ -220,7 +245,10 @@ class V1AuthoringApiTest(unittest.TestCase):
                 / "api"
                 / "bad_run_001"
             )
-            self.assertEqual({"workflow_log.json"}, {path.name for path in output_dir.iterdir()})
+            self.assertEqual(
+                {"workflow_log.json", "agent_traces"},
+                {path.name for path in output_dir.iterdir()},
+            )
             raw_log = _load_json(output_dir / "workflow_log.json")
             self.assertEqual("failed", raw_log["status"])
             self.assertEqual("openai", raw_log["model_provider"])
@@ -232,6 +260,12 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertEqual("failed", failed_entry["validation_result"])
             self.assertEqual("KnowActValidationError", failed_entry["error"]["error_type"])
             self.assertIn("exactly L0-L5", failed_entry["error"]["message"])
+            entries_by_name = {entry["entry_name"]: entry for entry in raw_log["entries"]}
+            rubric_trace = entries_by_name["node_rubric_authoring"]["agent_trace"]
+            self.assertNotIn("model_raw_output", rubric_trace)
+            self.assertNotIn("output", rubric_trace["parser_result"])
+            self.assertTrue((output_dir / rubric_trace["model_raw_output_uri"]).exists())
+            self.assertTrue((output_dir / rubric_trace["parser_result"]["output_uri"]).exists())
             self.assertEqual(2, len(fake_model_client.calls))
 
     def test_authoring_api_rejects_paths_outside_storage(self):
@@ -321,19 +355,6 @@ class FixtureGraphModelClient:
                     "nodes": [
                         {
                             "id": "train_test_split",
-                            "name": "Train Test Split",
-                            "type": "concept",
-                            "definition": (
-                                "Separating data into training and test sets to estimate "
-                                "out-of-sample performance."
-                            ),
-                            "source_locators": [
-                                {
-                                    "source_id": "isl_python",
-                                    "locator": "chapter_2",
-                                    "note": "Development fixture locator",
-                                }
-                            ],
                             "diagnostic_goal": (
                                 "Assess whether the user can explain and apply Train Test Split."
                             ),

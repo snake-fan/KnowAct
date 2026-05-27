@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from backend.knowact.core.graph import KnowledgeEdge, KnowledgeGraph, KnowledgeNode
+from backend.knowact.core.graph import KnowledgeEdge, KnowledgeEdgeType, KnowledgeGraph, KnowledgeNode
 from backend.knowact.core.map import MasteryLevel
 from backend.knowact.validation.exceptions import KnowActValidationError
 from backend.knowact.validation.graph import validate_knowledge_graph
@@ -67,6 +67,10 @@ def validate_candidate_edges(
     validate_knowledge_graph(KnowledgeGraph(nodes=tuple(nodes), edges=tuple(edges)))
 
 
+def canonicalize_candidate_edges(edges: Sequence[KnowledgeEdge]) -> tuple[KnowledgeEdge, ...]:
+    return tuple(_canonicalize_candidate_edge(edge) for edge in edges)
+
+
 def _duplicates(values: Sequence[str]) -> set[str]:
     seen: set[str] = set()
     duplicates: set[str] = set()
@@ -77,6 +81,19 @@ def _duplicates(values: Sequence[str]) -> set[str]:
     return duplicates
 
 
+def _canonicalize_candidate_edge(edge: KnowledgeEdge) -> KnowledgeEdge:
+    if edge.type != KnowledgeEdgeType.CONTRASTS_WITH:
+        return edge
+
+    source, target = sorted((edge.source, edge.target))
+    return edge.model_copy(
+        update={
+            "id": f"edge_{source}_{edge.type.value}_{target}",
+            "source": source,
+            "target": target,
+        }
+    )
+
+
 def _is_blank(value: str | None) -> bool:
     return value is None or not value.strip()
-

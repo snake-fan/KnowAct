@@ -302,7 +302,6 @@ DEEPSEEK_API_KEY=...
 KNOWACT_DEEPSEEK_MODEL=deepseek-v4-flash
 KNOWACT_DEEPSEEK_BASE_URL=https://api.deepseek.com
 KNOWACT_DEEPSEEK_TIMEOUT_SECONDS=120
-KNOWACT_DEEPSEEK_MAX_TOKENS=8000
 ```
 
 The current tests use deterministic fixtures and fake clients; they do not call the OpenAI or DeepSeek APIs.
@@ -327,7 +326,7 @@ uv run fastapi dev backend/main.py
 
 Then open the local Swagger UI at `http://127.0.0.1:8000/docs`. The current authoring API includes:
 
-- `POST /api/authoring/graph-candidates`, which reads one PDF by relative path under `storage/`, resolves same-directory same-stem Parsed Source Markdown, calls MinerU to create or regenerate that Markdown when needed, sends the Markdown text through the graph authoring workflow steps, returns source-grounded skeletons, candidate nodes, candidate edges, Markdown cache metadata, and a compact run log summary, and writes `candidate_nodes.json`, `candidate_edges.json`, and sidecar `workflow_log.json` by default. MinerU standard mode publishes the local PDF through a private Aliyun OSS staging object and short-lived signed URL before submitting the URL to MinerU; PDFs above `KNOWACT_MINERU_MAX_PAGES_PER_TASK` are split into chunks and their Markdown results are joined in page order. Only the node and edge files are candidate graph review artifacts. Example request:
+- `POST /api/authoring/graph-candidates`, which reads one PDF by relative path under `storage/`, resolves same-directory same-stem Parsed Source Markdown, calls MinerU to create or regenerate that Markdown when needed, sends the Markdown text through the graph authoring workflow steps, returns source-grounded skeletons, candidate nodes, candidate edges, Markdown cache metadata, and a compact run log summary, and writes `candidate_nodes.json`, `candidate_edges.json`, and sidecar `workflow_log.json` by default. The workflow log records step status and links to `agent_traces/{step}/model_raw_output.txt` and `agent_traces/{step}/parser_output.json` for LLM-backed debugging, while still avoiding full prompt/source-material text. MinerU standard mode publishes the local PDF through a private Aliyun OSS staging object and short-lived signed URL before submitting the URL to MinerU; PDFs above `KNOWACT_MINERU_MAX_PAGES_PER_TASK` are split into chunks and their Markdown results are joined in page order. Only the node and edge files are candidate graph review artifacts. Example request:
 
 ```json
 {

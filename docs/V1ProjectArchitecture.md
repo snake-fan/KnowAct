@@ -173,7 +173,7 @@ core
 - `templates/node_extraction.py`, `templates/node_rubric_authoring.py`, `templates/edge_proposal.py`: prompt/message builders for each Graph Authoring Agent Workflow step. `templates/graph_authoring.py` can remain as a compatibility re-export only; step-specific prompt content should live in the step-specific template file.
 - `parsers/graph_authoring.py`: raw model-output parsers that turn JSON text into source skeletons, candidate nodes, and candidate edges.
 - `validation.py`: authoring-specific validation around skeleton grounding, complete candidate node rubrics, and candidate edge graph validity.
-- `logging.py`: authoring run log schemas and helpers for structured, redacted `Graph Authoring Run Log` records.
+- `logging.py`: authoring run log schemas and helpers for structured, redacted `Graph Authoring Run Log` records, including links to external agent-step raw model outputs and parser outputs for local debugging.
 - `output.py`: candidate graph file export, especially `candidate_nodes.json` and `candidate_edges.json`, plus sidecar `workflow_log.json` export.
 - `sources.py`: authoring source preparation, including resolving cached `Parsed Source Markdown`, splitting PDFs that exceed MinerU's per-task page limit into local chunks, temporarily publishing local PDFs or PDF chunks through private Aliyun OSS signed URLs for MinerU standard-mode parsing, joining chunk Markdown in page order, calling MinerU when a same-directory same-stem Markdown file is missing or explicitly regenerated, and keeping source parsing outside the `llm/` completion boundary.
 - `openai_workflow.py`: shared graph authoring workflow wiring behind the `ModelClient` interface, with provider selection for OpenAI and DeepSeek clients.
@@ -182,13 +182,14 @@ core
 边界：
 
 - graph authoring final output 只能是 `candidate_nodes.json` 和 `candidate_edges.json` 两个 JSON list files。
-- `workflow_log.json` 可以作为 run directory 中的 sidecar artifact 存在，但它不是 candidate graph final review output，也不改变 node/edge JSON list schema。
+- `workflow_log.json` 可以作为 run directory 中的 sidecar artifact 存在，并记录 agent step 状态、counts、错误和 trace artifact URI；LLM raw output 与 parser output 分别写入 `agent_traces/{step}/model_raw_output.txt` 与 `agent_traces/{step}/parser_output.json`。这些都不是 candidate graph final review output，也不改变 node/edge JSON list schema。
 - `candidate` 状态不写进 node/edge object。
 - rubric authoring 不读取 unreviewed candidate edges。
 - edge proposal 可以读取 complete candidate nodes 和 rubrics，但仍然只产生 candidate edges。
 - `workflow.py` 负责编排 step 顺序和每步后的 validation；具体 step 只负责把自己的 template、model client 和 parser 连接起来。
 - `steps.py` 可以统一承载多个 step 接口和 LLM step 实现；只有在职责真正膨胀时才拆出 `node_extraction.py`、`rubric_authoring.py` 或 `edge_proposal.py`。
 - template 与 parser 不混写在 step class 中。每个 step 的 prompt 差异通过 `templates/node_extraction.py`、`templates/node_rubric_authoring.py`、`templates/edge_proposal.py` 表达，共享约束放在 `templates/common.py`；parser 仍可通过 `parsers/graph_authoring.py` 统一表达 raw model output 到 structured objects 的转换。
+- rubric authoring 的 LLM output 只包含 node-level rubric patch；`id`、`name`、`type`、`definition` 和 `source_locators` 由 workflow 按 skeleton id 确定性合并，避免让模型重复拷贝 source-grounded 字段。
 
 ### `llm/`
 
@@ -208,7 +209,7 @@ core
 - prompt templates 输入输出尽量结构化，并优先放在调用方所属 workflow 的 `templates/` 目录中。
 - model client 返回原始模型文本；workflow-specific parser 负责把输出解析成 domain schema。
 - hidden map、hidden evidence、visible transcript 的边界在调用前显式构造。
-- Phase 2 初始实现使用 OpenAI Python SDK-compatible adapters，通过 `.env.example` 中记录的环境变量配置 OpenAI 或 DeepSeek API key、model、base URL、timeout 和 token limits；`POST /api/authoring/graph-candidates` 通过 `client_provider` 在请求级选择 provider，默认 `openai`。
+- Phase 2 初始实现使用 OpenAI Python SDK-compatible adapters，通过 `.env.example` 中记录的环境变量配置 OpenAI 或 DeepSeek API key、model、base URL 和 timeout；`POST /api/authoring/graph-candidates` 通过 `client_provider` 在请求级选择 provider，默认 `openai`。
 - 测试阶段的 PDF source material 可以放在仓库根目录 `storage/` 下，由 `/api/authoring` 按相对路径选择；authoring source preparation 先复用或生成同目录同 stem 的 `Parsed Source Markdown`，再通过普通 text `ModelClient` 发送给 LLM。
 - v1 graph authoring 不使用 PDF base64 `input_file`、OpenAI Files API `file_id` 或 PDF-specific LLM client path；MinerU 解析属于 `authoring/sources.py` 的 source preparation。
 - MinerU standard mode 通过私有阿里云 OSS bucket 的临时 staging object 生成短期 signed URL，再将 URL 提交给 MinerU v4；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会先在本地拆分为多个 chunk，逐块解析后按页码顺序拼接为一个 `Parsed Source Markdown`；OSS object 默认 best-effort 删除，signed URL 不进入 API response、workflow log 或 candidate graph artifacts。
@@ -351,7 +352,8 @@ benchmark/
         │   └── run_001/
         │       ├── candidate_nodes.json
         │       ├── candidate_edges.json
-        │       └── workflow_log.json
+        │       ├── workflow_log.json
+        │       └── agent_traces/
         ├── graphs/
         │   └── v1/
         │       ├── graph_manifest.json

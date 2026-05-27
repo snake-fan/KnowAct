@@ -7,14 +7,21 @@ from backend.knowact.authoring.logging import (
     GraphAuthoringWorkflowRunError,
     GraphAuthoringWorkflowRunResult,
     RunLogSourceMaterial,
+    WorkflowRunAgentTrace,
     WorkflowRunLogEntryType,
     WorkflowRunValidationResult,
     default_graph_authoring_run_id,
     workflow_run_error_from_exception,
 )
 from backend.knowact.authoring.schemas import GraphAuthoringWorkflowResult, SourceMaterial
-from backend.knowact.authoring.steps import EdgeProposalStep, NodeExtractionStep, NodeRubricAuthoringStep
+from backend.knowact.authoring.steps import (
+    EdgeProposalStep,
+    NodeExtractionStep,
+    NodeRubricAuthoringStep,
+    get_authoring_agent_step_trace,
+)
 from backend.knowact.authoring.validation import (
+    canonicalize_candidate_edges,
     validate_candidate_edges,
     validate_complete_candidate_nodes,
     validate_source_grounded_node_skeletons,
@@ -76,6 +83,7 @@ class GraphAuthoringAgentWorkflow:
             run_id=run_id,
             operation=lambda: self._node_extraction_step.run(source_materials),
             output_counts=lambda value: {"skeletons": len(value)},
+            trace_getter=lambda: get_authoring_agent_step_trace(self._node_extraction_step),
         )
         _run_logged_entry(
             builder,
@@ -95,6 +103,7 @@ class GraphAuthoringAgentWorkflow:
             run_id=run_id,
             operation=lambda: self._node_rubric_authoring_step.run(skeletons, source_materials),
             output_counts=lambda value: {"candidate_nodes": len(value)},
+            trace_getter=lambda: get_authoring_agent_step_trace(self._node_rubric_authoring_step),
         )
         _run_logged_entry(
             builder,
@@ -114,7 +123,9 @@ class GraphAuthoringAgentWorkflow:
             run_id=run_id,
             operation=lambda: self._edge_proposal_step.run(candidate_nodes, source_materials),
             output_counts=lambda value: {"candidate_edges": len(value)},
+            trace_getter=lambda: get_authoring_agent_step_trace(self._edge_proposal_step),
         )
+        candidate_edges = canonicalize_candidate_edges(candidate_edges)
         _run_logged_entry(
             builder,
             entry_name="validate_candidate_edges",
@@ -153,6 +164,7 @@ def _run_logged_entry(
     operation: Callable[[], T],
     output_counts: Callable[[T], dict[str, int]] | None = None,
     validation_result: WorkflowRunValidationResult | None = None,
+    trace_getter: Callable[[], WorkflowRunAgentTrace | None] | None = None,
 ) -> T:
     _LOGGER.info(
         "Graph authoring entry started run_id=%s entry_name=%s entry_type=%s input_counts=%s",
@@ -174,7 +186,8 @@ def _run_logged_entry(
             checkpoint=entry_name if entry_type == "validation_checkpoint" else None,
             step_name=entry_name if entry_type == "agent_step" else None,
         )
-        builder.fail_entry(active_entry, error)
+        agent_trace = trace_getter() if trace_getter is not None else None
+        builder.fail_entry(active_entry, error, agent_trace=agent_trace)
         run_log = builder.failed(error)
         _LOGGER.error(
             "Graph authoring entry failed run_id=%s entry_name=%s entry_type=%s error_type=%s message=%s",
@@ -195,6 +208,7 @@ def _run_logged_entry(
         active_entry,
         output_counts=entry_output_counts,
         validation_result=validation_result,
+        agent_trace=trace_getter() if trace_getter is not None else None,
     )
     _LOGGER.info(
         "Graph authoring entry succeeded run_id=%s entry_name=%s entry_type=%s output_counts=%s validation_result=%s",
