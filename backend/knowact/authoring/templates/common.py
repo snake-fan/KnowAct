@@ -16,13 +16,22 @@ Keep these domain boundaries explicit:
 """.strip()
 
 
-SOURCE_GROUNDING_RULES = """
-Source-grounding rules:
-- Use only the Parsed Source Markdown and source locators from earlier workflow steps.
-- Do not brainstorm nodes, rubrics, or edges from model memory.
-- Every node or skeleton must be traceable to at least one source_id and locator.
+SOURCE_READING_RULES = """
+Source-reading rules:
+- Use only the provided Parsed Source Markdown as authoritative source material.
+- Do not brainstorm nodes from model memory.
+- Every skeleton must be traceable to at least one source_id and locator.
 - Source locators are lightweight audit references, not quote stores. Chapter, section, page, slide, paragraph, or equivalent locator is enough when it lets a reviewer find the concept.
 - Do not invent quotes, exact spans, page numbers, or source metadata that are not visible in the Parsed Source Markdown or provided as source_id metadata.
+""".strip()
+
+
+INTERMEDIATE_SOURCE_GROUNDING_RULES = """
+Intermediate source-grounding rules:
+- Use only the workflow intermediate artifacts provided in this prompt.
+- Do not rely on outside memory or unstated source passages.
+- Source locators and source grounding notes are the available source-grounded evidence for downstream authoring.
+- Do not ask for, assume, or reconstruct full source text.
 """.strip()
 
 

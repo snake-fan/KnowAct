@@ -166,7 +166,7 @@ core
 
 建议模块：
 
-- `schemas.py`: authoring-only schemas, including `SourceMaterial`, `Source-Grounded Node Skeleton`, list wrappers, and workflow result objects.
+- `schemas.py`: authoring-only schemas, including `SourceMaterial`, `Source-Grounded Node Skeleton` with concise source grounding notes, step input/result DTOs, list wrappers, and workflow result objects.
 - `workflow.py`: `GraphAuthoringAgentWorkflow` orchestration, including step order, dependency direction, and validation checkpoints.
 - `steps.py`: graph authoring step protocols and concrete step implementations. `Node Extraction Agent Step`, `Node Rubric Authoring Agent Step`, and `Edge Proposal Agent Step` can live in this single module; they are workflow responsibilities, not required one-file-per-step modules.
 - `templates/common.py`: shared graph-authoring prompt components such as source-grounding rules, node design rules, MasteryScale guidance, edge type definitions, schema/output contracts, and JSON serialization helpers.
@@ -183,13 +183,17 @@ core
 
 - graph authoring final output 只能是 `candidate_nodes.json` 和 `candidate_edges.json` 两个 JSON list files。
 - `workflow_log.json` 可以作为 run directory 中的 sidecar artifact 存在，并记录 agent step 状态、counts、错误和 trace artifact URI；LLM raw output 与 parser output 分别写入 `agent_traces/{step}/model_raw_output.txt` 与 `agent_traces/{step}/parser_output.json`。这些都不是 candidate graph final review output，也不改变 node/edge JSON list schema。
+- `intermediate/` 可以作为 run directory 中的 structured replay/debug artifact directory 存在，保存通过相邻 validation checkpoint 的 workflow intermediate artifacts，例如 `source_grounded_node_skeletons.json`、`node_rubric_patches.json`、`candidate_nodes_pre_edge.json` 和 canonicalized candidate edge snapshots；这些不是 candidate graph final review output。
 - `candidate` 状态不写进 node/edge object。
-- rubric authoring 不读取 unreviewed candidate edges。
-- edge proposal 可以读取 complete candidate nodes 和 rubrics，但仍然只产生 candidate edges。
+- Node Extraction Agent Step 是唯一接收 full `Parsed Source Markdown` / `SourceMaterial.text` 的 LLM step；rubric authoring 和 edge proposal 的 step protocol 与 prompt template 不接收 source-material text 参数。
+- rubric authoring 只读取 source-grounded skeletons、source locators、source grounding notes 和 MasteryScale，不读取 unreviewed candidate edges。
+- edge proposal 可以读取 complete candidate nodes、rubrics、source locators 和 source grounding notes，但仍然只产生 candidate edges。
 - `workflow.py` 负责编排 step 顺序和每步后的 validation；具体 step 只负责把自己的 template、model client 和 parser 连接起来。
+- `workflow.py` 判定 intermediate artifact 何时可信并调用 `output.py` helper 写盘；step implementation 不直接写 candidate graph 或 intermediate artifact files。
 - `steps.py` 可以统一承载多个 step 接口和 LLM step 实现；只有在职责真正膨胀时才拆出 `node_extraction.py`、`rubric_authoring.py` 或 `edge_proposal.py`。
 - template 与 parser 不混写在 step class 中。每个 step 的 prompt 差异通过 `templates/node_extraction.py`、`templates/node_rubric_authoring.py`、`templates/edge_proposal.py` 表达，共享约束放在 `templates/common.py`；parser 仍可通过 `parsers/graph_authoring.py` 统一表达 raw model output 到 structured objects 的转换。
 - rubric authoring 的 LLM output 只包含 node-level rubric patch；`id`、`name`、`type`、`definition` 和 `source_locators` 由 workflow 按 skeleton id 确定性合并，避免让模型重复拷贝 source-grounded 字段。
+- Large node-rubric authoring can be batched inside the concrete step implementation. The workflow still records one `node_rubric_authoring` entry, while the step trace may contain per-batch raw/parser artifacts.
 
 ### `llm/`
 
@@ -353,6 +357,7 @@ benchmark/
         │       ├── candidate_nodes.json
         │       ├── candidate_edges.json
         │       ├── workflow_log.json
+        │       ├── intermediate/
         │       └── agent_traces/
         ├── graphs/
         │   └── v1/

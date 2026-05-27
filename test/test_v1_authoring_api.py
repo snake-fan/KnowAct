@@ -100,11 +100,18 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertIn("Node Extraction Agent Step", fake_model_client.calls[0][0].content)
             self.assertIn("Node Rubric Authoring Agent Step", fake_model_client.calls[1][0].content)
             self.assertIn("Edge Proposal Agent Step", fake_model_client.calls[2][0].content)
-            for messages in fake_model_client.calls:
+            extraction_prompt = _render_messages(fake_model_client.calls[0])
+            self.assertIn("Parsed Source Markdown", extraction_prompt)
+            self.assertIn("Cached Markdown", extraction_prompt)
+            self.assertIn('source_id "isl_python"', extraction_prompt)
+            self.assertNotIn("data:application/pdf;base64", extraction_prompt)
+            self.assertNotIn("uploaded original PDF", extraction_prompt)
+            for messages in fake_model_client.calls[1:]:
                 rendered_prompt = _render_messages(messages)
-                self.assertIn("Parsed Source Markdown", rendered_prompt)
-                self.assertIn("Cached Markdown", rendered_prompt)
-                self.assertIn('source_id "isl_python"', rendered_prompt)
+                self.assertNotIn("Cached Markdown", rendered_prompt)
+                self.assertNotIn("Parsed Source Markdown for source_id", rendered_prompt)
+                self.assertIn("source_grounding_notes", rendered_prompt)
+                self.assertIn("isl_python", rendered_prompt)
                 self.assertNotIn("data:application/pdf;base64", rendered_prompt)
                 self.assertNotIn("uploaded original PDF", rendered_prompt)
 
@@ -246,7 +253,7 @@ class V1AuthoringApiTest(unittest.TestCase):
                 / "bad_run_001"
             )
             self.assertEqual(
-                {"workflow_log.json", "agent_traces"},
+                {"workflow_log.json", "agent_traces", "intermediate"},
                 {path.name for path in output_dir.iterdir()},
             )
             raw_log = _load_json(output_dir / "workflow_log.json")
@@ -262,10 +269,13 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertIn("exactly L0-L5", failed_entry["error"]["message"])
             entries_by_name = {entry["entry_name"]: entry for entry in raw_log["entries"]}
             rubric_trace = entries_by_name["node_rubric_authoring"]["agent_trace"]
-            self.assertNotIn("model_raw_output", rubric_trace)
             self.assertNotIn("output", rubric_trace["parser_result"])
-            self.assertTrue((output_dir / rubric_trace["model_raw_output_uri"]).exists())
             self.assertTrue((output_dir / rubric_trace["parser_result"]["output_uri"]).exists())
+            rubric_batch_trace = rubric_trace["batch_traces"][0]
+            self.assertNotIn("model_raw_output", rubric_batch_trace)
+            self.assertNotIn("output", rubric_batch_trace["parser_result"])
+            self.assertTrue((output_dir / rubric_batch_trace["model_raw_output_uri"]).exists())
+            self.assertTrue((output_dir / rubric_batch_trace["parser_result"]["output_uri"]).exists())
             self.assertEqual(2, len(fake_model_client.calls))
 
     def test_authoring_api_rejects_paths_outside_storage(self):
@@ -345,6 +355,9 @@ class FixtureGraphModelClient:
                                     "locator": "chapter_2",
                                     "note": "Development fixture locator",
                                 }
+                            ],
+                            "source_grounding_notes": [
+                                "The fixture source introduces train/test split for estimating out-of-sample performance."
                             ],
                         }
                     ]

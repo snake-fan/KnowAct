@@ -5,7 +5,7 @@ from backend.knowact.authoring.templates.common import (
     AUTHORING_CONTEXT,
     JSON_ONLY_RULES,
     NODE_DESIGN_RULES,
-    SOURCE_GROUNDING_RULES,
+    SOURCE_READING_RULES,
     render_parsed_source_markdown,
     render_sections,
 )
@@ -23,7 +23,7 @@ def build_node_extraction_messages(
             content=render_sections(
                 "You are the KnowAct Node Extraction Agent Step.",
                 AUTHORING_CONTEXT,
-                SOURCE_GROUNDING_RULES,
+                SOURCE_READING_RULES,
                 NODE_DESIGN_RULES,
                 """
 This step extracts only Source-Grounded Node Skeletons from Parsed Source Markdown.
@@ -35,6 +35,7 @@ Extract skeletons that can later become benchmark Knowledge Nodes:
 - Merge obvious duplicates and near-synonyms into one canonical skeleton id.
 - Use snake_case ids that are stable and meaningful.
 - Write definitions from the Parsed Source Markdown, not from outside memory.
+- Write concise source_grounding_notes that preserve the source-grounded facts later workflow steps need without copying long source passages.
 - Do not output diagnostic_goal, levels, diagnostic_signals, simulator_behavior, edges, user states, or evidence.
 """.strip(),
                 """
@@ -52,6 +53,9 @@ Return JSON with this exact top-level shape:
           "locator": "chapter_or_section_or_page_reference",
           "note": "optional short reviewer note"
         }
+      ],
+      "source_grounding_notes": [
+        "Concise paraphrased source-grounding note for downstream rubric and edge steps."
       ]
     }
   ]
@@ -74,6 +78,7 @@ Before returning JSON, check each skeleton:
 - Is it explainable and diagnosable?
 - Is it neither too broad nor too tiny?
 - Is it stable enough to appear in a reviewed benchmark graph?
+- Does it include concise source_grounding_notes that capture definition, use, boundary, contrast, dependency, or diagnostic clues when source-grounded?
 - Is it free of user-state, evidence, candidate-status, and edge data?
 """.strip(),
             ),

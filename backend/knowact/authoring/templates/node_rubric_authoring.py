@@ -1,13 +1,10 @@
-from collections.abc import Sequence
-
-from backend.knowact.authoring.schemas import SourceGroundedNodeSkeleton, SourceMaterial
+from backend.knowact.authoring.schemas import NodeRubricAuthoringInput
 from backend.knowact.authoring.templates.common import (
     AUTHORING_CONTEXT,
+    INTERMEDIATE_SOURCE_GROUNDING_RULES,
     JSON_ONLY_RULES,
     MASTERY_SCALE,
-    SOURCE_GROUNDING_RULES,
     dump_model_list,
-    render_parsed_source_markdown,
     render_sections,
 )
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage, ModelMessageProfile
@@ -26,8 +23,7 @@ Do not output name, type, definition, or source_locators. The workflow will copy
 
 
 def build_node_rubric_authoring_messages(
-    skeletons: Sequence[SourceGroundedNodeSkeleton],
-    source_materials: Sequence[SourceMaterial],
+    input_data: NodeRubricAuthoringInput,
     *,
     message_profile: ModelMessageProfile = OPENAI_MESSAGE_PROFILE,
 ) -> tuple[ModelMessage, ...]:
@@ -37,7 +33,7 @@ def build_node_rubric_authoring_messages(
             content=render_sections(
                 "You are the KnowAct Node Rubric Authoring Agent Step.",
                 AUTHORING_CONTEXT,
-                SOURCE_GROUNDING_RULES,
+                INTERMEDIATE_SOURCE_GROUNDING_RULES,
                 MASTERY_SCALE,
                 NODE_RUBRIC_PATCH_SCHEMA_CONTRACT,
                 """
@@ -45,9 +41,9 @@ This step writes rubric patches for source-grounded skeletons.
 The workflow will merge each rubric patch with the matching skeleton to create complete candidate Knowledge Nodes.
 
 Input boundary:
-- Use only the skeletons, their source locators, Parsed Source Markdown, and the global MasteryScale.
+- Use only the skeletons, their source locators, source_grounding_notes, and the global MasteryScale.
 - Do not use candidate edges, unreviewed neighboring nodes, graph traversal context, or outside memory.
-- If the authoritative source itself explains a concept through a contrast or dependency, you may reflect that source-grounded context in the rubric.
+- If the source_grounding_notes explain a concept through a contrast or dependency, you may reflect that source-grounded context in the rubric.
 - Use each skeleton's id exactly as provided.
 - Do not copy skeleton name, type, definition, or source_locators into your JSON output.
 
@@ -93,17 +89,16 @@ Every node rubric patch must include all fields shown above, and "levels" must c
             role="user",
             content=render_sections(
                 "Author complete candidate Knowledge Nodes for every skeleton.",
-                render_parsed_source_markdown(source_materials),
                 """
 Quality checklist:
 - Every input skeleton has exactly one output node.
 - No extra ungrounded nodes are added.
 - Every output node has id, diagnostic_goal, complete L0-L5 levels, diagnostic_signals, and simulator_behavior.
 - No output node includes name, type, definition, or source_locators.
-- Rubrics are source-grounded and diagnostic, not teaching plans or episode scoring rules.
+- Rubrics are grounded in the provided source locators and source_grounding_notes, not teaching plans or episode scoring rules.
 - No candidate/review status fields appear in objects.
 """.strip(),
-                f"Source-grounded node skeletons:\n\n{dump_model_list(skeletons)}",
+                f"Source-grounded node skeletons:\n\n{dump_model_list(input_data.skeletons)}",
             ),
         ),
     )

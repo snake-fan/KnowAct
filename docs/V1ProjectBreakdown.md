@@ -36,7 +36,7 @@ Before the formal research workbench is complete, the backend exposes a narrow a
 Current opened endpoint:
 
 - `GET /health`: backend process health.
-- `POST /api/authoring/graph-candidates`: reads one local textbook PDF by relative path under repository-level `storage/`, resolves same-directory same-stem `Parsed Source Markdown`, calls MinerU to create or regenerate that Markdown when needed, sends the Markdown text through the shared `Graph Authoring Agent Workflow` steps using the request-level `client_provider`, and returns `Source-Grounded Node Skeletons`, candidate `Knowledge Nodes`, candidate `Knowledge Edges`, Markdown cache metadata, and a compact run log summary. MinerU standard mode publishes the local PDF through a private Aliyun OSS staging object and short-lived signed URL, submits that URL to MinerU v4, then best-effort deletes the staging object. PDFs above `KNOWACT_MINERU_MAX_PAGES_PER_TASK` are split locally into chunks, parsed through separate MinerU tasks, and joined back into one Parsed Source Markdown. When `write_artifacts=true`, it writes `candidate_nodes.json`, `candidate_edges.json`, the sidecar `workflow_log.json`, and per-step `agent_traces/{step}/` raw/parser artifacts under a candidate graph run directory by default; only the node and edge files are candidate graph review artifacts.
+- `POST /api/authoring/graph-candidates`: reads one local textbook PDF by relative path under repository-level `storage/`, resolves same-directory same-stem `Parsed Source Markdown`, calls MinerU to create or regenerate that Markdown when needed, sends the Markdown text only to the Node Extraction Agent Step using the request-level `client_provider`, and returns `Source-Grounded Node Skeletons`, candidate `Knowledge Nodes`, candidate `Knowledge Edges`, Markdown cache metadata, and a compact run log summary. Later workflow steps consume structured intermediate artifacts rather than `SourceMaterial.text`. MinerU standard mode publishes the local PDF through a private Aliyun OSS staging object and short-lived signed URL, submits that URL to MinerU v4, then best-effort deletes the staging object. PDFs above `KNOWACT_MINERU_MAX_PAGES_PER_TASK` are split locally into chunks, parsed through separate MinerU tasks, and joined back into one Parsed Source Markdown. When `write_artifacts=true`, it writes `candidate_nodes.json`, `candidate_edges.json`, the sidecar `workflow_log.json`, validation-passed `intermediate/` artifacts, and per-step `agent_traces/{step}/` raw/parser artifacts under a candidate graph run directory by default; only the node and edge files are candidate graph review artifacts.
 
 Guardrails:
 
@@ -100,7 +100,7 @@ Goal: build the project-owned authoring workflow that turns authoritative source
 
 Milestone M2:
 
-- The `Node Extraction Agent Step` reads ISL Python source material and produces `Source-Grounded Node Skeletons` with simple `Source Locators`.
+- The `Node Extraction Agent Step` reads ISL Python source material and produces `Source-Grounded Node Skeletons` with simple `Source Locators` and concise source grounding notes.
 - The `Node Rubric Authoring Agent Step` turns node skeletons into complete candidate `Knowledge Nodes` with `diagnostic_goal`, L0-L5 `levels`, diagnostic signals, and `simulator_behavior`.
 - The `Edge Proposal Agent Step` uses complete candidate nodes and rubrics to propose precision-first candidate `Knowledge Edges`.
 - The final workflow output is exactly two JSON list files: `candidate_nodes.json` and `candidate_edges.json`.
@@ -113,6 +113,7 @@ Recommended milestone split:
 Guardrails:
 
 - Candidate nodes must be source-grounded, not brainstormed from model memory.
+- Only node extraction receives full Parsed Source Markdown; later LLM-backed workflow steps receive structured intermediate artifacts, not source-material text.
 - Rubric authoring must not use unreviewed neighboring nodes or candidate edges.
 - Edge proposal should omit weak, speculative, or merely related pairs.
 - Candidate status belongs to filenames, directories, or review state, not inside node or edge objects.
@@ -123,7 +124,7 @@ Implementation note:
 - PDF source-material graph authoring runs use MinerU to prepare same-directory same-stem Markdown under local `storage/`; MinerU standard mode receives a short-lived signed URL for a private Aliyun OSS staging object rather than a base64 payload or public-read bucket object. Large PDFs are split by page count before MinerU submission and their Markdown chunks are concatenated in source page order. The LLM receives Markdown text through the ordinary text `ModelClient` path, not PDF base64 `input_file` or OpenAI `file_id`.
 - Development and test runs should use deterministic or fake model clients unless the author explicitly chooses to run a provider-backed workflow.
 - Structures to implement: `backend/knowact/authoring/schemas.py`, `workflow.py`, `steps.py`, `templates/graph_authoring.py`, `parsers/graph_authoring.py`, `validation.py`, `output.py`, `sources.py`, and `openai_workflow.py`; `backend/knowact/llm/` supplies the model completion boundary.
-- Opened authoring interface: `POST /api/authoring/graph-candidates`. It accepts `pdf_path`, optional `benchmark_domain`, optional `source_id`, optional `source_title`, optional `run_id`, `client_provider`, `force_reparse`, and `write_artifacts`; it returns workflow outputs plus Markdown cache metadata and compact run log summary and, by default, writes `candidate_nodes.json`, `candidate_edges.json`, and sidecar `workflow_log.json` under `benchmark/domains/{benchmark_domain}/candidate_graphs/api/{run_id}/`.
+- Opened authoring interface: `POST /api/authoring/graph-candidates`. It accepts `pdf_path`, optional `benchmark_domain`, optional `source_id`, optional `source_title`, optional `run_id`, `client_provider`, `force_reparse`, and `write_artifacts`; it returns workflow outputs plus Markdown cache metadata and compact run log summary and, by default, writes `candidate_nodes.json`, `candidate_edges.json`, sidecar `workflow_log.json`, validation-passed `intermediate/` artifacts, and agent traces under `benchmark/domains/{benchmark_domain}/candidate_graphs/api/{run_id}/`.
 - Stable workbench interface: defer formal authoring write APIs until candidate review and promotion semantics are clearer.
 
 ## Phase 3: Authored Graph Review and Promotion

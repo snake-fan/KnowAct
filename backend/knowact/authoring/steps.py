@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from backend.knowact.authoring.logging import (
     WorkflowRunAgentTrace,
+    WorkflowRunAgentTraceBatch,
     WorkflowRunParserResult,
     redact_logged_text,
     workflow_run_error_from_exception,
@@ -16,7 +17,14 @@ from backend.knowact.authoring.parsers.graph_authoring import (
     parse_node_extraction_output,
     parse_node_rubric_authoring_output,
 )
-from backend.knowact.authoring.schemas import NodeRubricPatch, SourceGroundedNodeSkeleton, SourceMaterial
+from backend.knowact.authoring.schemas import (
+    EdgeProposalInput,
+    NodeRubricAuthoringInput,
+    NodeRubricAuthoringResult,
+    NodeRubricPatch,
+    SourceGroundedNodeSkeleton,
+    SourceMaterial,
+)
 from backend.knowact.authoring.templates.edge_proposal import build_edge_proposal_messages
 from backend.knowact.authoring.templates.node_extraction import build_node_extraction_messages
 from backend.knowact.authoring.templates.node_rubric_authoring import (
@@ -39,17 +47,15 @@ class NodeExtractionStep(Protocol):
 class NodeRubricAuthoringStep(Protocol):
     def run(
         self,
-        skeletons: Sequence[SourceGroundedNodeSkeleton],
-        source_materials: Sequence[SourceMaterial],
-    ) -> tuple[KnowledgeNode, ...]:
+        input_data: NodeRubricAuthoringInput,
+    ) -> NodeRubricAuthoringResult:
         """Turn node skeletons into complete candidate Knowledge Nodes."""
 
 
 class EdgeProposalStep(Protocol):
     def run(
         self,
-        candidate_nodes: Sequence[KnowledgeNode],
-        source_materials: Sequence[SourceMaterial],
+        input_data: EdgeProposalInput,
     ) -> tuple[KnowledgeEdge, ...]:
         """Propose precision-first candidate Knowledge Edges."""
 
@@ -79,30 +85,32 @@ class LLMNodeExtractionStep:
 
 
 class LLMNodeRubricAuthoringStep:
-    def __init__(self, model_client: ModelClient) -> None:
+    def __init__(self, model_client: ModelClient, *, batch_size: int = 8) -> None:
+        if batch_size < 1:
+            raise ValueError("batch_size must be at least 1")
         self._model_client = model_client
+        self._batch_size = batch_size
         self.last_trace: WorkflowRunAgentTrace | None = None
 
     def run(
         self,
-        skeletons: Sequence[SourceGroundedNodeSkeleton],
-        source_materials: Sequence[SourceMaterial],
-    ) -> tuple[KnowledgeNode, ...]:
-        rubric_patches = _run_traced_llm_step(
+        input_data: NodeRubricAuthoringInput,
+    ) -> NodeRubricAuthoringResult:
+        rubric_patches = _run_traced_batched_node_rubric_authoring_step(
             model_client=self._model_client,
-            messages=build_node_rubric_authoring_messages(
-                skeletons,
-                source_materials,
-                message_profile=_message_profile_for(self._model_client),
-            ),
-            parser=parse_node_rubric_authoring_output,
-            output_serializer=lambda nodes: {
-                "nodes": _dump_models(nodes),
-            },
-            step_name="node_rubric_authoring",
+            input_data=input_data,
+            batch_size=self._batch_size,
             trace_setter=self._set_last_trace,
+            message_profile=_message_profile_for(self._model_client),
         )
-        return _complete_candidate_nodes_from_rubrics(rubric_patches, skeletons)
+        candidate_nodes = _complete_candidate_nodes_from_rubrics(
+            rubric_patches,
+            input_data.skeletons,
+        )
+        return NodeRubricAuthoringResult(
+            rubric_patches=tuple(rubric_patches),
+            candidate_nodes=candidate_nodes,
+        )
 
     def _set_last_trace(self, trace: WorkflowRunAgentTrace | None) -> None:
         self.last_trace = trace
@@ -115,14 +123,12 @@ class LLMEdgeProposalStep:
 
     def run(
         self,
-        candidate_nodes: Sequence[KnowledgeNode],
-        source_materials: Sequence[SourceMaterial],
+        input_data: EdgeProposalInput,
     ) -> tuple[KnowledgeEdge, ...]:
         return _run_traced_llm_step(
             model_client=self._model_client,
             messages=build_edge_proposal_messages(
-                candidate_nodes,
-                source_materials,
+                input_data,
                 message_profile=_message_profile_for(self._model_client),
             ),
             parser=parse_edge_proposal_output,
@@ -187,8 +193,99 @@ def _run_traced_llm_step(
     return parsed_output
 
 
+def _run_traced_batched_node_rubric_authoring_step(
+    *,
+    model_client: ModelClient,
+    input_data: NodeRubricAuthoringInput,
+    batch_size: int,
+    trace_setter: Callable[[WorkflowRunAgentTrace | None], None],
+    message_profile: ModelMessageProfile,
+) -> tuple[NodeRubricPatch, ...]:
+    trace_setter(None)
+    rubric_patches: list[NodeRubricPatch] = []
+    batch_traces: list[WorkflowRunAgentTraceBatch] = []
+
+    for batch_index, skeleton_batch in enumerate(
+        _batches(input_data.skeletons, batch_size),
+        start=1,
+    ):
+        batch_name = f"batch_{batch_index:03d}"
+        raw_output = model_client.complete(
+            messages=build_node_rubric_authoring_messages(
+                NodeRubricAuthoringInput(skeletons=skeleton_batch),
+                message_profile=message_profile,
+            )
+        )
+        redacted_raw_output = redact_logged_text(raw_output)
+
+        try:
+            parsed_batch = parse_node_rubric_authoring_output(raw_output)
+        except Exception as exc:
+            batch_traces.append(
+                WorkflowRunAgentTraceBatch(
+                    batch_name=batch_name,
+                    input_counts={"skeletons": len(skeleton_batch)},
+                    model_raw_output=redacted_raw_output,
+                    parser_result=WorkflowRunParserResult(
+                        status="failed",
+                        error=workflow_run_error_from_exception(
+                            exc,
+                            step_name="node_rubric_authoring",
+                        ),
+                    ),
+                )
+            )
+            trace_setter(
+                WorkflowRunAgentTrace(
+                    parser_result=WorkflowRunParserResult(
+                        status="failed",
+                        error=workflow_run_error_from_exception(
+                            exc,
+                            step_name="node_rubric_authoring",
+                        ),
+                    ),
+                    batch_traces=tuple(batch_traces),
+                )
+            )
+            raise
+
+        rubric_patches.extend(parsed_batch)
+        batch_traces.append(
+            WorkflowRunAgentTraceBatch(
+                batch_name=batch_name,
+                input_counts={"skeletons": len(skeleton_batch)},
+                model_raw_output=redacted_raw_output,
+                parser_result=WorkflowRunParserResult(
+                    status="succeeded",
+                    output={"nodes": _dump_models(parsed_batch)},
+                ),
+            )
+        )
+
+    trace_setter(
+        WorkflowRunAgentTrace(
+            parser_result=WorkflowRunParserResult(
+                status="succeeded",
+                output={"nodes": _dump_models(tuple(rubric_patches))},
+            ),
+            batch_traces=tuple(batch_traces),
+        )
+    )
+    return tuple(rubric_patches)
+
+
 def _dump_models(items: tuple[BaseModel, ...]) -> list[dict[str, object]]:
     return [item.model_dump(mode="json", exclude_none=True) for item in items]
+
+
+def _batches(
+    items: Sequence[SourceGroundedNodeSkeleton],
+    batch_size: int,
+) -> tuple[tuple[SourceGroundedNodeSkeleton, ...], ...]:
+    return tuple(
+        tuple(items[index : index + batch_size])
+        for index in range(0, len(items), batch_size)
+    )
 
 
 def _complete_candidate_nodes_from_rubrics(

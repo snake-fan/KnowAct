@@ -1,23 +1,18 @@
-from collections.abc import Sequence
-
-from backend.knowact.authoring.schemas import SourceMaterial
+from backend.knowact.authoring.schemas import EdgeProposalInput
 from backend.knowact.authoring.templates.common import (
     AUTHORING_CONTEXT,
     EDGE_SCHEMA_CONTRACT,
     EDGE_TYPE_RULES,
+    INTERMEDIATE_SOURCE_GROUNDING_RULES,
     JSON_ONLY_RULES,
-    SOURCE_GROUNDING_RULES,
     dump_model_list,
-    render_parsed_source_markdown,
     render_sections,
 )
-from backend.knowact.core.graph import KnowledgeNode
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage, ModelMessageProfile
 
 
 def build_edge_proposal_messages(
-    candidate_nodes: Sequence[KnowledgeNode],
-    source_materials: Sequence[SourceMaterial],
+    input_data: EdgeProposalInput,
     *,
     message_profile: ModelMessageProfile = OPENAI_MESSAGE_PROFILE,
 ) -> tuple[ModelMessage, ...]:
@@ -27,14 +22,14 @@ def build_edge_proposal_messages(
             content=render_sections(
                 "You are the KnowAct Edge Proposal Agent Step.",
                 AUTHORING_CONTEXT,
-                SOURCE_GROUNDING_RULES,
+                INTERMEDIATE_SOURCE_GROUNDING_RULES,
                 EDGE_TYPE_RULES,
                 EDGE_SCHEMA_CONTRACT,
                 """
 This step proposes precision-first candidate Knowledge Edges after complete candidate nodes exist.
 
 Input boundary:
-- You may use complete candidate nodes, including diagnostic_goal, L0-L5 levels, diagnostic_signals, simulator_behavior, source_locators, and relevant passages from Parsed Source Markdown.
+- You may use complete candidate nodes, including diagnostic_goal, L0-L5 levels, diagnostic_signals, simulator_behavior, source_locators, and source_grounding_notes from earlier workflow artifacts.
 - Do not change node objects.
 - Do not add node fields to edge objects.
 - Do not use edge objects to express user knowledge state, evidence, diagnostic questions, scoring, or probe strategy.
@@ -74,7 +69,6 @@ Every edge object must include only the fields shown above and must reference ex
             role="user",
             content=render_sections(
                 "Propose precision-first candidate Knowledge Edges for the complete candidate node list.",
-                render_parsed_source_markdown(source_materials),
                 """
 Review each proposed edge before output:
 - Are source and target valid node ids from the candidate node list?
@@ -83,7 +77,8 @@ Review each proposed edge before output:
 - Does the rationale explain the objective knowledge relationship rather than a user-state or question-design idea?
 - Would a benchmark author prefer reviewing this edge over omitting it as weak relatedness?
 """.strip(),
-                f"Complete candidate nodes:\n\n{dump_model_list(candidate_nodes)}",
+                f"Source-grounded node context:\n\n{dump_model_list(input_data.source_grounded_node_skeletons)}",
+                f"Complete candidate nodes:\n\n{dump_model_list(input_data.candidate_nodes)}",
             ),
         ),
     )

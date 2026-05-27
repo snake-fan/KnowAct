@@ -628,11 +628,12 @@ Node Extraction Agent Step
 → source-grounded node skeleton extraction
 → duplicate / merge pass
 → source locator validation
+→ source grounding note extraction
 → source-grounded node skeleton list
 
 Node Rubric Authoring Agent Step
 = source-grounded node skeleton list
-+ authoritative source material
++ source locators and source grounding notes
 + global MasteryScale
 → diagnostic_goal drafting
 → L0-L5 level rubric drafting
@@ -643,7 +644,7 @@ Node Rubric Authoring Agent Step
 Edge Proposal Agent Step
 = complete candidate_nodes.json
 + node rubrics
-+ source locators / relevant source material
++ source locators and source grounding notes
 → candidate edge proposal
 → precision-first filtering
 → edge rationale drafting
@@ -656,11 +657,11 @@ Graph Authoring Agent Workflow output
 → human review
 ```
 
-`Node Rubric Authoring Agent Step` 的 v1 输入边界应保持收窄：它只参考 source-grounded node skeleton、对应 authoritative source/source locator，以及全局 `MasteryScale`。它不使用当前 candidate graph 中尚未审核的邻近 nodes、candidate edges 或 graph traversal context 来生成 rubric。
+`Node Rubric Authoring Agent Step` 的 v1 输入边界应保持收窄：它只参考 source-grounded node skeleton、source locator、source grounding notes，以及全局 `MasteryScale`。它不接收 full Parsed Source Markdown 或 source-material text 参数，也不使用当前 candidate graph 中尚未审核的邻近 nodes、candidate edges 或 graph traversal context 来生成 rubric。
 
 如果 authoritative source 本身通过对比或依赖关系解释该概念，rubric 可以反映这些 source-grounded 关系；但不能因为 workflow 已经临时生成了一条 candidate edge，就反过来把这条未审核关系写进 node 的诊断标准。
 
-`Edge Proposal Agent Step` 的输入边界与 rubric step 不同。edge proposal 发生在完整 candidate nodes 可用之后，因此 v1 允许它参考 `candidate_nodes.json` 中的完整 node rubrics，包括 `diagnostic_goal`、L0-L5 `levels`、diagnostic signals 和 `simulator_behavior`，来判断 `part_of`、`prerequisite_for`、`supports`、`contrasts_with` 等关系。
+`Edge Proposal Agent Step` 的输入边界与 rubric step 不同。edge proposal 发生在完整 candidate nodes 可用之后，因此 v1 允许它参考 `candidate_nodes.json` 中的完整 node rubrics，包括 `diagnostic_goal`、L0-L5 `levels`、diagnostic signals 和 `simulator_behavior`，以及 workflow intermediate artifacts 中的 source locators 和 source grounding notes，来判断 `part_of`、`prerequisite_for`、`supports`、`contrasts_with` 等关系。它同样不接收 full Parsed Source Markdown 或 source-material text 参数。
 
 `Edge Proposal Agent Step` 的输出策略是 precision-first。它应省略弱相关、rationale 不清、类型归属不清的关系，避免把 `candidate_edges.json` 变成“可能相关”的候选池。`supports` 也必须表达具体的解释、迁移或诊断贡献，不能作为泛化的 relatedness 标签使用。
 
