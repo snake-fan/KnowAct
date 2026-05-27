@@ -88,3 +88,11 @@ storage/*
 # OS files
 .DS_Store
 Thumbs.db
+
+# intermediate files from code generation
+intermediate/
+
+
+# benchmark
+candidate_edges.json
+candidate_nodes.json
