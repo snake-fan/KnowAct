@@ -12,6 +12,50 @@ from backend.knowact.llm.messages import DEEPSEEK_MESSAGE_PROFILE, OPENAI_MESSAG
 
 
 class V1AuthoringApiTest(unittest.TestCase):
+    def test_authoring_api_uploads_pdf_source_material_and_lists_catalog(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            fake_parser = FixtureSourceParser("unused")
+            fake_model_client = FixtureGraphModelClient()
+            client = _test_client(workspace_root, fake_model_client, fake_parser)
+            pdf_bytes = b"%PDF-1.4\nuploaded fixture\n%%EOF"
+
+            response = client.post(
+                "/api/authoring/source-materials",
+                data={
+                    "source_id": "isl_python_upload",
+                    "title": "ISL Python Upload",
+                    "citation": "local upload fixture",
+                },
+                files={"file": ("isl_python.pdf", pdf_bytes, "application/pdf")},
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("isl_python_upload", payload["source_id"])
+            self.assertEqual("ISL Python Upload", payload["title"])
+            self.assertEqual("local upload fixture", payload["citation"])
+            self.assertEqual("source_materials/isl_python_upload/original.pdf", payload["storage_path"])
+            self.assertEqual(
+                "storage/source_materials/isl_python_upload/original.pdf",
+                payload["storage_uri"],
+            )
+            self.assertEqual("isl_python.pdf", payload["filename"])
+            self.assertEqual(len(pdf_bytes), payload["size_bytes"])
+            self.assertIn("uploaded_at", payload)
+
+            material_path = workspace_root / "storage" / payload["storage_path"]
+            self.assertEqual(pdf_bytes, material_path.read_bytes())
+            metadata = _load_json(material_path.parent / "metadata.json")
+            self.assertEqual("isl_python_upload", metadata["source_id"])
+
+            list_response = client.get("/api/authoring/source-materials")
+
+            self.assertEqual(200, list_response.status_code)
+            self.assertEqual([payload], list_response.json()["source_materials"])
+            self.assertEqual([], fake_parser.calls)
+            self.assertEqual([], fake_model_client.calls)
+
     def test_authoring_api_runs_from_cached_markdown_and_writes_candidate_files_by_default(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -112,8 +156,157 @@ class V1AuthoringApiTest(unittest.TestCase):
                 self.assertNotIn("Parsed Source Markdown for source_id", rendered_prompt)
                 self.assertIn("source_grounding_notes", rendered_prompt)
                 self.assertIn("isl_python", rendered_prompt)
-                self.assertNotIn("data:application/pdf;base64", rendered_prompt)
-                self.assertNotIn("uploaded original PDF", rendered_prompt)
+            self.assertNotIn("data:application/pdf;base64", rendered_prompt)
+            self.assertNotIn("uploaded original PDF", rendered_prompt)
+
+    def test_authoring_api_runs_graph_candidates_from_source_material_id(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            fake_parser = FixtureSourceParser("## Generated From Catalog\n\nCatalog Markdown.")
+            fake_model_client = FixtureGraphModelClient()
+            client = _test_client(workspace_root, fake_model_client, fake_parser)
+            pdf_bytes = b"%PDF-1.4\ncatalog fixture\n%%EOF"
+            upload_response = client.post(
+                "/api/authoring/source-materials",
+                data={
+                    "source_id": "catalog_source",
+                    "title": "Catalog Source",
+                    "citation": "catalog fixture citation",
+                },
+                files={"file": ("catalog.pdf", pdf_bytes, "application/pdf")},
+            )
+            self.assertEqual(200, upload_response.status_code)
+
+            response = client.post(
+                "/api/authoring/graph-candidates",
+                json={
+                    "source_id": "catalog_source",
+                    "run_id": "catalog_run_001",
+                    "write_artifacts": False,
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("catalog_source", payload["material"]["source_id"])
+            self.assertEqual("Catalog Source", payload["material"]["title"])
+            self.assertEqual(
+                "storage/source_materials/catalog_source/original.pdf",
+                payload["material"]["storage_uri"],
+            )
+            self.assertEqual("generated", payload["material"]["markdown_cache_status"])
+            self.assertIn("Generated From Catalog", _render_messages(fake_model_client.calls[0]))
+
+    def test_authoring_api_reads_candidate_graph_run_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_fixture_pdf(workspace_root)
+            _write_fixture_markdown(workspace_root, "## Train Test Split\n\nCached Markdown.")
+            fake_model_client = FixtureGraphModelClient()
+            client = _test_client(workspace_root, fake_model_client, FixtureSourceParser("unused"))
+            create_response = client.post(
+                "/api/authoring/graph-candidates",
+                json={
+                    "pdf_path": "books/isl_python.pdf",
+                    "run_id": "read_run_001",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+
+            response = client.get(
+                "/api/authoring/candidate-graphs/classical_supervised_ml_algorithms/read_run_001"
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("classical_supervised_ml_algorithms", payload["benchmark_domain"])
+            self.assertEqual("read_run_001", payload["run_id"])
+            self.assertEqual(["train_test_split"], [node["id"] for node in payload["candidate_nodes"]])
+            self.assertEqual([], payload["candidate_edges"])
+            self.assertEqual(
+                "benchmark/domains/classical_supervised_ml_algorithms/candidate_graphs/api/read_run_001/candidate_nodes.json",
+                payload["artifact_paths"]["candidate_nodes_uri"],
+            )
+
+    def test_authoring_api_saves_valid_candidate_graph_edits_by_overwriting_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_fixture_pdf(workspace_root)
+            _write_fixture_markdown(workspace_root, "## Train Test Split\n\nCached Markdown.")
+            fake_model_client = FixtureGraphModelClient()
+            client = _test_client(workspace_root, fake_model_client, FixtureSourceParser("unused"))
+            create_response = client.post(
+                "/api/authoring/graph-candidates",
+                json={
+                    "pdf_path": "books/isl_python.pdf",
+                    "run_id": "save_run_001",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+            graph_payload = client.get(
+                "/api/authoring/candidate-graphs/classical_supervised_ml_algorithms/save_run_001"
+            ).json()
+            edited_node = {
+                **graph_payload["candidate_nodes"][0],
+                "name": "Train/Test Split Reviewed",
+            }
+
+            response = client.put(
+                "/api/authoring/candidate-graphs/classical_supervised_ml_algorithms/save_run_001",
+                json={
+                    "candidate_nodes": [edited_node],
+                    "candidate_edges": [],
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual(["Train/Test Split Reviewed"], [node["name"] for node in payload["candidate_nodes"]])
+            nodes_path = workspace_root / payload["artifact_paths"]["candidate_nodes_uri"]
+            self.assertEqual("Train/Test Split Reviewed", _load_json(nodes_path)[0]["name"])
+
+    def test_authoring_api_rejects_invalid_candidate_graph_edits_without_overwriting_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_fixture_pdf(workspace_root)
+            _write_fixture_markdown(workspace_root, "## Train Test Split\n\nCached Markdown.")
+            fake_model_client = FixtureGraphModelClient()
+            client = _test_client(workspace_root, fake_model_client, FixtureSourceParser("unused"))
+            create_response = client.post(
+                "/api/authoring/graph-candidates",
+                json={
+                    "pdf_path": "books/isl_python.pdf",
+                    "run_id": "invalid_save_run_001",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+            graph_payload = client.get(
+                "/api/authoring/candidate-graphs/classical_supervised_ml_algorithms/invalid_save_run_001"
+            ).json()
+            nodes_path = workspace_root / graph_payload["artifact_paths"]["candidate_nodes_uri"]
+            original_nodes = _load_json(nodes_path)
+
+            response = client.put(
+                "/api/authoring/candidate-graphs/classical_supervised_ml_algorithms/invalid_save_run_001",
+                json={
+                    "candidate_nodes": graph_payload["candidate_nodes"],
+                    "candidate_edges": [
+                        {
+                            "id": "edge_train_test_split_supports_missing_node",
+                            "source": "train_test_split",
+                            "target": "missing_node",
+                            "type": "supports",
+                            "rationale": "Invalid edge for regression coverage.",
+                            "weight": 0.5,
+                            "curation_confidence": 0.5,
+                        }
+                    ],
+                },
+            )
+
+            self.assertEqual(422, response.status_code)
+            self.assertIn("unknown target node", response.json()["detail"])
+            self.assertEqual(original_nodes, _load_json(nodes_path))
 
     def test_authoring_api_generates_markdown_when_cache_is_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
