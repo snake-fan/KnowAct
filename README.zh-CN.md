@@ -302,7 +302,6 @@ DEEPSEEK_API_KEY=...
 KNOWACT_DEEPSEEK_MODEL=deepseek-v4-flash
 KNOWACT_DEEPSEEK_BASE_URL=https://api.deepseek.com
 KNOWACT_DEEPSEEK_TIMEOUT_SECONDS=120
-KNOWACT_DEEPSEEK_MAX_TOKENS=8000
 ```
 
 当前测试使用 deterministic fixtures 和 fake clients，不会调用 OpenAI 或 DeepSeek API。
@@ -327,7 +326,7 @@ uv run fastapi dev backend/main.py
 
 然后打开本地 Swagger UI：`http://127.0.0.1:8000/docs`。当前 authoring API 包含：
 
-- `POST /api/authoring/graph-candidates`：按 `storage/` 下的相对路径读取一个 PDF，解析或复用同目录同 stem 的 Parsed Source Markdown，必要时调用 MinerU 创建或重新生成 Markdown，再把 Markdown 文本发送给 graph authoring workflow 的各个 step，返回 source-grounded skeletons、candidate nodes、candidate edges、Markdown cache metadata 和 compact run log summary，并默认写出 `candidate_nodes.json`、`candidate_edges.json` 以及 sidecar `workflow_log.json`。MinerU standard mode 会先把本地 PDF 发布为私有阿里云 OSS staging object 的短期 signed URL，再把这个 URL 提交给 MinerU；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会拆成 chunks 并按页码顺序拼接 Markdown。其中只有 node 和 edge 文件是 candidate graph review artifacts。示例请求：
+- `POST /api/authoring/graph-candidates`：按 `storage/` 下的相对路径读取一个 PDF，解析或复用同目录同 stem 的 Parsed Source Markdown，必要时调用 MinerU 创建或重新生成 Markdown，再把 Markdown 文本发送给 graph authoring workflow 的各个 step，返回 source-grounded skeletons、candidate nodes、candidate edges、Markdown cache metadata 和 compact run log summary，并默认写出 `candidate_nodes.json`、`candidate_edges.json` 以及 sidecar `workflow_log.json`。workflow log 记录 step 状态，并链接到 `agent_traces/{step}/model_raw_output.txt` 和 `agent_traces/{step}/parser_output.json` 以便 debug，但仍不写入完整 prompt/source-material text。MinerU standard mode 会先把本地 PDF 发布为私有阿里云 OSS staging object 的短期 signed URL，再把这个 URL 提交给 MinerU；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会拆成 chunks 并按页码顺序拼接 Markdown。其中只有 node 和 edge 文件是 candidate graph review artifacts。示例请求：
 
 ```json
 {

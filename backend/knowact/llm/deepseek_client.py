@@ -44,9 +44,6 @@ class DeepSeekChatModelClient:
             "messages": render_messages_for_profile(tuple(messages), self.message_profile),
             "response_format": {"type": "json_object"},
         }
-        if self._config.max_tokens is not None:
-            params["max_tokens"] = self._config.max_tokens
-
         completion = self._client.chat.completions.create(**params)
         return _extract_content(completion)
 

@@ -1,5 +1,7 @@
 # V1 splits node extraction from rubric authoring
 
+Amended by ADR-0041: after node extraction, v1 graph authoring passes structured intermediate artifacts forward instead of re-reading full `Parsed Source Markdown` in later steps.
+
 KnowAct v1 graph authoring does not ask the node extraction step to produce complete `Knowledge Node` objects in one pass. The node extraction step reads authoritative source material and produces source-grounded node skeletons with identity fields and source locators. A later node rubric authoring step completes `diagnostic_goal`, L0-L5 `levels`, diagnostic signals, and `simulator_behavior`. In v1, rubric authoring uses only the node skeleton, authoritative source/source locator, and global `MasteryScale`, not unreviewed neighboring nodes or candidate edges.
 
 **Considered Options**

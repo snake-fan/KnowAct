@@ -6,6 +6,10 @@ from pathlib import Path
 from backend.knowact.authoring.logging import GraphAuthoringWorkflowRunError
 from backend.knowact.authoring.output import write_graph_authoring_output, write_graph_authoring_run_log
 from backend.knowact.authoring.openai_workflow import build_openai_graph_authoring_workflow
+from backend.knowact.authoring.parsers.graph_authoring import (
+    AuthoringOutputParseError,
+    parse_node_rubric_authoring_output,
+)
 from backend.knowact.authoring.schemas import SourceGroundedNodeSkeleton, SourceMaterial
 from backend.knowact.authoring.templates.edge_proposal import build_edge_proposal_messages
 from backend.knowact.authoring.templates.node_extraction import build_node_extraction_messages
@@ -101,6 +105,22 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertNotIn(source_material.text, serialized_log)
         self.assertNotIn("Source material:", serialized_log)
 
+    def test_graph_authoring_workflow_canonicalizes_contrasts_with_edges_in_code(self):
+        workflow = GraphAuthoringAgentWorkflow(
+            node_extraction_step=FixtureNodeExtractionStep(),
+            node_rubric_authoring_step=FixtureNodeRubricAuthoringStep(),
+            edge_proposal_step=ReversedContrastsEdgeProposalStep(),
+        )
+
+        result = workflow.run([_source_material()])
+
+        self.assertEqual(1, len(result.candidate_edges))
+        edge = result.candidate_edges[0]
+        self.assertEqual("edge_linear_regression_contrasts_with_logistic_regression", edge.id)
+        self.assertEqual("linear_regression", edge.source)
+        self.assertEqual("logistic_regression", edge.target)
+        validate_knowledge_graph(KnowledgeGraph(nodes=result.candidate_nodes, edges=result.candidate_edges))
+
     def test_graph_authoring_run_log_can_be_written_as_sidecar_artifact(self):
         workflow = GraphAuthoringAgentWorkflow(
             node_extraction_step=FixtureNodeExtractionStep(),
@@ -162,9 +182,113 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
 
         self.assertEqual(("train_test_split",), tuple(node.id for node in result.candidate_nodes))
         self.assertEqual(
+            ("chapter_2",),
+            tuple(locator.locator for locator in result.candidate_nodes[0].source_locators),
+        )
+        self.assertEqual(
             ["Node Extraction Agent Step", "Node Rubric Authoring Agent Step", "Edge Proposal Agent Step"],
             model_client.prompt_markers,
         )
+
+    def test_llm_agent_steps_record_raw_model_output_and_parser_output_in_run_log(self):
+        model_client = FakeRawJSONWorkflowModelClient()
+        workflow = build_openai_graph_authoring_workflow(model_client=model_client)
+
+        run_result = workflow.run_with_log([_source_material()], run_id="trace_run_001")
+
+        entries_by_name = {entry.entry_name: entry for entry in run_result.run_log.entries}
+        node_extraction_trace = entries_by_name["node_extraction"].agent_trace
+        self.assertIsNotNone(node_extraction_trace)
+        self.assertIn('"skeletons"', node_extraction_trace.model_raw_output)
+        self.assertEqual("succeeded", node_extraction_trace.parser_result.status)
+        self.assertEqual(
+            "train_test_split",
+            node_extraction_trace.parser_result.output["skeletons"][0]["id"],
+        )
+
+        rubric_trace = entries_by_name["node_rubric_authoring"].agent_trace
+        self.assertIsNotNone(rubric_trace)
+        self.assertEqual("succeeded", rubric_trace.parser_result.status)
+        self.assertEqual("train_test_split", rubric_trace.parser_result.output["nodes"][0]["id"])
+        self.assertNotIn("source_locators", rubric_trace.parser_result.output["nodes"][0])
+
+        edge_trace = entries_by_name["edge_proposal"].agent_trace
+        self.assertIsNotNone(edge_trace)
+        self.assertEqual("succeeded", edge_trace.parser_result.status)
+        self.assertEqual({"edges": []}, edge_trace.parser_result.output)
+
+    def test_written_run_log_externalizes_agent_trace_artifacts(self):
+        model_client = FakeRawJSONWorkflowModelClient()
+        workflow = build_openai_graph_authoring_workflow(model_client=model_client)
+        run_result = workflow.run_with_log([_source_material()], run_id="trace_run_001")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            log_path = write_graph_authoring_run_log(run_result.run_log, output_dir)
+
+            raw_log = _load_json(log_path)
+            entries_by_name = {entry["entry_name"]: entry for entry in raw_log["entries"]}
+            node_trace = entries_by_name["node_extraction"]["agent_trace"]
+            self.assertNotIn("model_raw_output", node_trace)
+            self.assertEqual(
+                "agent_traces/node_extraction/model_raw_output.txt",
+                node_trace["model_raw_output_uri"],
+            )
+            self.assertNotIn("output", node_trace["parser_result"])
+            self.assertEqual(
+                "agent_traces/node_extraction/parser_output.json",
+                node_trace["parser_result"]["output_uri"],
+            )
+
+            raw_output_path = output_dir / node_trace["model_raw_output_uri"]
+            parser_output_path = output_dir / node_trace["parser_result"]["output_uri"]
+            self.assertIn('"skeletons"', raw_output_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                "train_test_split",
+                _load_json(parser_output_path)["skeletons"][0]["id"],
+            )
+
+    def test_llm_agent_step_parse_failures_record_raw_model_output_in_run_log(self):
+        workflow = build_openai_graph_authoring_workflow(model_client=InvalidJSONGraphModelClient())
+
+        with self.assertRaises(GraphAuthoringWorkflowRunError) as context:
+            workflow.run_with_log([_source_material()], run_id="bad_json_run_001")
+
+        failed_entry = context.exception.run_log.entries[-1]
+        self.assertEqual("node_extraction", failed_entry.entry_name)
+        self.assertEqual("AuthoringOutputParseError", failed_entry.error.error_type)
+        self.assertIn("not valid JSON", failed_entry.error.message)
+        self.assertIsNotNone(failed_entry.agent_trace)
+        self.assertEqual("I cannot return JSON for this request.", failed_entry.agent_trace.model_raw_output)
+        self.assertEqual("failed", failed_entry.agent_trace.parser_result.status)
+        self.assertEqual(
+            "AuthoringOutputParseError",
+            failed_entry.agent_trace.parser_result.error.error_type,
+        )
+
+    def test_node_rubric_parser_rejects_missing_required_rubric_fields(self):
+        raw_output = json.dumps(
+            {
+                "nodes": [
+                    {
+                        "id": "train_test_split",
+                        "levels": {
+                            "L0": "Does not recognize train/test split.",
+                            "L1": "Recognizes the term but cannot explain its purpose.",
+                        },
+                        "diagnostic_signals": [
+                            "Explains the purpose of separating training and test data."
+                        ],
+                        "simulator_behavior": (
+                            "Answer naturally about train/test split without naming mastery labels."
+                        ),
+                    }
+                ]
+            }
+        )
+
+        with self.assertRaises(AuthoringOutputParseError):
+            parse_node_rubric_authoring_output(raw_output)
 
     def test_graph_authoring_templates_are_split_and_include_knowledge_graph_guardrails(self):
         source_materials = [_source_material()]
@@ -181,6 +305,7 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertIn("Global L0-L5 MasteryScale", rubric_prompt)
         self.assertIn("Do not use candidate edges", rubric_prompt)
         self.assertIn("positive signs, negative signs, and common misconceptions", rubric_prompt)
+        self.assertIn("Do not output name, type, definition, or source_locators", rubric_prompt)
         self.assertIn('"L5"', rubric_prompt)
 
         candidate_nodes = FixtureNodeRubricAuthoringStep().run(skeletons, source_materials)
@@ -192,6 +317,8 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertIn("contrasts_with", edge_prompt)
         self.assertIn("curation_confidence", edge_prompt)
         self.assertIn("Omit weak, speculative, merely related", edge_prompt)
+        self.assertNotIn("lexicographic", edge_prompt)
+        self.assertNotIn("node-id order", edge_prompt)
 
         for prompt in (extraction_prompt, rubric_prompt, edge_prompt):
             self.assertIn("Parsed Source Markdown", prompt)
@@ -321,6 +448,21 @@ class FixtureEdgeProposalStep:
         )
 
 
+class ReversedContrastsEdgeProposalStep:
+    def run(self, candidate_nodes, source_materials):
+        return (
+            KnowledgeEdge(
+                id="edge_logistic_regression_contrasts_with_linear_regression",
+                source="logistic_regression",
+                target="linear_regression",
+                type="contrasts_with",
+                rationale="The two methods are compared by response type, link function, and output interpretation.",
+                weight=0.8,
+                curation_confidence=0.9,
+            ),
+        )
+
+
 class FakeRawJSONWorkflowModelClient:
     def __init__(self):
         self.prompt_markers = []
@@ -341,11 +483,17 @@ class FakeRawJSONWorkflowModelClient:
         if "Node Rubric Authoring Agent Step" in developer_prompt:
             self.prompt_markers.append("Node Rubric Authoring Agent Step")
             node = _complete_candidate_node(self._skeleton)
-            return json.dumps({"nodes": [node.model_dump(mode="json")]})
+            return json.dumps({"nodes": [_rubric_patch_payload(node)]})
         if "Edge Proposal Agent Step" in developer_prompt:
             self.prompt_markers.append("Edge Proposal Agent Step")
             return json.dumps({"edges": []})
         raise AssertionError(f"unexpected prompt: {developer_prompt}")
+
+
+class InvalidJSONGraphModelClient(FakeRawJSONWorkflowModelClient):
+    def complete(self, *, messages):
+        self.prompt_markers.append("Node Extraction Agent Step")
+        return "I cannot return JSON for this request."
 
 
 def _complete_candidate_node(
@@ -377,6 +525,16 @@ def _complete_candidate_node(
         ),
         simulator_behavior=f"Answer naturally about {skeleton.name} without naming mastery labels.",
     )
+
+
+def _rubric_patch_payload(node: KnowledgeNode) -> dict[str, object]:
+    return {
+        "id": node.id,
+        "diagnostic_goal": node.diagnostic_goal,
+        "levels": node.levels,
+        "diagnostic_signals": list(node.diagnostic_signals),
+        "simulator_behavior": node.simulator_behavior,
+    }
 
 
 def _source_material() -> SourceMaterial:

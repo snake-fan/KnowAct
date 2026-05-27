@@ -56,6 +56,9 @@ Return JSON with this exact top-level shape:
     }
   ]
 }
+
+The complete response must be a JSON object with exactly one top-level key: "skeletons".
+"skeletons" must be an array. If you cannot ground a concept in the Parsed Source Markdown, omit that concept rather than adding notes outside JSON.
 """.strip(),
                 JSON_ONLY_RULES,
             ),

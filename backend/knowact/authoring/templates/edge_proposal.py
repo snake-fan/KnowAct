@@ -45,7 +45,6 @@ Precision-first policy:
 - Do not invent related_to, used_for, similar_to, enables, or other free-form edge types.
 - Use supports only when the source gives a specific explanatory, transfer, or diagnostic contribution to the target.
 - For prerequisite_for, ask whether missing the source would usually prevent stable L3+ understanding of the target.
-- For contrasts_with, store only one edge and order source/target lexicographically by node id.
 - It is acceptable to return an empty edges list when no pair is clear enough.
 """.strip(),
                 """
@@ -63,6 +62,10 @@ Return JSON with this exact top-level shape:
     }
   ]
 }
+
+The complete response must be a JSON object with exactly one top-level key: "edges".
+"edges" must be an array. When no edge is clear enough, return exactly {"edges": []}.
+Every edge object must include only the fields shown above and must reference existing candidate node ids.
 """.strip(),
                 JSON_ONLY_RULES,
             ),
@@ -77,7 +80,6 @@ Review each proposed edge before output:
 - Are source and target valid node ids from the candidate node list?
 - Is the edge type one of the four canonical types?
 - Is the direction correct for part_of, prerequisite_for, and supports?
-- Is contrasts_with stored in lexicographic node-id order?
 - Does the rationale explain the objective knowledge relationship rather than a user-state or question-design idea?
 - Would a benchmark author prefer reviewing this edge over omitting it as weak relatedness?
 """.strip(),

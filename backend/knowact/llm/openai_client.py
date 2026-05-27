@@ -49,9 +49,6 @@ class OpenAIChatModelClient:
         }
         if self._config.temperature is not None:
             params["temperature"] = self._config.temperature
-        if self._config.max_completion_tokens is not None:
-            params["max_completion_tokens"] = self._config.max_completion_tokens
-
         completion = self._client.chat.completions.create(**params)
         return _extract_content(completion)
 

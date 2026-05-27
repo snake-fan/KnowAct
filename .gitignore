@@ -67,6 +67,10 @@ reports/generated/
 *.sqlite3
 *.db
 
+# Candidate graph authoring process artifacts
+benchmark/domains/*/candidate_graphs/api/*/workflow_log.json
+benchmark/domains/*/candidate_graphs/api/*/agent_traces/
+
 # Local source materials used by test API PDF upload checks
 storage/*
 !storage/.gitkeep

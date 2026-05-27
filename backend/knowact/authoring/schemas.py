@@ -42,10 +42,43 @@ class SourceGroundedNodeSkeletonList(BaseModel):
     skeletons: tuple[SourceGroundedNodeSkeleton, ...]
 
 
-class KnowledgeNodeList(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class NodeRubricPatch(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    nodes: tuple[KnowledgeNode, ...]
+    id: str
+    diagnostic_goal: str
+    levels: dict[str, str]
+    diagnostic_signals: tuple[str, ...] = Field(min_length=1)
+    simulator_behavior: str
+
+    @field_validator("id", "diagnostic_goal", "simulator_behavior")
+    @classmethod
+    def _must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("levels")
+    @classmethod
+    def _levels_must_not_be_empty(cls, value: dict[str, str]) -> dict[str, str]:
+        if not value:
+            raise ValueError("must not be empty")
+        if any(not key.strip() or not description.strip() for key, description in value.items()):
+            raise ValueError("keys and descriptions must not be blank")
+        return value
+
+    @field_validator("diagnostic_signals")
+    @classmethod
+    def _signals_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not signal.strip() for signal in value):
+            raise ValueError("must not contain blank signals")
+        return value
+
+
+class NodeRubricPatchList(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    nodes: tuple[NodeRubricPatch, ...]
 
 
 class KnowledgeEdgeList(BaseModel):
@@ -60,4 +93,3 @@ class GraphAuthoringWorkflowResult(BaseModel):
     source_grounded_node_skeletons: tuple[SourceGroundedNodeSkeleton, ...]
     candidate_nodes: tuple[KnowledgeNode, ...]
     candidate_edges: tuple[KnowledgeEdge, ...]
-

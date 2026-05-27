@@ -1,5 +1,7 @@
 # V1 edge proposal can use node rubrics
 
+Amended by ADR-0041: edge proposal may use complete candidate node rubrics, but it consumes workflow intermediate artifacts rather than full `Parsed Source Markdown`.
+
 KnowAct v1 edge proposal runs after candidate nodes have complete diagnostic rubrics. The edge proposal step may use the full `candidate_nodes.json`, including `diagnostic_goal`, L0-L5 `levels`, diagnostic signals, `simulator_behavior`, source locators, and relevant source material, to propose candidate `Knowledge Edge` objects. It should propose edges precision-first: only clear canonical edges with clear rationales enter `candidate_edges.json`.
 
 **Considered Options**

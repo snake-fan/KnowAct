@@ -64,10 +64,16 @@ Return KnowledgeNode objects that match the current parser contract:
 
 JSON_ONLY_RULES = """
 Output rules:
-- Return only valid JSON.
+- Return exactly one valid JSON object.
+- The first non-whitespace character must be { and the last non-whitespace character must be }.
+- Do not return a top-level array, JSON Lines, YAML, XML, Markdown, or prose.
+- Use double quotes for every JSON key and string; do not use comments or trailing commas.
+- Include only the exact top-level key named by this step's output contract.
+- Keep every field name exactly as shown in the contract; do not rename, add, omit, or nest fields differently.
 - Do not wrap JSON in Markdown fences.
 - Do not include commentary, reasoning notes, review notes, or debug logs.
 - Do not add fields outside the requested schema.
+- Any content before or after the JSON object will fail the workflow parser.
 """.strip()
 
 
@@ -76,7 +82,7 @@ Canonical Knowledge Edge types:
 - part_of: source is a structural component of target. It is not a generic topic/category relation.
 - prerequisite_for: source is a cognitive prerequisite for target. Missing source usually weakens or blocks stable L3+ understanding of target, though L1/L2 may still be possible.
 - supports: source strengthens explanation, transfer, or diagnostic confidence for target, but is not a prerequisite. Do not use supports as a generic relatedness label.
-- contrasts_with: source and target clarify each other through boundaries, failure modes, or differences. It is symmetric, but store one edge only with source/target in lexicographic node-id order.
+- contrasts_with: source and target clarify each other through boundaries, failure modes, or differences.
 
 If a pair is only in the same chapter, merely topically adjacent, speculative, or hard to type clearly, omit it.
 """.strip()

@@ -2,6 +2,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import re
+from typing import Any
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -18,6 +19,7 @@ RunLogStatus = Literal["running", "succeeded", "failed"]
 RunLogCompletedStatus = Literal["succeeded", "failed"]
 WorkflowRunLogEntryType = Literal["agent_step", "validation_checkpoint", "artifact_write"]
 WorkflowRunValidationResult = Literal["passed", "failed"]
+WorkflowRunParserResultStatus = Literal["succeeded", "failed"]
 
 _OPENAI_KEY_PATTERN = re.compile(r"sk-[A-Za-z0-9_-]{8,}")
 _SENSITIVE_ASSIGNMENT_PATTERN = re.compile(
@@ -108,6 +110,23 @@ class WorkflowRunError(BaseModel):
         return value
 
 
+class WorkflowRunParserResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: WorkflowRunParserResultStatus
+    output: dict[str, Any] | None = None
+    output_uri: str | None = None
+    error: WorkflowRunError | None = None
+
+
+class WorkflowRunAgentTrace(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    model_raw_output: str | None = None
+    model_raw_output_uri: str | None = None
+    parser_result: WorkflowRunParserResult
+
+
 class WorkflowRunLogEntry(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -119,6 +138,7 @@ class WorkflowRunLogEntry(BaseModel):
     input_counts: dict[str, int] = Field(default_factory=dict)
     output_counts: dict[str, int] = Field(default_factory=dict)
     validation_result: WorkflowRunValidationResult | None = None
+    agent_trace: WorkflowRunAgentTrace | None = None
     error: WorkflowRunError | None = None
 
     @field_validator("entry_name")
@@ -229,6 +249,7 @@ class GraphAuthoringRunLogBuilder:
         *,
         output_counts: dict[str, int] | None = None,
         validation_result: WorkflowRunValidationResult | None = None,
+        agent_trace: WorkflowRunAgentTrace | None = None,
     ) -> None:
         self._entries.append(
             WorkflowRunLogEntry(
@@ -240,6 +261,7 @@ class GraphAuthoringRunLogBuilder:
                 input_counts=active_entry.input_counts,
                 output_counts=dict(output_counts or {}),
                 validation_result=validation_result,
+                agent_trace=agent_trace,
             )
         )
 
@@ -249,6 +271,7 @@ class GraphAuthoringRunLogBuilder:
         error: WorkflowRunError,
         *,
         output_counts: dict[str, int] | None = None,
+        agent_trace: WorkflowRunAgentTrace | None = None,
     ) -> None:
         validation_result: WorkflowRunValidationResult | None = None
         if active_entry.entry_type == "validation_checkpoint":
@@ -264,6 +287,7 @@ class GraphAuthoringRunLogBuilder:
                 input_counts=active_entry.input_counts,
                 output_counts=dict(output_counts or {}),
                 validation_result=validation_result,
+                agent_trace=agent_trace,
                 error=error,
             )
         )
@@ -350,6 +374,11 @@ def redact_error_message(message: str) -> str:
     if len(redacted) > MAX_ERROR_MESSAGE_CHARS:
         return f"{redacted[: MAX_ERROR_MESSAGE_CHARS - 3]}..."
     return redacted
+
+
+def redact_logged_text(text: str) -> str:
+    redacted = _OPENAI_KEY_PATTERN.sub("sk-[REDACTED]", text)
+    return _SENSITIVE_ASSIGNMENT_PATTERN.sub(lambda match: f"{match.group(1)}=[REDACTED]", redacted)
 
 
 def _utc_now() -> datetime:

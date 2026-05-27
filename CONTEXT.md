@@ -24,13 +24,17 @@ _Avoid_: PDF input_file, OpenAI file_id, raw PDF prompt payload
 A minimal structured reference that identifies where a **Knowledge Node** is mentioned in an **Authoritative Source**.
 _Avoid_: vague source label, invented citation, generic textbook reference, required quote span
 
+**Source Grounding Note**:
+A concise, paraphrased, source-grounded note extracted for a **Source-Grounded Node Skeleton** so later graph-authoring steps can use structured source evidence without reading full **Parsed Source Markdown**.
+_Avoid_: full source excerpt, hidden chain-of-thought, unsourced model memory, long copied passage
+
 **Source-Grounded Candidate Node**:
 A draft **Knowledge Node** extracted from an **Authoritative Source** with a **Source Locator**.
 _Avoid_: brainstormed node, common-sense topic, unsourced candidate
 
 **Graph Authoring Run Log**:
-A structured sidecar record of one **Graph Authoring Agent Workflow** run, capturing source metadata, step status, validation checkpoints, counts, artifact paths, and redacted failure metadata.
-_Avoid_: candidate graph artifact, raw model trace, prompt log, reviewed graph
+A structured sidecar record of one **Graph Authoring Agent Workflow** run, capturing source metadata, step status, validation checkpoints, counts, artifact paths, redacted agent-step model outputs, parser results, and failure metadata for authoring debug.
+_Avoid_: candidate graph artifact, prompt log, full source-material text, reviewed graph
 
 **User Knowledge State**:
 A user-specific state describing how a particular user appears to understand a **Knowledge Node**.
@@ -281,7 +285,7 @@ The source-grounded list of candidate **Knowledge Nodes** considered during grap
 _Avoid_: brainstormed topic list, final graph, unsourced curriculum outline
 
 **Source-Grounded Node Skeleton**:
-A partial **Knowledge Node** draft containing the source-grounded concept identity and source locator before diagnostic rubrics are authored.
+A partial **Knowledge Node** draft containing the source-grounded concept identity, source locator, and concise **Source Grounding Notes** before diagnostic rubrics are authored.
 _Avoid_: final node, complete rubric, unsourced topic
 
 **Graph Authoring Pipeline**:
@@ -291,6 +295,10 @@ _Avoid_: evaluation runtime, tested agent loop, scoring pipeline
 **Graph Authoring Agent Workflow**:
 The single agent workflow that accelerates graph authoring by extracting source-grounded node skeletons, authoring node rubrics, and proposing edges for review, then outputs node and edge JSON list files.
 _Avoid_: manual-only inventory, evaluation runtime, automatic authored graph
+
+**Graph Authoring Intermediate Artifacts**:
+Structured per-run artifacts produced between **Graph Authoring Agent Workflow** steps so later steps can consume prior workflow results without re-reading full **Parsed Source Markdown**.
+_Avoid_: final graph authoring output files, reviewed graph data, freeform log text, full source-material copy
 
 **Graph Authoring Output Files**:
 The two JSON list files produced by the **Graph Authoring Agent Workflow** for benchmark-author review: one node list and one edge list.
@@ -309,16 +317,16 @@ The step in the **Graph Authoring Agent Workflow** that turns **Source-Grounded 
 _Avoid_: source extraction, edge proposal, user map generation
 
 **Node Rubric Input Scope**:
-The allowed context for v1 node rubric authoring: a **Source-Grounded Node Skeleton**, its **Authoritative Source**, its **Source Locator**, and the global **MasteryScale**.
-_Avoid_: unreviewed neighboring nodes, candidate edges, graph traversal context, profile context
+The allowed context for v1 node rubric authoring: **Source-Grounded Node Skeletons**, their **Source Locators**, their **Source Grounding Notes**, and the global **MasteryScale**.
+_Avoid_: full Parsed Source Markdown, unreviewed neighboring nodes, candidate edges, graph traversal context, profile context
 
 **Edge Proposal Agent Step**:
 The step in the **Graph Authoring Agent Workflow** that proposes candidate **Knowledge Edges** after candidate nodes are available.
 _Avoid_: separate workflow, final authored graph, automatic edge acceptance
 
 **Edge Proposal Input Scope**:
-The allowed context for v1 edge proposal: complete candidate **Knowledge Nodes**, including node rubrics, plus their source locators and relevant authoritative source material.
-_Avoid_: hidden user maps, profile context, scoring results, automatic edge acceptance
+The allowed context for v1 edge proposal: complete candidate **Knowledge Nodes**, including node rubrics, source locators, and **Source Grounding Notes**, plus workflow-produced source-grounded intermediate information.
+_Avoid_: full Parsed Source Markdown, hidden user maps, profile context, scoring results, automatic edge acceptance
 
 **Precision-First Edge Proposal**:
 The v1 edge proposal policy that prefers fewer, clearer candidate **Knowledge Edges** over broad recall of weakly related node pairs.
@@ -432,6 +440,7 @@ _Avoid_: ground-truth edge, authored edge
 - The v1 **Graph Authoring Pipeline** is implemented through a **Graph Authoring Agent Workflow**.
 - The **Graph Authoring Agent Workflow** contains a **Node Extraction Agent Step**, a **Node Rubric Authoring Agent Step**, and an **Edge Proposal Agent Step**.
 - The **Node Extraction Agent Step** may read the authoritative PDF or source material directly rather than relying on pre-cut chunks.
+- In v1, the **Node Extraction Agent Step** is the only **Graph Authoring Agent Workflow** step that reads full **Parsed Source Markdown** directly.
 - The **Node Extraction Agent Step** is responsible for producing **Source-Grounded Node Skeletons** with **Source Locators**.
 - The **Node Rubric Authoring Agent Step** runs after node extraction and before final node output.
 - The **Node Rubric Authoring Agent Step** is responsible for `diagnostic_goal`, L0-L5 `levels`, diagnostic signals, and `simulator_behavior`.
@@ -448,6 +457,7 @@ _Avoid_: ground-truth edge, authored edge
 - `curation_confidence` remains required on candidate **Knowledge Edges** as a review and calibration signal.
 - Candidate **Knowledge Edges** proposed from rubrics still require benchmark-author review before becoming authored graph data.
 - A **Graph Authoring Agent Workflow** produces **Graph Authoring Output Files**, not an automatically accepted **Authored Knowledge Graph**.
+- **Graph Authoring Intermediate Artifacts** may be persisted for replay, debugging, and downstream workflow-step input, but they are not **Graph Authoring Output Files**.
 - V1 **Graph Authoring Output Files** are exactly two JSON list files: one **Knowledge Node** list and one **Knowledge Edge** list.
 - The filenames or enclosing review directory for **Graph Authoring Output Files** may include candidate status.
 - Individual **Knowledge Node** and **Knowledge Edge** objects in **Graph Authoring Output Files** must use the normal object schemas and must not include candidate status fields.
