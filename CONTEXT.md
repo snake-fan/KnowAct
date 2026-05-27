@@ -318,7 +318,7 @@ _Avoid_: source extraction, edge proposal, user map generation
 
 **Node Rubric Input Scope**:
 The allowed context for v1 node rubric authoring: **Source-Grounded Node Skeletons**, their **Source Locators**, their **Source Grounding Notes**, and the global **MasteryScale**.
-_Avoid_: full Parsed Source Markdown, unreviewed neighboring nodes, candidate edges, graph traversal context, profile context
+_Avoid_: full Parsed Source Markdown, source-material text parameter, unreviewed neighboring nodes, candidate edges, graph traversal context, profile context
 
 **Edge Proposal Agent Step**:
 The step in the **Graph Authoring Agent Workflow** that proposes candidate **Knowledge Edges** after candidate nodes are available.
@@ -326,7 +326,7 @@ _Avoid_: separate workflow, final authored graph, automatic edge acceptance
 
 **Edge Proposal Input Scope**:
 The allowed context for v1 edge proposal: complete candidate **Knowledge Nodes**, including node rubrics, source locators, and **Source Grounding Notes**, plus workflow-produced source-grounded intermediate information.
-_Avoid_: full Parsed Source Markdown, hidden user maps, profile context, scoring results, automatic edge acceptance
+_Avoid_: full Parsed Source Markdown, source-material text parameter, hidden user maps, profile context, scoring results, automatic edge acceptance
 
 **Precision-First Edge Proposal**:
 The v1 edge proposal policy that prefers fewer, clearer candidate **Knowledge Edges** over broad recall of weakly related node pairs.
@@ -441,6 +441,7 @@ _Avoid_: ground-truth edge, authored edge
 - The **Graph Authoring Agent Workflow** contains a **Node Extraction Agent Step**, a **Node Rubric Authoring Agent Step**, and an **Edge Proposal Agent Step**.
 - The **Node Extraction Agent Step** may read the authoritative PDF or source material directly rather than relying on pre-cut chunks.
 - In v1, the **Node Extraction Agent Step** is the only **Graph Authoring Agent Workflow** step that reads full **Parsed Source Markdown** directly.
+- Later **Graph Authoring Agent Workflow** steps should not receive source-material text as an input parameter.
 - The **Node Extraction Agent Step** is responsible for producing **Source-Grounded Node Skeletons** with **Source Locators**.
 - The **Node Rubric Authoring Agent Step** runs after node extraction and before final node output.
 - The **Node Rubric Authoring Agent Step** is responsible for `diagnostic_goal`, L0-L5 `levels`, diagnostic signals, and `simulator_behavior`.

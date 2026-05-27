@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import TypeVar
+from typing import Protocol, TypeVar
 
 from backend.knowact.authoring.logging import (
     GRAPH_AUTHORING_WORKFLOW_NAME,
@@ -13,7 +13,13 @@ from backend.knowact.authoring.logging import (
     default_graph_authoring_run_id,
     workflow_run_error_from_exception,
 )
-from backend.knowact.authoring.schemas import GraphAuthoringWorkflowResult, SourceMaterial
+from backend.knowact.authoring.schemas import (
+    EdgeProposalInput,
+    GraphAuthoringWorkflowResult,
+    NodeRubricAuthoringInput,
+    NodeRubricAuthoringResult,
+    SourceMaterial,
+)
 from backend.knowact.authoring.steps import (
     EdgeProposalStep,
     NodeExtractionStep,
@@ -32,6 +38,20 @@ from backend.knowact.logging_config import get_knowact_logger
 
 T = TypeVar("T")
 _LOGGER = get_knowact_logger("authoring.workflow")
+
+
+class IntermediateArtifactWriter(Protocol):
+    def write_source_grounded_node_skeletons(self, items) -> str:
+        """Persist validated source-grounded skeletons and return a run-relative URI."""
+
+    def write_node_rubric_patches(self, items) -> str:
+        """Persist validated node rubric patches and return a run-relative URI."""
+
+    def write_candidate_nodes_pre_edge(self, items) -> str:
+        """Persist validated candidate nodes before edge proposal and return a run-relative URI."""
+
+    def write_candidate_edges_canonical(self, items) -> str:
+        """Persist validated canonical candidate edges and return a run-relative URI."""
 
 
 class GraphAuthoringAgentWorkflow:
@@ -60,6 +80,7 @@ class GraphAuthoringAgentWorkflow:
         *,
         run_id: str,
         source_metadata: Sequence[RunLogSourceMaterial] | None = None,
+        intermediate_artifact_writer: IntermediateArtifactWriter | None = None,
     ) -> GraphAuthoringWorkflowRunResult:
         source_materials = tuple(source_materials)
         _LOGGER.info(
@@ -93,18 +114,28 @@ class GraphAuthoringAgentWorkflow:
             run_id=run_id,
             operation=lambda: validate_source_grounded_node_skeletons(skeletons),
             validation_result="passed",
+            artifact_uris=lambda _: _write_source_grounded_node_skeleton_artifacts(
+                intermediate_artifact_writer,
+                skeletons,
+            ),
         )
 
-        candidate_nodes = _run_logged_entry(
+        rubric_result = _run_logged_entry(
             builder,
             entry_name="node_rubric_authoring",
             entry_type="agent_step",
-            input_counts={"skeletons": len(skeletons), "source_materials": len(source_materials)},
+            input_counts={"skeletons": len(skeletons)},
             run_id=run_id,
-            operation=lambda: self._node_rubric_authoring_step.run(skeletons, source_materials),
-            output_counts=lambda value: {"candidate_nodes": len(value)},
+            operation=lambda: self._node_rubric_authoring_step.run(
+                NodeRubricAuthoringInput(skeletons=tuple(skeletons))
+            ),
+            output_counts=lambda value: {
+                "node_rubric_patches": len(value.rubric_patches),
+                "candidate_nodes": len(value.candidate_nodes),
+            },
             trace_getter=lambda: get_authoring_agent_step_trace(self._node_rubric_authoring_step),
         )
+        candidate_nodes = rubric_result.candidate_nodes
         _run_logged_entry(
             builder,
             entry_name="validate_complete_candidate_nodes",
@@ -113,15 +144,24 @@ class GraphAuthoringAgentWorkflow:
             run_id=run_id,
             operation=lambda: validate_complete_candidate_nodes(candidate_nodes, skeletons),
             validation_result="passed",
+            artifact_uris=lambda _: _write_candidate_node_artifacts(
+                intermediate_artifact_writer,
+                rubric_result,
+            ),
         )
 
         candidate_edges = _run_logged_entry(
             builder,
             entry_name="edge_proposal",
             entry_type="agent_step",
-            input_counts={"candidate_nodes": len(candidate_nodes), "source_materials": len(source_materials)},
+            input_counts={"candidate_nodes": len(candidate_nodes), "skeletons": len(skeletons)},
             run_id=run_id,
-            operation=lambda: self._edge_proposal_step.run(candidate_nodes, source_materials),
+            operation=lambda: self._edge_proposal_step.run(
+                EdgeProposalInput(
+                    candidate_nodes=tuple(candidate_nodes),
+                    source_grounded_node_skeletons=tuple(skeletons),
+                )
+            ),
             output_counts=lambda value: {"candidate_edges": len(value)},
             trace_getter=lambda: get_authoring_agent_step_trace(self._edge_proposal_step),
         )
@@ -134,6 +174,10 @@ class GraphAuthoringAgentWorkflow:
             run_id=run_id,
             operation=lambda: validate_candidate_edges(candidate_nodes, candidate_edges),
             validation_result="passed",
+            artifact_uris=lambda _: _write_candidate_edge_artifacts(
+                intermediate_artifact_writer,
+                candidate_edges,
+            ),
         )
 
         workflow_result = GraphAuthoringWorkflowResult(
@@ -163,6 +207,7 @@ def _run_logged_entry(
     run_id: str,
     operation: Callable[[], T],
     output_counts: Callable[[T], dict[str, int]] | None = None,
+    artifact_uris: Callable[[T], dict[str, str]] | None = None,
     validation_result: WorkflowRunValidationResult | None = None,
     trace_getter: Callable[[], WorkflowRunAgentTrace | None] | None = None,
 ) -> T:
@@ -180,6 +225,7 @@ def _run_logged_entry(
     )
     try:
         value = operation()
+        entry_artifact_uris = artifact_uris(value) if artifact_uris is not None else None
     except Exception as exc:
         error = workflow_run_error_from_exception(
             exc,
@@ -207,6 +253,7 @@ def _run_logged_entry(
     builder.finish_entry(
         active_entry,
         output_counts=entry_output_counts,
+        artifact_uris=entry_artifact_uris,
         validation_result=validation_result,
         agent_trace=trace_getter() if trace_getter is not None else None,
     )
@@ -219,3 +266,41 @@ def _run_logged_entry(
         validation_result,
     )
     return value
+
+
+def _write_source_grounded_node_skeleton_artifacts(
+    writer: IntermediateArtifactWriter | None,
+    skeletons,
+) -> dict[str, str]:
+    if writer is None:
+        return {}
+    return {
+        "source_grounded_node_skeletons": writer.write_source_grounded_node_skeletons(
+            tuple(skeletons)
+        )
+    }
+
+
+def _write_candidate_node_artifacts(
+    writer: IntermediateArtifactWriter | None,
+    result: NodeRubricAuthoringResult,
+) -> dict[str, str]:
+    if writer is None:
+        return {}
+    return {
+        "node_rubric_patches": writer.write_node_rubric_patches(result.rubric_patches),
+        "candidate_nodes_pre_edge": writer.write_candidate_nodes_pre_edge(result.candidate_nodes),
+    }
+
+
+def _write_candidate_edge_artifacts(
+    writer: IntermediateArtifactWriter | None,
+    candidate_edges,
+) -> dict[str, str]:
+    if writer is None:
+        return {}
+    return {
+        "candidate_edges_canonical": writer.write_candidate_edges_canonical(
+            tuple(candidate_edges)
+        )
+    }

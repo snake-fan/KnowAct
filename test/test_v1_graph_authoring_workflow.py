@@ -4,13 +4,24 @@ import unittest
 from pathlib import Path
 
 from backend.knowact.authoring.logging import GraphAuthoringWorkflowRunError
-from backend.knowact.authoring.output import write_graph_authoring_output, write_graph_authoring_run_log
+from backend.knowact.authoring.output import (
+    GraphAuthoringIntermediateArtifactWriter,
+    write_graph_authoring_output,
+    write_graph_authoring_run_log,
+)
 from backend.knowact.authoring.openai_workflow import build_openai_graph_authoring_workflow
 from backend.knowact.authoring.parsers.graph_authoring import (
     AuthoringOutputParseError,
     parse_node_rubric_authoring_output,
 )
-from backend.knowact.authoring.schemas import SourceGroundedNodeSkeleton, SourceMaterial
+from backend.knowact.authoring.schemas import (
+    EdgeProposalInput,
+    NodeRubricAuthoringInput,
+    NodeRubricAuthoringResult,
+    NodeRubricPatch,
+    SourceGroundedNodeSkeleton,
+    SourceMaterial,
+)
 from backend.knowact.authoring.templates.edge_proposal import build_edge_proposal_messages
 from backend.knowact.authoring.templates.node_extraction import build_node_extraction_messages
 from backend.knowact.authoring.templates.node_rubric_authoring import build_node_rubric_authoring_messages
@@ -97,7 +108,10 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         )
         self.assertEqual({"source_materials": 1}, entries_by_name["node_extraction"].input_counts)
         self.assertEqual({"skeletons": 5}, entries_by_name["node_extraction"].output_counts)
-        self.assertEqual({"candidate_nodes": 5}, entries_by_name["node_rubric_authoring"].output_counts)
+        self.assertEqual(
+            {"node_rubric_patches": 5, "candidate_nodes": 5},
+            entries_by_name["node_rubric_authoring"].output_counts,
+        )
         self.assertEqual({"candidate_edges": 4}, entries_by_name["edge_proposal"].output_counts)
         self.assertEqual("passed", entries_by_name["validate_candidate_edges"].validation_result)
 
@@ -138,6 +152,51 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
             self.assertEqual("dev_run_001", raw_log["run_id"])
             self.assertEqual("succeeded", raw_log["status"])
             self.assertEqual(6, len(raw_log["entries"]))
+
+    def test_graph_authoring_workflow_writes_validated_intermediate_artifacts(self):
+        workflow = GraphAuthoringAgentWorkflow(
+            node_extraction_step=FixtureNodeExtractionStep(),
+            node_rubric_authoring_step=FixtureNodeRubricAuthoringStep(),
+            edge_proposal_step=FixtureEdgeProposalStep(),
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            run_result = workflow.run_with_log(
+                [_source_material()],
+                run_id="intermediate_run_001",
+                intermediate_artifact_writer=GraphAuthoringIntermediateArtifactWriter(output_dir),
+            )
+
+            entries_by_name = {entry.entry_name: entry for entry in run_result.run_log.entries}
+            skeleton_uri = entries_by_name["validate_source_grounded_node_skeletons"].artifact_uris[
+                "source_grounded_node_skeletons"
+            ]
+            rubric_uri = entries_by_name["validate_complete_candidate_nodes"].artifact_uris[
+                "node_rubric_patches"
+            ]
+            node_uri = entries_by_name["validate_complete_candidate_nodes"].artifact_uris[
+                "candidate_nodes_pre_edge"
+            ]
+            edge_uri = entries_by_name["validate_candidate_edges"].artifact_uris[
+                "candidate_edges_canonical"
+            ]
+
+            self.assertEqual("intermediate/source_grounded_node_skeletons.json", skeleton_uri)
+            self.assertEqual("intermediate/node_rubric_patches.json", rubric_uri)
+            self.assertEqual("intermediate/candidate_nodes_pre_edge.json", node_uri)
+            self.assertEqual("intermediate/candidate_edges_canonical.json", edge_uri)
+            self.assertEqual(
+                "train_test_split",
+                _load_json(output_dir / skeleton_uri)[0]["id"],
+            )
+            self.assertIn("source_grounding_notes", _load_json(output_dir / skeleton_uri)[0])
+            self.assertEqual(
+                "train_test_split",
+                _load_json(output_dir / rubric_uri)[0]["id"],
+            )
+            self.assertEqual(5, len(_load_json(output_dir / node_uri)))
+            self.assertEqual(4, len(_load_json(output_dir / edge_uri)))
 
     def test_graph_authoring_workflow_rejects_incomplete_candidate_node_rubrics(self):
         workflow = GraphAuthoringAgentWorkflow(
@@ -211,6 +270,9 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertEqual("succeeded", rubric_trace.parser_result.status)
         self.assertEqual("train_test_split", rubric_trace.parser_result.output["nodes"][0]["id"])
         self.assertNotIn("source_locators", rubric_trace.parser_result.output["nodes"][0])
+        self.assertEqual(1, len(rubric_trace.batch_traces))
+        self.assertEqual("batch_001", rubric_trace.batch_traces[0].batch_name)
+        self.assertEqual({"skeletons": 1}, rubric_trace.batch_traces[0].input_counts)
 
         edge_trace = entries_by_name["edge_proposal"].agent_trace
         self.assertIsNotNone(edge_trace)
@@ -247,6 +309,18 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
                 "train_test_split",
                 _load_json(parser_output_path)["skeletons"][0]["id"],
             )
+
+            rubric_trace = entries_by_name["node_rubric_authoring"]["agent_trace"]
+            rubric_batch_trace = rubric_trace["batch_traces"][0]
+            self.assertEqual(
+                "agent_traces/node_rubric_authoring/batch_001/model_raw_output.txt",
+                rubric_batch_trace["model_raw_output_uri"],
+            )
+            self.assertEqual(
+                "agent_traces/node_rubric_authoring/batch_001/parser_output.json",
+                rubric_batch_trace["parser_result"]["output_uri"],
+            )
+            self.assertTrue((output_dir / rubric_batch_trace["model_raw_output_uri"]).exists())
 
     def test_llm_agent_step_parse_failures_record_raw_model_output_in_run_log(self):
         workflow = build_openai_graph_authoring_workflow(model_client=InvalidJSONGraphModelClient())
@@ -301,29 +375,49 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertIn('"skeletons"', extraction_prompt)
 
         skeletons = FixtureNodeExtractionStep().run(source_materials)
-        rubric_prompt = _render_prompt(build_node_rubric_authoring_messages(skeletons, source_materials))
+        rubric_prompt = _render_prompt(
+            build_node_rubric_authoring_messages(
+                NodeRubricAuthoringInput(skeletons=skeletons)
+            )
+        )
         self.assertIn("Global L0-L5 MasteryScale", rubric_prompt)
         self.assertIn("Do not use candidate edges", rubric_prompt)
         self.assertIn("positive signs, negative signs, and common misconceptions", rubric_prompt)
         self.assertIn("Do not output name, type, definition, or source_locators", rubric_prompt)
+        self.assertIn("source_grounding_notes", rubric_prompt)
         self.assertIn('"L5"', rubric_prompt)
+        self.assertNotIn(source_materials[0].text, rubric_prompt)
 
-        candidate_nodes = FixtureNodeRubricAuthoringStep().run(skeletons, source_materials)
-        edge_prompt = _render_prompt(build_edge_proposal_messages(candidate_nodes, source_materials))
+        candidate_nodes = FixtureNodeRubricAuthoringStep().run(
+            NodeRubricAuthoringInput(skeletons=skeletons)
+        ).candidate_nodes
+        edge_prompt = _render_prompt(
+            build_edge_proposal_messages(
+                EdgeProposalInput(
+                    candidate_nodes=candidate_nodes,
+                    source_grounded_node_skeletons=skeletons,
+                )
+            )
+        )
         self.assertIn("precision-first", edge_prompt)
         self.assertIn("part_of", edge_prompt)
         self.assertIn("prerequisite_for", edge_prompt)
         self.assertIn("supports", edge_prompt)
         self.assertIn("contrasts_with", edge_prompt)
         self.assertIn("curation_confidence", edge_prompt)
+        self.assertIn("source_grounding_notes", edge_prompt)
         self.assertIn("Omit weak, speculative, merely related", edge_prompt)
         self.assertNotIn("lexicographic", edge_prompt)
         self.assertNotIn("node-id order", edge_prompt)
+        self.assertNotIn(source_materials[0].text, edge_prompt)
 
-        for prompt in (extraction_prompt, rubric_prompt, edge_prompt):
-            self.assertIn("Parsed Source Markdown", prompt)
-            self.assertIn('source_id "isl_python"', prompt)
-            self.assertIn(source_materials[0].text, prompt)
+        self.assertIn("Parsed Source Markdown", extraction_prompt)
+        self.assertIn('source_id "isl_python"', extraction_prompt)
+        self.assertIn(source_materials[0].text, extraction_prompt)
+        self.assertNotIn("uploaded original PDF", extraction_prompt)
+        for prompt in (rubric_prompt, edge_prompt):
+            self.assertNotIn("Parsed Source Markdown for source_id", prompt)
+            self.assertIn("isl_python", prompt)
             self.assertNotIn("uploaded original PDF", prompt)
 
     def test_graph_authoring_templates_render_high_priority_instructions_for_message_profile(self):
@@ -350,6 +444,9 @@ class FixtureNodeExtractionStep:
                 definition=definition,
                 source_locators=(
                     SourceLocator(source_id="isl_python", locator=locator, note="Development fixture locator"),
+                ),
+                source_grounding_notes=(
+                    f"The fixture source describes {name} in {locator}.",
                 ),
             )
             for node_id, name, definition, locator in [
@@ -397,17 +494,36 @@ class SecretFailingNodeExtractionStep:
 
 
 class FixtureNodeRubricAuthoringStep:
-    def run(self, skeletons, source_materials):
-        return tuple(_complete_candidate_node(skeleton) for skeleton in skeletons)
+    def run(self, input_data):
+        candidate_nodes = tuple(
+            _complete_candidate_node(skeleton) for skeleton in input_data.skeletons
+        )
+        return NodeRubricAuthoringResult(
+            rubric_patches=tuple(
+                NodeRubricPatch.model_validate(_rubric_patch_payload(node))
+                for node in candidate_nodes
+            ),
+            candidate_nodes=candidate_nodes,
+        )
 
 
 class IncompleteNodeRubricAuthoringStep:
-    def run(self, skeletons, source_materials):
-        return tuple(_complete_candidate_node(skeleton, include_l5=False) for skeleton in skeletons)
+    def run(self, input_data):
+        candidate_nodes = tuple(
+            _complete_candidate_node(skeleton, include_l5=False)
+            for skeleton in input_data.skeletons
+        )
+        return NodeRubricAuthoringResult(
+            rubric_patches=tuple(
+                NodeRubricPatch.model_validate(_rubric_patch_payload(node))
+                for node in candidate_nodes
+            ),
+            candidate_nodes=candidate_nodes,
+        )
 
 
 class FixtureEdgeProposalStep:
-    def run(self, candidate_nodes, source_materials):
+    def run(self, input_data):
         return (
             KnowledgeEdge(
                 id="edge_bias_variance_tradeoff_supports_train_test_split",
@@ -449,7 +565,7 @@ class FixtureEdgeProposalStep:
 
 
 class ReversedContrastsEdgeProposalStep:
-    def run(self, candidate_nodes, source_materials):
+    def run(self, input_data):
         return (
             KnowledgeEdge(
                 id="edge_logistic_regression_contrasts_with_linear_regression",
@@ -472,6 +588,9 @@ class FakeRawJSONWorkflowModelClient:
             definition="Separating data into training and test sets to estimate out-of-sample performance.",
             source_locators=(
                 SourceLocator(source_id="isl_python", locator="chapter_2", note="Development fixture locator"),
+            ),
+            source_grounding_notes=(
+                "The fixture source introduces train/test split as a way to estimate out-of-sample performance.",
             ),
         )
 

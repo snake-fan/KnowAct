@@ -119,12 +119,30 @@ class WorkflowRunParserResult(BaseModel):
     error: WorkflowRunError | None = None
 
 
+class WorkflowRunAgentTraceBatch(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    batch_name: str
+    input_counts: dict[str, int] = Field(default_factory=dict)
+    model_raw_output: str | None = None
+    model_raw_output_uri: str | None = None
+    parser_result: WorkflowRunParserResult
+
+    @field_validator("batch_name")
+    @classmethod
+    def _batch_name_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
 class WorkflowRunAgentTrace(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     model_raw_output: str | None = None
     model_raw_output_uri: str | None = None
     parser_result: WorkflowRunParserResult
+    batch_traces: tuple[WorkflowRunAgentTraceBatch, ...] = ()
 
 
 class WorkflowRunLogEntry(BaseModel):
@@ -137,6 +155,7 @@ class WorkflowRunLogEntry(BaseModel):
     status: RunLogCompletedStatus
     input_counts: dict[str, int] = Field(default_factory=dict)
     output_counts: dict[str, int] = Field(default_factory=dict)
+    artifact_uris: dict[str, str] = Field(default_factory=dict)
     validation_result: WorkflowRunValidationResult | None = None
     agent_trace: WorkflowRunAgentTrace | None = None
     error: WorkflowRunError | None = None
@@ -248,6 +267,7 @@ class GraphAuthoringRunLogBuilder:
         active_entry: _ActiveRunLogEntry,
         *,
         output_counts: dict[str, int] | None = None,
+        artifact_uris: dict[str, str] | None = None,
         validation_result: WorkflowRunValidationResult | None = None,
         agent_trace: WorkflowRunAgentTrace | None = None,
     ) -> None:
@@ -260,6 +280,7 @@ class GraphAuthoringRunLogBuilder:
                 status="succeeded",
                 input_counts=active_entry.input_counts,
                 output_counts=dict(output_counts or {}),
+                artifact_uris=dict(artifact_uris or {}),
                 validation_result=validation_result,
                 agent_trace=agent_trace,
             )
@@ -271,6 +292,7 @@ class GraphAuthoringRunLogBuilder:
         error: WorkflowRunError,
         *,
         output_counts: dict[str, int] | None = None,
+        artifact_uris: dict[str, str] | None = None,
         agent_trace: WorkflowRunAgentTrace | None = None,
     ) -> None:
         validation_result: WorkflowRunValidationResult | None = None
@@ -286,6 +308,7 @@ class GraphAuthoringRunLogBuilder:
                 status="failed",
                 input_counts=active_entry.input_counts,
                 output_counts=dict(output_counts or {}),
+                artifact_uris=dict(artifact_uris or {}),
                 validation_result=validation_result,
                 agent_trace=agent_trace,
                 error=error,

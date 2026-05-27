@@ -19,7 +19,11 @@ from backend.knowact.authoring.logging import (
     summarize_run_log,
     with_artifact_paths,
 )
-from backend.knowact.authoring.output import write_graph_authoring_output, write_graph_authoring_run_log
+from backend.knowact.authoring.output import (
+    GraphAuthoringIntermediateArtifactWriter,
+    write_graph_authoring_output,
+    write_graph_authoring_run_log,
+)
 from backend.knowact.authoring.parsers.graph_authoring import AuthoringOutputParseError
 from backend.knowact.authoring.schemas import SourceGroundedNodeSkeleton, SourceMaterial
 from backend.knowact.authoring.sources import (
@@ -183,6 +187,11 @@ def build_authoring_router(
                 (source_material,),
                 run_id=run_id,
                 source_metadata=(_run_log_source_material(material, parsed_markdown, request),),
+                intermediate_artifact_writer=(
+                    GraphAuthoringIntermediateArtifactWriter(output_dir)
+                    if request.write_artifacts
+                    else None
+                ),
             )
         except MaterialFileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
