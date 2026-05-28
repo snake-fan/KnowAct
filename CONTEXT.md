@@ -280,6 +280,22 @@ _Avoid_: authored graph, evaluation graph, benchmark ground truth
 A research workbench surface where a benchmark author reviews, visualizes, and edits a **Candidate Knowledge Graph** before any promotion decision.
 _Avoid_: automatic graph promotion, evaluation runtime, graph scoring UI
 
+**Candidate Graph Review Layout Layer**:
+A visual grouping used only by the **Candidate Graph Review Workbench** to arrange **Knowledge Nodes** for review.
+_Avoid_: node hierarchy, graph schema layer, authored graph level
+
+**Candidate Graph Review Layout Progression Score**:
+A derived score used by the **Candidate Graph Review Workbench** to prioritize unplaced **Knowledge Nodes** for the next **Candidate Graph Review Layout Layer**.
+_Avoid_: graph edge weight, scoring metric, authored node rank
+
+**Candidate Graph Review Foundation Score**:
+A derived score used by the **Candidate Graph Review Workbench** to prioritize more foundational **Knowledge Nodes** into earlier layout layers.
+_Avoid_: node mastery level, authored node rank, graph schema layer
+
+**Candidate Graph Review Layout Artifact**:
+An optional artifact that stores review-workbench node placement separately from **Knowledge Node** and **Knowledge Edge** data.
+_Avoid_: node coordinate field, authored graph schema, knowledge map
+
 **Candidate Node Inventory**:
 The source-grounded list of candidate **Knowledge Nodes** considered during graph authoring.
 _Avoid_: brainstormed topic list, final graph, unsourced curriculum outline
@@ -430,6 +446,22 @@ _Avoid_: ground-truth edge, authored edge
 - A **Candidate Knowledge Graph** must be reviewed before it becomes an **Authored Knowledge Graph**.
 - A **Candidate Graph Review Workbench** may edit candidate graph artifacts, but it does not make them reviewed **Authored Graph Data Files**.
 - Review edits in a **Candidate Graph Review Workbench** may update the current **Candidate Knowledge Graph** artifacts in place while preserving candidate status.
+- A **Candidate Graph Review Layout Layer** may use **Knowledge Edges** to arrange **Knowledge Nodes**, but it is not stored as graph domain structure.
+- A **Candidate Graph Review Layout Layer** uses directed **Part-Of Knowledge Edges**, **Prerequisite-For Knowledge Edges**, and **Supports Knowledge Edges** as layout progression signals.
+- A **Contrasts-With Knowledge Edge** should not create a next **Candidate Graph Review Layout Layer** because it is symmetric.
+- Earlier **Candidate Graph Review Layout Layers** should contain more foundational **Knowledge Nodes**, with later layers progressing rightward toward nodes that depend on or are supported by them.
+- A **Candidate Graph Review Foundation Score** may derive foundation from low directed indegree, high directed outdegree, outgoing **Effective Relationship Strength**, and being the source of **Prerequisite-For**, **Supports**, or **Part-Of Knowledge Edges**.
+- A **Candidate Graph Review Foundation Score** should treat **Prerequisite-For Knowledge Edges** as stronger foundation signals than **Part-Of Knowledge Edges**, and **Part-Of Knowledge Edges** as stronger than **Supports Knowledge Edges**.
+- A **Candidate Graph Review Layout Progression Score** prioritizes unplaced nodes with direct incoming layout progression signals from the previous layer.
+- A **Candidate Graph Review Layout Progression Score** may use the number of previous-layer connections, **Effective Relationship Strength**, global node degree, and stable node identity as tie-breakers.
+- When direct previous-layer candidates are insufficient, a **Candidate Graph Review Layout Layer** may be filled by frontier expansion from unplaced nodes connected to already placed nodes.
+- A **Candidate Graph Review Layout Layer** is filled elastically, with target capacity preferred over exact fixed size.
+- A **Candidate Graph Review Layout Layer** does not require the **Candidate Knowledge Graph** to be acyclic.
+- Cyclic directed **Knowledge Edges** should be handled by frontier placement without moving already placed **Knowledge Nodes** backward.
+- **Knowledge Nodes** without directed layout progression signals should be placed after connected frontier nodes.
+- Manual node placement in a **Candidate Graph Review Workbench** is transient unless captured in a **Candidate Graph Review Layout Artifact**.
+- A workbench reflow action may recompute **Candidate Graph Review Layout Layers** and override transient manual placement.
+- Editing **Knowledge Node** or **Knowledge Edge** content should not by itself make manual node placement part of graph semantics.
 - A **Candidate Knowledge Graph** should be built from a **Candidate Node Inventory** extracted from **Authoritative Sources**.
 - An **Authored Knowledge Graph** is stored as separate **Authored Graph Data Files** for nodes and edges.
 - V1 **Authored Graph Data Files** are typically `authored_nodes.json` and `authored_edges.json`.
@@ -548,7 +580,14 @@ _Avoid_: ground-truth edge, authored edge
 - "candidate node inventory" can sound like a brainstormed list; resolved: v1 candidate nodes must be source-grounded and carry **Source Locators**.
 - "source" can be too vague to audit; resolved: use **Source Locators** that identify the source location for each **Knowledge Node**.
 - "source locator" can sound like an exact excerpt requirement; resolved: v1 source locators only need simple source references and do not require `quote`, `evidence_span`, or exact offsets.
-- "node hierarchy" suggests built-in levels among **Knowledge Nodes**; resolved: **Knowledge Nodes** are flat diagnosable units, while **Knowledge Edges** express relationships between them.
+- "node hierarchy" suggests built-in levels among **Knowledge Nodes**; resolved: **Knowledge Nodes** are flat diagnosable units, while review UI grouping should be called a **Candidate Graph Review Layout Layer**.
+- "next layer" can imply every **Knowledge Edge Type** contributes direction; resolved: **Contrasts-With Knowledge Edges** do not create next **Candidate Graph Review Layout Layers**.
+- "layout ordering" can sound arbitrary; resolved: next-layer ordering should use a **Candidate Graph Review Layout Progression Score** derived from explicit **Knowledge Edges**.
+- "fill the layer" can imply arbitrary padding; resolved: sparse **Candidate Graph Review Layout Layers** should be filled through frontier expansion rather than random node selection.
+- "layout layer" can imply a strict DAG; resolved: **Candidate Graph Review Layout Layers** are review placements and can handle cycles and isolated nodes without changing graph semantics.
+- "dragged position" can sound like graph data; resolved: manual placement is transient review state unless saved in a separate **Candidate Graph Review Layout Artifact**.
+- "foundational node" can sound like a stored node attribute; resolved: foundation is a derived **Candidate Graph Review Foundation Score** for layout only.
+- "edge type weight" can sound like domain scoring; resolved: edge type weighting is a review layout heuristic, with `prerequisite_for` stronger than `part_of`, and `part_of` stronger than `supports`.
 - "confidence" can mean curation confidence or user-state confidence; resolved: **Curation Confidence** is the author's confidence in an edge's validity.
 - "candidate curation confidence" can sound like final author judgment; resolved: candidate values may be agent suggestions, while authored values are benchmark-author reviewed.
 - "weight" can mean relationship strength or author confidence; resolved: **Knowledge Edge Weight** means relationship strength, while **Curation Confidence** means confidence in validity.
