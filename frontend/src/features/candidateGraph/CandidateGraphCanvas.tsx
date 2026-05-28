@@ -9,16 +9,25 @@ import {
   CandidateGraphPayload,
   KnowledgeEdge
 } from "../../api/authoring";
-
-type Selection =
-  | { kind: "node"; id: string }
-  | { kind: "edge"; id: string }
-  | null;
+import {
+  isGraphLifecycleError,
+  isGraphRuntimeAvailable,
+  safeApplySelectionState,
+  safeGetCurrentNodePositions,
+  safeGetViewportCenterPosition
+} from "./CandidateGraphCanvasModel";
+import type {
+  NodePosition,
+  NodePositionMap,
+  Selection
+} from "./CandidateGraphWorkbenchModel";
 
 type CandidateGraphCanvasProps = {
   graph: CandidateGraphPayload;
   selection: Selection;
   onSelect: (selection: Selection) => void;
+  nodePositionOverrides?: NodePositionMap;
+  onViewportCenterChange?: (position: NodePosition) => void;
   layoutVersion: number;
 };
 
@@ -38,7 +47,6 @@ const EDGE_TYPE_LAYOUT_WEIGHTS: Record<KnowledgeEdge["type"], number> = {
 };
 
 type CandidateNode = CandidateGraphPayload["candidate_nodes"][number];
-type NodePosition = { x: number; y: number };
 type LayoutEdge = KnowledgeEdge & {
   layoutStrength: number;
 };
@@ -55,29 +63,28 @@ export function CandidateGraphCanvas({
   graph,
   selection,
   onSelect,
+  nodePositionOverrides,
+  onViewportCenterChange,
   layoutVersion
 }: CandidateGraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<G6Graph | null>(null);
-  const appliedStructureKeyRef = useRef<string | null>(null);
+  const appliedLayoutKeyRef = useRef<string | null>(null);
   const graphPayloadRef = useRef(graph);
   const selectionRef = useRef(selection);
 
-  const structureKey = [
+  const layoutKey = [
     graph.run_id,
-    layoutVersion,
-    graph.candidate_nodes.map((node) => node.id).join("\u0000"),
-    graph.candidate_edges
-      .map((edge) => `${edge.id}:${edge.source}:${edge.target}:${edge.type}`)
-      .join("\u0000")
+    layoutVersion
   ].join("\u0001");
 
-  const contentKey = [
+  const graphDataKey = [
+    graph.candidate_nodes.map((node) => node.id).join("\u0000"),
     graph.candidate_nodes
       .map((node) => `${node.id}:${node.name}:${node.type}`)
       .join("\u0000"),
     graph.candidate_edges
-      .map((edge) => `${edge.id}:${edge.type}:${edge.weight}:${edge.curation_confidence}`)
+      .map((edge) => `${edge.id}:${edge.source}:${edge.target}:${edge.type}:${edge.weight}:${edge.curation_confidence}`)
       .join("\u0000")
   ].join("\u0001");
 
@@ -93,7 +100,13 @@ export function CandidateGraphCanvas({
     const container = containerRef.current;
     if (!container) return;
 
-    const graphInstance = new G6Graph({
+    let graphInstance: G6Graph | null = null;
+    const publishViewportCenter = () => {
+      if (!isGraphRuntimeAvailable(graphInstance)) return;
+      onViewportCenterChange?.(safeGetViewportCenterPosition(graphInstance));
+    };
+
+    graphInstance = new G6Graph({
       container,
       autoResize: true,
       background: "#eef3f1",
@@ -173,8 +186,16 @@ export function CandidateGraphCanvas({
         }
       },
       behaviors: [
-        "drag-canvas",
-        "zoom-canvas",
+        {
+          type: "drag-canvas",
+          key: "candidate-drag-canvas",
+          onFinish: publishViewportCenter
+        },
+        {
+          type: "zoom-canvas",
+          key: "candidate-zoom-canvas",
+          onFinish: publishViewportCenter
+        },
         {
           type: "click-select",
           key: "candidate-click-select",
@@ -232,42 +253,70 @@ export function CandidateGraphCanvas({
 
     const resizeObserver = new ResizeObserver(() => {
       graphInstance.resize();
+      publishViewportCenter();
     });
     resizeObserver.observe(container);
 
     return () => {
       resizeObserver.disconnect();
-      graphInstance.destroy();
-      graphRef.current = null;
+      if (graphRef.current === graphInstance) {
+        graphRef.current = null;
+      }
+      if (isGraphRuntimeAvailable(graphInstance)) {
+        graphInstance.destroy();
+      }
     };
-  }, [onSelect]);
+  }, [onSelect, onViewportCenterChange]);
 
   useEffect(() => {
     const graphInstance = graphRef.current;
-    if (!graphInstance) return;
+    if (!isGraphRuntimeAvailable(graphInstance)) return;
 
     const currentGraph = graphPayloadRef.current;
-    const shouldRelayout = appliedStructureKeyRef.current !== structureKey;
-    appliedStructureKeyRef.current = structureKey;
-    const currentPositions = shouldRelayout ? undefined : getCurrentNodePositions(graphInstance);
-    graphInstance.setData(toG6Data(currentGraph, currentPositions));
+    const shouldRelayout = appliedLayoutKeyRef.current !== layoutKey;
+    appliedLayoutKeyRef.current = layoutKey;
+    const currentPositions = shouldRelayout ? undefined : safeGetCurrentNodePositions(graphInstance);
+    const positionOverrides = shouldRelayout ? undefined : { ...nodePositionOverrides, ...currentPositions };
+    const fallbackPosition = shouldRelayout ? undefined : safeGetViewportCenterPosition(graphInstance);
+    try {
+      graphInstance.setData(toG6Data(currentGraph, positionOverrides, fallbackPosition));
+    } catch (error) {
+      if (!isGraphRuntimeAvailable(graphInstance) || isGraphLifecycleError(error)) return;
+      throw error;
+    }
 
     let cancelled = false;
-    const draw = shouldRelayout ? graphInstance.render() : graphInstance.draw();
-    void draw.then(async () => {
-      if (cancelled) return;
-      await applySelectionState(graphInstance, currentGraph, selectionRef.current);
-    });
+    let draw: Promise<unknown>;
+    try {
+      draw = shouldRelayout ? graphInstance.render() : graphInstance.draw();
+    } catch (error) {
+      if (!isGraphRuntimeAvailable(graphInstance) || isGraphLifecycleError(error)) return;
+      throw error;
+    }
+    void draw
+      .then(async () => {
+        if (cancelled || graphRef.current !== graphInstance || !isGraphRuntimeAvailable(graphInstance)) return;
+        await safeApplySelectionState(graphInstance, currentGraph, selectionRef.current);
+        if (cancelled || graphRef.current !== graphInstance || !isGraphRuntimeAvailable(graphInstance)) return;
+        onViewportCenterChange?.(safeGetViewportCenterPosition(graphInstance));
+      })
+      .catch((error: unknown) => {
+        if (!isGraphRuntimeAvailable(graphInstance) || isGraphLifecycleError(error)) return;
+        throw error;
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [contentKey, structureKey]);
+  }, [graphDataKey, layoutKey, nodePositionOverrides, onViewportCenterChange]);
 
   useEffect(() => {
     const graphInstance = graphRef.current;
-    if (!graphInstance) return;
-    void applySelectionState(graphInstance, graph, selection);
+    if (!isGraphRuntimeAvailable(graphInstance)) return;
+    void safeApplySelectionState(graphInstance, graph, selection).catch((error: unknown) => {
+      if (!isGraphRuntimeAvailable(graphInstance) || isGraphLifecycleError(error)) return;
+      throw error;
+    });
   }, [graph, selection]);
 
   return (
@@ -287,26 +336,18 @@ function getEventTargetId(event: IPointerEvent) {
   return target.id == null ? "" : String(target.id);
 }
 
-function getCurrentNodePositions(graphInstance: G6Graph) {
-  const positions: Record<string, NodePosition> = {};
-  for (const node of graphInstance.getNodeData()) {
-    const x = Number(node.style?.x);
-    const y = Number(node.style?.y);
-    if (Number.isFinite(x) && Number.isFinite(y)) {
-      positions[String(node.id)] = { x, y };
-    }
-  }
-  return positions;
-}
-
-function toG6Data(graph: CandidateGraphPayload, positionOverrides?: Record<string, NodePosition>) {
+function toG6Data(
+  graph: CandidateGraphPayload,
+  positionOverrides?: NodePositionMap,
+  fallbackPosition?: NodePosition
+) {
   const nodeIds = new Set(graph.candidate_nodes.map((node) => node.id));
   const positions = buildLayeredNodePositions(graph.candidate_nodes, graph.candidate_edges);
   return {
     nodes: graph.candidate_nodes.map((node): G6NodeData => ({
       id: node.id,
       style: {
-        ...(positionOverrides?.[node.id] ?? positions[node.id]),
+        ...(positionOverrides?.[node.id] ?? fallbackPosition ?? positions[node.id]),
         size: NODE_SIZE
       },
       data: {
@@ -327,25 +368,6 @@ function toG6Data(graph: CandidateGraphPayload, positionOverrides?: Record<strin
         }
       }))
   };
-}
-
-async function applySelectionState(
-  graphInstance: G6Graph,
-  graph: CandidateGraphPayload,
-  selection: Selection
-) {
-  const states: Record<string, string[]> = {};
-  const visibleEdgeIds = new Set(toG6Data(graph).edges.map((edge) => String(edge.id)));
-
-  for (const node of graph.candidate_nodes) {
-    states[node.id] = selection?.kind === "node" && selection.id === node.id ? [SELECTED_STATE] : [];
-  }
-  for (const edge of graph.candidate_edges) {
-    if (!visibleEdgeIds.has(edge.id)) continue;
-    states[edge.id] = selection?.kind === "edge" && selection.id === edge.id ? [SELECTED_STATE] : [];
-  }
-
-  await graphInstance.setElementState(states, false);
 }
 
 function getNodeLabel(datum: G6NodeData) {

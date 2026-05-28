@@ -332,6 +332,12 @@ npm --prefix frontend install
 npm --prefix frontend run dev
 ```
 
+运行 Candidate Graph Review Workbench model 检查：
+
+```bash
+npm --prefix frontend run test:candidate-graph-workbench
+```
+
 如果后端运行在非默认端口，可以设置 `VITE_API_PROXY_TARGET`，例如：
 
 ```bash

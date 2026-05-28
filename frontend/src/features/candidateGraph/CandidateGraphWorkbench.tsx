@@ -13,14 +13,17 @@ import {
   uploadSourceMaterial
 } from "../../api/authoring";
 import { CandidateGraphCanvas } from "./CandidateGraphCanvas";
-
-type Selection =
-  | { kind: "node"; id: string }
-  | { kind: "edge"; id: string }
-  | null;
+import {
+  LEVEL_KEYS,
+  addCandidateEdgeFromSelection,
+  addCandidateNodeAtPosition,
+  deleteCandidateGraphSelection,
+  type NodePosition,
+  type NodePositionMap,
+  type Selection
+} from "./CandidateGraphWorkbenchModel";
 
 const DEFAULT_DOMAIN = "classical_supervised_ml_algorithms";
-const LEVEL_KEYS = ["L0", "L1", "L2", "L3", "L4", "L5"];
 
 export function CandidateGraphWorkbench() {
   const [materials, setMaterials] = useState<SourceMaterialRecord[]>([]);
@@ -31,6 +34,8 @@ export function CandidateGraphWorkbench() {
   const [clientProvider, setClientProvider] = useState<"openai" | "deepseek">("openai");
   const [graph, setGraph] = useState<CandidateGraphPayload | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
+  const [nodePositions, setNodePositions] = useState<NodePositionMap>({});
+  const [viewportCenter, setViewportCenter] = useState<NodePosition>({ x: 0, y: 0 });
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +116,7 @@ export function CandidateGraphWorkbench() {
         artifact_paths: response.artifact_paths
       };
       setGraph(nextGraph);
+      setNodePositions({});
       setRunId(nextGraph.run_id);
       setSelection(nextGraph.candidate_nodes[0] ? { kind: "node", id: nextGraph.candidate_nodes[0].id } : null);
       setLayoutVersion((version) => version + 1);
@@ -126,6 +132,7 @@ export function CandidateGraphWorkbench() {
     await runTask("load", async () => {
       const nextGraph = await readCandidateGraph(benchmarkDomain, runId);
       setGraph(nextGraph);
+      setNodePositions({});
       setSelection(nextGraph.candidate_nodes[0] ? { kind: "node", id: nextGraph.candidate_nodes[0].id } : null);
       setLayoutVersion((version) => version + 1);
       setNotice(`Loaded ${nextGraph.run_id}`);
@@ -163,7 +170,14 @@ export function CandidateGraphWorkbench() {
       )
     });
     if (patch.id) {
-      setSelection({ kind: "node", id: patch.id });
+      const newId = patch.id;
+      setNodePositions((positions) => {
+        const existing = positions[id];
+        if (!existing || newId === id) return positions;
+        const { [id]: _removedPosition, ...remainingPositions } = positions;
+        return { ...remainingPositions, [newId]: existing };
+      });
+      setSelection({ kind: "node", id: newId });
     }
   }
 
@@ -182,57 +196,25 @@ export function CandidateGraphWorkbench() {
 
   function addNode() {
     if (!graph) return;
-    const id = nextId("new_node", graph.candidate_nodes.map((node) => node.id));
-    const node: KnowledgeNode = {
-      id,
-      name: "New Knowledge Node",
-      type: "concept",
-      definition: "",
-      source_locators: [],
-      diagnostic_goal: "",
-      levels: Object.fromEntries(LEVEL_KEYS.map((level) => [level, ""])),
-      diagnostic_signals: [],
-      simulator_behavior: ""
-    };
-    setGraph({ ...graph, candidate_nodes: [...graph.candidate_nodes, node] });
-    setSelection({ kind: "node", id });
+    const edit = addCandidateNodeAtPosition(graph, viewportCenter);
+    setGraph(edit.graph);
+    setSelection(edit.selection);
+    setNodePositions((positions) => ({ ...positions, ...edit.nodePositions }));
   }
 
   function addEdge() {
     if (!graph || graph.candidate_nodes.length < 2) return;
-    const source = graph.candidate_nodes[0].id;
-    const target = graph.candidate_nodes[1].id;
-    const id = nextId("edge_new", graph.candidate_edges.map((edge) => edge.id));
-    const edge: KnowledgeEdge = {
-      id,
-      source,
-      target,
-      type: "supports",
-      rationale: "",
-      weight: 0.5,
-      curation_confidence: 0.5
-    };
-    setGraph({ ...graph, candidate_edges: [...graph.candidate_edges, edge] });
-    setSelection({ kind: "edge", id });
+    const edit = addCandidateEdgeFromSelection(graph, selection);
+    setGraph(edit.graph);
+    setSelection(edit.selection);
   }
 
   function deleteSelection() {
     if (!graph || !selection) return;
-    if (selection.kind === "node") {
-      setGraph({
-        ...graph,
-        candidate_nodes: graph.candidate_nodes.filter((node) => node.id !== selection.id),
-        candidate_edges: graph.candidate_edges.filter(
-          (edge) => edge.source !== selection.id && edge.target !== selection.id
-        )
-      });
-    } else {
-      setGraph({
-        ...graph,
-        candidate_edges: graph.candidate_edges.filter((edge) => edge.id !== selection.id)
-      });
-    }
-    setSelection(null);
+    const edit = deleteCandidateGraphSelection(graph, selection, nodePositions);
+    setGraph(edit.graph);
+    setSelection(edit.selection);
+    setNodePositions(edit.nodePositions);
   }
 
   return (
@@ -355,6 +337,8 @@ export function CandidateGraphWorkbench() {
               graph={graph}
               selection={selection}
               onSelect={setSelection}
+              nodePositionOverrides={nodePositions}
+              onViewportCenterChange={setViewportCenter}
               layoutVersion={layoutVersion}
             />
           ) : (
@@ -451,15 +435,6 @@ function EdgeInspector({
       <label>Curation Confidence<input type="number" min="0" max="1" step="0.05" value={edge.curation_confidence} onChange={(event) => onChange({ curation_confidence: Number(event.target.value) })} /></label>
     </div>
   );
-}
-
-function nextId(prefix: string, existingIds: string[]) {
-  const existing = new Set(existingIds);
-  let index = 1;
-  while (existing.has(`${prefix}_${index}`)) {
-    index += 1;
-  }
-  return `${prefix}_${index}`;
 }
 
 function lines(value: string) {

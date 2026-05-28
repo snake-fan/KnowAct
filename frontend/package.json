@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
+    "test:candidate-graph-workbench": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --outDir /tmp/knowact-candidate-graph-tests test/*.ts && node /tmp/knowact-candidate-graph-tests/test/CandidateGraphWorkbenchModel.test.js && node /tmp/knowact-candidate-graph-tests/test/CandidateGraphCanvasModel.test.js",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

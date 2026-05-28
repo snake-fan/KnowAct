@@ -332,6 +332,12 @@ npm --prefix frontend install
 npm --prefix frontend run dev
 ```
 
+Run the Candidate Graph Review Workbench model checks with:
+
+```bash
+npm --prefix frontend run test:candidate-graph-workbench
+```
+
 If the backend is running on a non-default port, set `VITE_API_PROXY_TARGET`, for example:
 
 ```bash
