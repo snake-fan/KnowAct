@@ -285,6 +285,7 @@ V1 实现已经从 schema 与 validation spine 开始：
 - `backend/knowact/llm/`：model-client interface，以及基于 OpenAI 和 DeepSeek SDK 的 clients，用于 text-based authoring steps。
 - `backend/knowact/storage/`：local artifact 与 material path helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
 - `backend/knowact/api/` 与 `backend/main.py`：FastAPI 入口，以及可从本地教材 PDF 运行真实 graph authoring workflow 的 authoring API。
+- `frontend/`：React/Vite Candidate Graph Review Workbench，用于上传 PDF source material、生成 candidate graph、可视化 nodes/edges、编辑 candidate graph artifacts，并保存通过验证的 review edits。
 - `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`：用于 schema 与 validator 检查的 5-node development fixture，不是正式的 30-50 node v1 graph。
 - `test/`：覆盖公开 schema 与 validation API 的 `unittest` 测试。
 
@@ -324,9 +325,30 @@ uv run python scripts/manual_aliyun_oss_smoke.py
 uv run fastapi dev backend/main.py
 ```
 
-然后打开本地 Swagger UI：`http://127.0.0.1:8000/docs`。当前 authoring API 包含：
+在第二个终端启动前端 workbench：
 
+```bash
+npm --prefix frontend install
+npm --prefix frontend run dev
+```
+
+运行 Candidate Graph Review Workbench model 检查：
+
+```bash
+npm --prefix frontend run test:candidate-graph-workbench
+```
+
+如果后端运行在非默认端口，可以设置 `VITE_API_PROXY_TARGET`，例如：
+
+```bash
+VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
+```
+
+然后打开 Vite 输出的前端地址，或打开本地 Swagger UI：`http://127.0.0.1:8000/docs`。当前 authoring API 包含：
+
+- `POST /api/authoring/source-materials` 和 `GET /api/authoring/source-materials`：把 PDF source material 上传到 `storage/source_materials/{source_id}/original.pdf`，写出 `metadata.json`，并为 workbench 列出已登记 source materials。
 - `POST /api/authoring/graph-candidates`：按 `storage/` 下的相对路径读取一个 PDF，解析或复用同目录同 stem 的 Parsed Source Markdown，必要时调用 MinerU 创建或重新生成 Markdown，再只把 Markdown 文本发送给 node extraction step，返回 source-grounded skeletons、candidate nodes、candidate edges、Markdown cache metadata 和 compact run log summary，并默认写出 `candidate_nodes.json`、`candidate_edges.json`、通过 validation 的 `intermediate/` artifacts 以及 sidecar `workflow_log.json`。workflow log 记录 step 状态，并链接到 `agent_traces/{step}/model_raw_output.txt`、`agent_traces/{step}/parser_output.json` 和适用时的 batch trace artifacts 以便 debug，但仍不写入完整 prompt/source-material text。MinerU standard mode 会先把本地 PDF 发布为私有阿里云 OSS staging object 的短期 signed URL，再把这个 URL 提交给 MinerU；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会拆成 chunks 并按页码顺序拼接 Markdown。其中只有 node 和 edge 文件是 candidate graph review artifacts。示例请求：
+- `GET /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}` 和 `PUT /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}`：读取和 validate-save candidate graph review artifacts。保存端点只有在 schema 与 graph validation 通过后，才会覆盖 `candidate_nodes.json` 和 `candidate_edges.json`。
 
 ```json
 {
@@ -346,6 +368,7 @@ PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `.
 - [x] Phase 2 graph authoring workflow spine
 - [x] OpenAI 与 DeepSeek SDK client boundary for LLM-backed steps
 - [x] FastAPI authoring API，用于真实 source-backed graph candidate runs
+- [x] Candidate Graph Review Workbench 前端
 - [ ] Ground-truth map authoring
 - [ ] 基于 LLM 的画像生成
 - [ ] 人工校验协议

@@ -1,9 +1,10 @@
 from collections.abc import Callable
+import json
 from pathlib import Path
 import re
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from backend.knowact.authoring.openai_workflow import (
     DEFAULT_GRAPH_AUTHORING_CLIENT_PROVIDER,
@@ -25,7 +26,7 @@ from backend.knowact.authoring.output import (
     write_graph_authoring_run_log,
 )
 from backend.knowact.authoring.parsers.graph_authoring import AuthoringOutputParseError
-from backend.knowact.authoring.schemas import SourceGroundedNodeSkeleton, SourceMaterial
+from backend.knowact.authoring.schemas import GraphAuthoringWorkflowResult, SourceGroundedNodeSkeleton, SourceMaterial
 from backend.knowact.authoring.sources import (
     ParsedMarkdownMaterial,
     ParsedMarkdownEmptyError,
@@ -34,6 +35,7 @@ from backend.knowact.authoring.sources import (
     SourcePreparationError,
     resolve_or_create_parsed_markdown,
 )
+from backend.knowact.authoring.validation import validate_candidate_edges, validate_complete_candidate_nodes
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeNode
 from backend.knowact.llm.client import ModelClientError
@@ -45,6 +47,12 @@ from backend.knowact.storage.materials import (
     MaterialFileSizeError,
     MaterialFileTypeError,
     resolve_pdf_material,
+)
+from backend.knowact.storage.source_material_catalog import (
+    SourceMaterialRecord,
+    get_source_material,
+    list_source_materials,
+    save_pdf_source_material,
 )
 from backend.knowact.validation.exceptions import KnowActValidationError
 
@@ -60,7 +68,10 @@ _LOGGER = get_knowact_logger("api.authoring")
 class GraphCandidateAuthoringRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    pdf_path: str = Field(description="Relative path under storage/, for example books/isl_python.pdf.")
+    pdf_path: str | None = Field(
+        default=None,
+        description="Relative path under storage/, for example books/isl_python.pdf.",
+    )
     benchmark_domain: str = _DEFAULT_BENCHMARK_DOMAIN
     source_id: str = _DEFAULT_SOURCE_ID
     source_title: str = _DEFAULT_SOURCE_TITLE
@@ -70,7 +81,14 @@ class GraphCandidateAuthoringRequest(BaseModel):
     run_id: str | None = None
     client_provider: GraphAuthoringClientProvider = DEFAULT_GRAPH_AUTHORING_CLIENT_PROVIDER
 
-    @field_validator("pdf_path", "source_title")
+    @field_validator("pdf_path")
+    @classmethod
+    def _pdf_path_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("source_title")
     @classmethod
     def _must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
@@ -104,6 +122,12 @@ class SourceMaterialInfo(BaseModel):
     title: str
 
 
+class SourceMaterialListResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    source_materials: tuple[SourceMaterialRecord, ...]
+
+
 class GraphCandidateArtifactPaths(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -125,6 +149,36 @@ class GraphCandidateAuthoringResponse(BaseModel):
     artifact_paths: GraphCandidateArtifactPaths | None = None
 
 
+class CandidateGraphArtifactsResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    run_id: str
+    candidate_nodes: tuple[KnowledgeNode, ...]
+    candidate_edges: tuple[KnowledgeEdge, ...]
+    artifact_paths: GraphCandidateArtifactPaths
+
+
+class CandidateGraphRunSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    run_id: str
+
+
+class CandidateGraphRunListResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    runs: tuple[CandidateGraphRunSummary, ...]
+
+
+class CandidateGraphSaveRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    candidate_nodes: tuple[KnowledgeNode, ...]
+    candidate_edges: tuple[KnowledgeEdge, ...] = Field(default_factory=tuple)
+
+
 def build_authoring_router(
     *,
     graph_authoring_workflow_factory: GraphAuthoringWorkflowFactory,
@@ -134,6 +188,150 @@ def build_authoring_router(
     root = workspace_root or _default_workspace_root()
     storage_root = root / "storage"
     router = APIRouter()
+
+    @router.post(
+        "/source-materials",
+        response_model=SourceMaterialRecord,
+        summary="Upload one PDF source material for graph authoring.",
+    )
+    def upload_source_material(
+        file: UploadFile = File(...),
+        source_id: str = Form(...),
+        title: str = Form(...),
+        citation: str | None = Form(None),
+    ) -> SourceMaterialRecord:
+        try:
+            safe_source_id = _validate_safe_id_or_422(source_id, "source_id")
+            return save_pdf_source_material(
+                storage_root=storage_root,
+                source_id=safe_source_id,
+                title=title,
+                citation=citation,
+                filename=file.filename or "",
+                content=file.file,
+            )
+        except MaterialFileTypeError as exc:
+            raise HTTPException(status_code=415, detail=str(exc)) from exc
+        except MaterialFileSizeError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        except MaterialFileError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @router.get(
+        "/source-materials",
+        response_model=SourceMaterialListResponse,
+        summary="List uploaded source materials available for graph authoring.",
+    )
+    def list_uploaded_source_materials() -> SourceMaterialListResponse:
+        return SourceMaterialListResponse(source_materials=list_source_materials(storage_root=storage_root))
+
+    @router.get(
+        "/candidate-graphs/{benchmark_domain}",
+        response_model=CandidateGraphRunListResponse,
+        summary="List candidate graph runs for a benchmark domain.",
+    )
+    def list_candidate_graph_runs(
+        benchmark_domain: str,
+    ) -> CandidateGraphRunListResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        runs_dir = root / "benchmark" / "domains" / benchmark_domain / "candidate_graphs" / "api"
+        runs: list[CandidateGraphRunSummary] = []
+        if runs_dir.exists() and runs_dir.is_dir():
+            for entry in sorted(runs_dir.iterdir(), reverse=True):
+                if not entry.is_dir():
+                    continue
+                run_id = entry.name
+                try:
+                    _validate_safe_id(run_id, "run_id")
+                except ValueError:
+                    continue
+                runs.append(CandidateGraphRunSummary(run_id=run_id))
+        return CandidateGraphRunListResponse(
+            benchmark_domain=benchmark_domain,
+            runs=tuple(runs),
+        )
+
+    @router.get(
+        "/candidate-graphs/{benchmark_domain}/{run_id}",
+        response_model=CandidateGraphArtifactsResponse,
+        summary="Read one candidate graph run's node and edge artifacts.",
+    )
+    def read_candidate_graph_artifacts(
+        benchmark_domain: str,
+        run_id: str,
+    ) -> CandidateGraphArtifactsResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        run_id = _validate_safe_id_or_422(run_id, "run_id")
+        output_dir = _candidate_graph_output_dir(root, benchmark_domain, run_id)
+        nodes_path = output_dir / "candidate_nodes.json"
+        edges_path = output_dir / "candidate_edges.json"
+        workflow_log_path = output_dir / WORKFLOW_LOG_FILENAME
+        if not nodes_path.exists() or not edges_path.exists():
+            raise HTTPException(status_code=404, detail="candidate graph artifacts do not exist")
+
+        try:
+            candidate_nodes = tuple(KnowledgeNode.model_validate(item) for item in _read_json_list(nodes_path))
+            candidate_edges = tuple(KnowledgeEdge.model_validate(item) for item in _read_json_list(edges_path))
+        except (OSError, ValueError, ValidationError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        return CandidateGraphArtifactsResponse(
+            benchmark_domain=benchmark_domain,
+            run_id=run_id,
+            candidate_nodes=candidate_nodes,
+            candidate_edges=candidate_edges,
+            artifact_paths=GraphCandidateArtifactPaths(
+                output_dir_uri=_relative_uri(output_dir, root),
+                candidate_nodes_uri=_relative_uri(nodes_path, root),
+                candidate_edges_uri=_relative_uri(edges_path, root),
+                workflow_log_uri=_relative_uri(workflow_log_path, root),
+            ),
+        )
+
+    @router.put(
+        "/candidate-graphs/{benchmark_domain}/{run_id}",
+        response_model=CandidateGraphArtifactsResponse,
+        summary="Validate and overwrite one candidate graph run's node and edge artifacts.",
+    )
+    def save_candidate_graph_artifacts(
+        benchmark_domain: str,
+        run_id: str,
+        request: CandidateGraphSaveRequest,
+    ) -> CandidateGraphArtifactsResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        run_id = _validate_safe_id_or_422(run_id, "run_id")
+        output_dir = _candidate_graph_output_dir(root, benchmark_domain, run_id)
+        nodes_path = output_dir / "candidate_nodes.json"
+        edges_path = output_dir / "candidate_edges.json"
+        if not nodes_path.exists() or not edges_path.exists():
+            raise HTTPException(status_code=404, detail="candidate graph artifacts do not exist")
+
+        try:
+            validate_complete_candidate_nodes(request.candidate_nodes)
+            validate_candidate_edges(request.candidate_nodes, request.candidate_edges)
+        except KnowActValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        result = GraphAuthoringWorkflowResult(
+            source_grounded_node_skeletons=(),
+            candidate_nodes=request.candidate_nodes,
+            candidate_edges=request.candidate_edges,
+        )
+        write_graph_authoring_output(result, output_dir)
+        workflow_log_path = output_dir / WORKFLOW_LOG_FILENAME
+
+        return CandidateGraphArtifactsResponse(
+            benchmark_domain=benchmark_domain,
+            run_id=run_id,
+            candidate_nodes=request.candidate_nodes,
+            candidate_edges=request.candidate_edges,
+            artifact_paths=GraphCandidateArtifactPaths(
+                output_dir_uri=_relative_uri(output_dir, root),
+                candidate_nodes_uri=_relative_uri(nodes_path, root),
+                candidate_edges_uri=_relative_uri(edges_path, root),
+                workflow_log_uri=_relative_uri(workflow_log_path, root),
+            ),
+        )
 
     @router.post(
         "/graph-candidates",
@@ -146,16 +344,22 @@ def build_authoring_router(
         run_id = request.run_id or default_graph_authoring_run_id()
         output_dir = _candidate_graph_output_dir(root, request.benchmark_domain, run_id)
         _LOGGER.info(
-            "Graph candidate authoring request received run_id=%s benchmark_domain=%s pdf_path=%s client_provider=%s write_artifacts=%s",
+            "Graph candidate authoring request received run_id=%s benchmark_domain=%s pdf_path=%s source_id=%s client_provider=%s write_artifacts=%s",
             run_id,
             request.benchmark_domain,
             request.pdf_path,
+            request.source_id,
             request.client_provider,
             request.write_artifacts,
         )
 
         try:
-            material = resolve_pdf_material(storage_root=storage_root, storage_path=request.pdf_path)
+            material_record = None
+            if request.pdf_path is None:
+                material_record = get_source_material(storage_root=storage_root, source_id=request.source_id)
+                material = resolve_pdf_material(storage_root=storage_root, storage_path=material_record.storage_path)
+            else:
+                material = resolve_pdf_material(storage_root=storage_root, storage_path=request.pdf_path)
             _LOGGER.info(
                 "Graph candidate authoring source resolved run_id=%s storage_uri=%s filename=%s size_bytes=%d",
                 run_id,
@@ -182,11 +386,11 @@ def build_authoring_router(
                 graph_authoring_workflow_factory,
                 client_provider=request.client_provider,
             )
-            source_material = _source_material_from_markdown(parsed_markdown, request)
+            source_material = _source_material_from_markdown(parsed_markdown, request, material_record)
             run_result = workflow.run_with_log(
                 (source_material,),
                 run_id=run_id,
-                source_metadata=(_run_log_source_material(material, parsed_markdown, request),),
+                source_metadata=(_run_log_source_material(material, parsed_markdown, request, material_record),),
                 intermediate_artifact_writer=(
                     GraphAuthoringIntermediateArtifactWriter(output_dir)
                     if request.write_artifacts
@@ -282,7 +486,7 @@ def build_authoring_router(
                 markdown_size_bytes=parsed_markdown.size_bytes,
                 markdown_cache_status=parsed_markdown.cache_status,
                 source_id=request.source_id,
-                title=request.source_title,
+                title=_effective_source_title(request, material_record),
             ),
             run_log_summary=summarize_run_log(run_log),
             source_grounded_node_skeletons=result.source_grounded_node_skeletons,
@@ -308,11 +512,12 @@ def _build_graph_authoring_workflow(
 def _source_material_from_markdown(
     parsed_markdown: ParsedMarkdownMaterial,
     request: GraphCandidateAuthoringRequest,
+    material_record: SourceMaterialRecord | None = None,
 ) -> SourceMaterial:
     return SourceMaterial(
         source_id=request.source_id,
-        title=request.source_title,
-        citation=request.citation or parsed_markdown.storage_uri,
+        title=_effective_source_title(request, material_record),
+        citation=_effective_citation(request, material_record, parsed_markdown),
         text=parsed_markdown.text,
     )
 
@@ -321,11 +526,12 @@ def _run_log_source_material(
     material: LocalPDFMaterial,
     parsed_markdown: ParsedMarkdownMaterial,
     request: GraphCandidateAuthoringRequest,
+    material_record: SourceMaterialRecord | None = None,
 ) -> RunLogSourceMaterial:
     return RunLogSourceMaterial(
         source_id=request.source_id,
-        title=request.source_title,
-        citation=request.citation or parsed_markdown.storage_uri,
+        title=_effective_source_title(request, material_record),
+        citation=_effective_citation(request, material_record, parsed_markdown),
         storage_uri=material.storage_uri,
         filename=material.filename,
         size_bytes=material.size_bytes,
@@ -333,6 +539,23 @@ def _run_log_source_material(
         parsed_markdown_cache_status=parsed_markdown.cache_status,
         parsed_markdown_size_bytes=parsed_markdown.size_bytes,
     )
+
+
+def _effective_source_title(
+    request: GraphCandidateAuthoringRequest,
+    material_record: SourceMaterialRecord | None,
+) -> str:
+    if material_record is not None and request.source_title == _DEFAULT_SOURCE_TITLE:
+        return material_record.title
+    return request.source_title
+
+
+def _effective_citation(
+    request: GraphCandidateAuthoringRequest,
+    material_record: SourceMaterialRecord | None,
+    parsed_markdown: ParsedMarkdownMaterial,
+) -> str:
+    return request.citation or (material_record.citation if material_record is not None else None) or parsed_markdown.storage_uri
 
 
 def _default_workspace_root() -> Path:
@@ -397,3 +620,18 @@ def _validate_safe_id(value: str, field_name: str) -> str:
     if not _SAFE_ID_PATTERN.fullmatch(value):
         raise ValueError(f"{field_name} must contain only letters, numbers, dots, underscores, or dashes")
     return value
+
+
+def _validate_safe_id_or_422(value: str, field_name: str) -> str:
+    try:
+        return _validate_safe_id(value, field_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _read_json_list(path: Path) -> list[object]:
+    with path.open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, list):
+        raise ValueError(f"{path.name} must contain a JSON list")
+    return payload
