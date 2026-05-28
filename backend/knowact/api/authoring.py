@@ -159,6 +159,19 @@ class CandidateGraphArtifactsResponse(BaseModel):
     artifact_paths: GraphCandidateArtifactPaths
 
 
+class CandidateGraphRunSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    run_id: str
+
+
+class CandidateGraphRunListResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    runs: tuple[CandidateGraphRunSummary, ...]
+
+
 class CandidateGraphSaveRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -211,6 +224,32 @@ def build_authoring_router(
     )
     def list_uploaded_source_materials() -> SourceMaterialListResponse:
         return SourceMaterialListResponse(source_materials=list_source_materials(storage_root=storage_root))
+
+    @router.get(
+        "/candidate-graphs/{benchmark_domain}",
+        response_model=CandidateGraphRunListResponse,
+        summary="List candidate graph runs for a benchmark domain.",
+    )
+    def list_candidate_graph_runs(
+        benchmark_domain: str,
+    ) -> CandidateGraphRunListResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        runs_dir = root / "benchmark" / "domains" / benchmark_domain / "candidate_graphs" / "api"
+        runs: list[CandidateGraphRunSummary] = []
+        if runs_dir.exists() and runs_dir.is_dir():
+            for entry in sorted(runs_dir.iterdir(), reverse=True):
+                if not entry.is_dir():
+                    continue
+                run_id = entry.name
+                try:
+                    _validate_safe_id(run_id, "run_id")
+                except ValueError:
+                    continue
+                runs.append(CandidateGraphRunSummary(run_id=run_id))
+        return CandidateGraphRunListResponse(
+            benchmark_domain=benchmark_domain,
+            runs=tuple(runs),
+        )
 
     @router.get(
         "/candidate-graphs/{benchmark_domain}/{run_id}",

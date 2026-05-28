@@ -124,6 +124,23 @@ export async function generateCandidateGraph(input: {
   });
 }
 
+export type CandidateGraphRunSummary = {
+  run_id: string;
+};
+
+export type CandidateGraphRunListResponse = {
+  benchmark_domain: string;
+  runs: CandidateGraphRunSummary[];
+};
+
+export async function listCandidateGraphRuns(
+  benchmarkDomain: string
+): Promise<CandidateGraphRunListResponse> {
+  return requestJson<CandidateGraphRunListResponse>(
+    `/api/authoring/candidate-graphs/${encodeURIComponent(benchmarkDomain)}`
+  );
+}
+
 export async function readCandidateGraph(
   benchmarkDomain: string,
   runId: string
