@@ -89,7 +89,7 @@ class V1AuthoringApiTest(unittest.TestCase):
             edges_path = workspace_root / artifact_paths["candidate_edges_uri"]
             log_path = workspace_root / artifact_paths["workflow_log_uri"]
             self.assertEqual(
-                "benchmark/domains/classical_supervised_ml_algorithms/candidate_graphs/api/dev_run_001",
+                "benchmark/domains/classical_supervised_ml_algorithms/candidate_graphs/dev_run_001",
                 artifact_paths["output_dir_uri"],
             )
             self.assertEqual("candidate_nodes.json", nodes_path.name)
@@ -224,7 +224,7 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertEqual(["train_test_split"], [node["id"] for node in payload["candidate_nodes"]])
             self.assertEqual([], payload["candidate_edges"])
             self.assertEqual(
-                "benchmark/domains/classical_supervised_ml_algorithms/candidate_graphs/api/read_run_001/candidate_nodes.json",
+                "benchmark/domains/classical_supervised_ml_algorithms/candidate_graphs/read_run_001/candidate_nodes.json",
                 payload["artifact_paths"]["candidate_nodes_uri"],
             )
 
@@ -431,7 +431,7 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertEqual(422, response.status_code)
             detail = response.json()["detail"]
             self.assertEqual(
-                "benchmark/domains/classical_supervised_ml_algorithms/candidate_graphs/api/bad_run_001/workflow_log.json",
+                "benchmark/domains/classical_supervised_ml_algorithms/candidate_graphs/bad_run_001/workflow_log.json",
                 detail["workflow_log_uri"],
             )
             self.assertIn("exactly L0-L5", detail["message"])
@@ -442,7 +442,6 @@ class V1AuthoringApiTest(unittest.TestCase):
                 / "domains"
                 / "classical_supervised_ml_algorithms"
                 / "candidate_graphs"
-                / "api"
                 / "bad_run_001"
             )
             self.assertEqual(

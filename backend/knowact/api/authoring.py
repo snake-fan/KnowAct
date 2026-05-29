@@ -2,6 +2,7 @@ from collections.abc import Callable
 import json
 from pathlib import Path
 import re
+import shutil
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -234,7 +235,7 @@ def build_authoring_router(
         benchmark_domain: str,
     ) -> CandidateGraphRunListResponse:
         benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
-        runs_dir = root / "benchmark" / "domains" / benchmark_domain / "candidate_graphs" / "api"
+        runs_dir = root / "benchmark" / "domains" / benchmark_domain / "candidate_graphs"
         runs: list[CandidateGraphRunSummary] = []
         if runs_dir.exists() and runs_dir.is_dir():
             for entry in sorted(runs_dir.iterdir(), reverse=True):
@@ -381,6 +382,17 @@ def build_authoring_router(
                 parsed_markdown.storage_uri,
                 parsed_markdown.cache_status,
                 parsed_markdown.size_bytes,
+            )
+            sources_md_path = _copy_markdown_to_domain_sources(
+                markdown_text=parsed_markdown.text,
+                root=root,
+                benchmark_domain=request.benchmark_domain,
+                source_filename=material.filename,
+            )
+            _LOGGER.info(
+                "Markdown copied to domain sources run_id=%s path=%s",
+                run_id,
+                _relative_uri(sources_md_path, root),
             )
             workflow = _build_graph_authoring_workflow(
                 graph_authoring_workflow_factory,
@@ -563,7 +575,26 @@ def _default_workspace_root() -> Path:
 
 
 def _candidate_graph_output_dir(root: Path, benchmark_domain: str, run_id: str) -> Path:
-    return root / "benchmark" / "domains" / benchmark_domain / "candidate_graphs" / "api" / run_id
+    return root / "benchmark" / "domains" / benchmark_domain / "candidate_graphs" / run_id
+
+
+def _copy_markdown_to_domain_sources(
+    *,
+    markdown_text: str,
+    root: Path,
+    benchmark_domain: str,
+    source_filename: str,
+) -> Path:
+    """Copy parsed markdown to the domain's sources/ directory, backing up any existing copy."""
+    sources_dir = root / "benchmark" / "domains" / benchmark_domain / "sources"
+    sources_dir.mkdir(parents=True, exist_ok=True)
+    md_filename = Path(source_filename).stem + ".md"
+    target_path = sources_dir / md_filename
+    if target_path.exists():
+        backup_path = sources_dir / (md_filename + ".bak")
+        shutil.copy2(target_path, backup_path)
+    target_path.write_text(markdown_text, encoding="utf-8")
+    return target_path
 
 
 def _write_failed_workflow_log(

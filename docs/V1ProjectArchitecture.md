@@ -351,7 +351,7 @@ benchmark/
 └── domains/
     └── classical_supervised_ml_algorithms/
         ├── sources/
-        │   └── isl_python.source.json
+        │   └── isl_python.md
         ├── candidate_graphs/
         │   └── run_001/
         │       ├── candidate_nodes.json
