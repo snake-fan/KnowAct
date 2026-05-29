@@ -69,8 +69,8 @@ reports/generated/
 *.db
 
 # Candidate graph authoring process artifacts
-benchmark/domains/*/candidate_graphs/api/*/workflow_log.json
-benchmark/domains/*/candidate_graphs/api/*/agent_traces/
+benchmark/domains/*/candidate_graphs/*/workflow_log.json
+benchmark/domains/*/candidate_graphs/*/agent_traces/
 
 # Local source materials used by test API PDF upload checks
 storage/*
