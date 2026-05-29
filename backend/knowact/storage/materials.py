@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-
-MAX_RESPONSES_INPUT_FILE_BYTES = 50_000_000
+MAX_RESPONSES_INPUT_FILE_BYTES = 100_000_000
 
 
 class MaterialFileError(ValueError):
@@ -52,7 +51,9 @@ def resolve_pdf_material(
         raise MaterialFileError("storage_path must stay under storage/") from exc
 
     if not path.exists():
-        raise MaterialFileNotFoundError(f"storage/{relative_path.as_posix()} does not exist")
+        raise MaterialFileNotFoundError(
+            f"storage/{relative_path.as_posix()} does not exist"
+        )
     if not path.is_file():
         raise MaterialFileError(f"storage/{relative_path.as_posix()} is not a file")
     if path.suffix.lower() != ".pdf":
