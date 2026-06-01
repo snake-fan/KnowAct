@@ -27,6 +27,7 @@ from backend.knowact.authoring.output import (
     write_graph_authoring_run_log,
 )
 from backend.knowact.authoring.parsers.graph_authoring import AuthoringOutputParseError
+from backend.knowact.authoring.review_promotion import promote_candidate_graph
 from backend.knowact.authoring.schemas import GraphAuthoringWorkflowResult, SourceGroundedNodeSkeleton, SourceMaterial
 from backend.knowact.authoring.sources import (
     ParsedMarkdownMaterial,
@@ -38,7 +39,7 @@ from backend.knowact.authoring.sources import (
 )
 from backend.knowact.authoring.validation import validate_candidate_edges, validate_complete_candidate_nodes
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
-from backend.knowact.core.graph import KnowledgeEdge, KnowledgeNode
+from backend.knowact.core.graph import GraphManifest, KnowledgeEdge, KnowledgeNode
 from backend.knowact.llm.client import ModelClientError
 from backend.knowact.logging_config import get_knowact_logger
 from backend.knowact.storage.materials import (
@@ -54,6 +55,11 @@ from backend.knowact.storage.source_material_catalog import (
     get_source_material,
     list_source_materials,
     save_pdf_source_material,
+)
+from backend.knowact.storage.reviewed_graphs import (
+    CandidateGraphArtifactError,
+    CandidateGraphNotFoundError,
+    ReviewedGraphPromotionConflictError,
 )
 from backend.knowact.validation.exceptions import KnowActValidationError
 
@@ -178,6 +184,36 @@ class CandidateGraphSaveRequest(BaseModel):
 
     candidate_nodes: tuple[KnowledgeNode, ...]
     candidate_edges: tuple[KnowledgeEdge, ...] = Field(default_factory=tuple)
+
+
+class CandidateGraphPromotionRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    version: str
+    overwrite: bool = False
+
+    @field_validator("version")
+    @classmethod
+    def _version_must_be_safe(cls, value: str) -> str:
+        return _validate_safe_id(value, "version")
+
+
+class ReviewedGraphArtifactPaths(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    output_dir_uri: str
+    graph_manifest_uri: str
+    authored_nodes_uri: str
+    authored_edges_uri: str
+
+
+class CandidateGraphPromotionResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    run_id: str
+    graph_manifest: GraphManifest
+    artifact_paths: ReviewedGraphArtifactPaths
 
 
 def build_authoring_router(
@@ -331,6 +367,45 @@ def build_authoring_router(
                 candidate_nodes_uri=_relative_uri(nodes_path, root),
                 candidate_edges_uri=_relative_uri(edges_path, root),
                 workflow_log_uri=_relative_uri(workflow_log_path, root),
+            ),
+        )
+
+    @router.post(
+        "/candidate-graphs/{benchmark_domain}/{run_id}/promotion",
+        response_model=CandidateGraphPromotionResponse,
+        summary="Promote one validated candidate graph run into a reviewed authored graph version.",
+    )
+    def promote_candidate_graph_artifacts(
+        benchmark_domain: str,
+        run_id: str,
+        request: CandidateGraphPromotionRequest,
+    ) -> CandidateGraphPromotionResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        run_id = _validate_safe_id_or_422(run_id, "run_id")
+        try:
+            promotion = promote_candidate_graph(
+                workspace_root=root,
+                benchmark_domain=benchmark_domain,
+                run_id=run_id,
+                version=request.version,
+                overwrite=request.overwrite,
+            )
+        except CandidateGraphNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ReviewedGraphPromotionConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except CandidateGraphArtifactError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        return CandidateGraphPromotionResponse(
+            benchmark_domain=benchmark_domain,
+            run_id=run_id,
+            graph_manifest=promotion.manifest,
+            artifact_paths=ReviewedGraphArtifactPaths(
+                output_dir_uri=_relative_uri(promotion.output_dir, root),
+                graph_manifest_uri=_relative_uri(promotion.graph_manifest_path, root),
+                authored_nodes_uri=_relative_uri(promotion.authored_nodes_path, root),
+                authored_edges_uri=_relative_uri(promotion.authored_edges_path, root),
             ),
         )
 

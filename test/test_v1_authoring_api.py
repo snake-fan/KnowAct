@@ -308,6 +308,177 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertIn("unknown target node", response.json()["detail"])
             self.assertEqual(original_nodes, _load_json(nodes_path))
 
+    def test_authoring_api_promotes_candidate_graph_into_reviewed_version_with_manifest(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_fixture_pdf(workspace_root)
+            _write_fixture_markdown(workspace_root, "## Train Test Split\n\nCached Markdown.")
+            fake_model_client = FixtureGraphModelClient()
+            client = _test_client(workspace_root, fake_model_client, FixtureSourceParser("unused"))
+            candidate_payload = _generate_fixture_candidate(client, run_id="promote_run_001")
+
+            response = client.post(
+                "/api/authoring/candidate-graphs/classical_supervised_ml_algorithms/promote_run_001/promotion",
+                json={"version": "v1"},
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("classical_supervised_ml_algorithms", payload["benchmark_domain"])
+            self.assertEqual("promote_run_001", payload["run_id"])
+            self.assertEqual(
+                {
+                    "graph_id": "kg_classical_supervised_ml_algorithms_v1",
+                    "domain": "classical_supervised_ml_algorithms",
+                    "version": "v1",
+                    "promoted_from_candidate_run": "promote_run_001",
+                    "nodes_file": "authored_nodes.json",
+                    "edges_file": "authored_edges.json",
+                    "source": [
+                        {
+                            "source_id": "isl_python",
+                            "title": "An Introduction to Statistical Learning with Applications in Python",
+                            "citation": "storage/books/isl_python.md",
+                        }
+                    ],
+                },
+                payload["graph_manifest"],
+            )
+            artifact_paths = payload["artifact_paths"]
+            self.assertEqual(
+                "benchmark/domains/classical_supervised_ml_algorithms/graphs/v1",
+                artifact_paths["output_dir_uri"],
+            )
+            self.assertEqual(
+                payload["graph_manifest"],
+                _load_json(workspace_root / artifact_paths["graph_manifest_uri"]),
+            )
+            self.assertEqual(
+                candidate_payload["candidate_nodes"],
+                _load_json(workspace_root / artifact_paths["authored_nodes_uri"]),
+            )
+            self.assertEqual(
+                candidate_payload["candidate_edges"],
+                _load_json(workspace_root / artifact_paths["authored_edges_uri"]),
+            )
+            self.assertTrue(
+                (
+                    workspace_root
+                    / candidate_payload["artifact_paths"]["candidate_nodes_uri"]
+                ).exists()
+            )
+
+    def test_authoring_api_requires_explicit_confirmation_before_overwriting_reviewed_version(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_fixture_pdf(workspace_root)
+            _write_fixture_markdown(workspace_root, "## Train Test Split\n\nCached Markdown.")
+            fake_model_client = FixtureGraphModelClient()
+            client = _test_client(workspace_root, fake_model_client, FixtureSourceParser("unused"))
+            graph_payload = _generate_fixture_candidate(client, run_id="overwrite_run_001")
+            promotion_url = (
+                "/api/authoring/candidate-graphs/"
+                "classical_supervised_ml_algorithms/overwrite_run_001/promotion"
+            )
+            self.assertEqual(200, client.post(promotion_url, json={"version": "v1"}).status_code)
+            authored_nodes_path = (
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "graphs"
+                / "v1"
+                / "authored_nodes.json"
+            )
+            edited_node = {
+                **graph_payload["candidate_nodes"][0],
+                "name": "Train/Test Split Reviewed Again",
+            }
+            save_response = client.put(
+                "/api/authoring/candidate-graphs/classical_supervised_ml_algorithms/overwrite_run_001",
+                json={
+                    "candidate_nodes": [edited_node],
+                    "candidate_edges": [],
+                },
+            )
+            self.assertEqual(200, save_response.status_code)
+
+            conflict_response = client.post(promotion_url, json={"version": "v1"})
+
+            self.assertEqual(409, conflict_response.status_code)
+            self.assertEqual("Train Test Split", _load_json(authored_nodes_path)[0]["name"])
+
+            overwrite_response = client.post(
+                promotion_url,
+                json={"version": "v1", "overwrite": True},
+            )
+
+            self.assertEqual(200, overwrite_response.status_code)
+            self.assertEqual("Train/Test Split Reviewed Again", _load_json(authored_nodes_path)[0]["name"])
+
+    def test_authoring_api_revalidates_candidate_graph_before_promotion(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_fixture_pdf(workspace_root)
+            _write_fixture_markdown(workspace_root, "## Train Test Split\n\nCached Markdown.")
+            fake_model_client = FixtureGraphModelClient()
+            client = _test_client(workspace_root, fake_model_client, FixtureSourceParser("unused"))
+            graph_payload = _generate_fixture_candidate(client, run_id="invalid_promotion_run_001")
+            edges_path = workspace_root / graph_payload["artifact_paths"]["candidate_edges_uri"]
+            edges_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "edge_train_test_split_supports_missing_node",
+                            "source": "train_test_split",
+                            "target": "missing_node",
+                            "type": "supports",
+                            "rationale": "Invalid edge for promotion regression coverage.",
+                            "weight": 0.5,
+                            "curation_confidence": 0.5,
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            response = client.post(
+                "/api/authoring/candidate-graphs/classical_supervised_ml_algorithms/invalid_promotion_run_001/promotion",
+                json={"version": "v1"},
+            )
+
+            self.assertEqual(422, response.status_code)
+            self.assertIn("unknown target node", response.json()["detail"])
+            self.assertFalse(
+                (
+                    workspace_root
+                    / "benchmark"
+                    / "domains"
+                    / "classical_supervised_ml_algorithms"
+                    / "graphs"
+                    / "v1"
+                ).exists()
+            )
+
+    def test_authoring_api_allows_promotion_without_readable_optional_workflow_log(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_fixture_pdf(workspace_root)
+            _write_fixture_markdown(workspace_root, "## Train Test Split\n\nCached Markdown.")
+            fake_model_client = FixtureGraphModelClient()
+            client = _test_client(workspace_root, fake_model_client, FixtureSourceParser("unused"))
+            graph_payload = _generate_fixture_candidate(client, run_id="auditless_run_001")
+            workflow_log_path = workspace_root / graph_payload["artifact_paths"]["workflow_log_uri"]
+            workflow_log_path.write_text("not json", encoding="utf-8")
+
+            response = client.post(
+                "/api/authoring/candidate-graphs/classical_supervised_ml_algorithms/auditless_run_001/promotion",
+                json={"version": "v1"},
+            )
+
+            self.assertEqual(200, response.status_code)
+            self.assertEqual([], response.json()["graph_manifest"]["source"])
+
     def test_authoring_api_generates_markdown_when_cache_is_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -658,6 +829,19 @@ def _write_fixture_markdown(workspace_root: Path, text: str) -> Path:
     markdown_path.parent.mkdir(parents=True, exist_ok=True)
     markdown_path.write_text(text, encoding="utf-8")
     return markdown_path
+
+
+def _generate_fixture_candidate(client: TestClient, *, run_id: str):
+    response = client.post(
+        "/api/authoring/graph-candidates",
+        json={
+            "pdf_path": "books/isl_python.pdf",
+            "run_id": run_id,
+        },
+    )
+    if response.status_code != 200:
+        raise AssertionError(f"candidate generation failed: {response.text}")
+    return response.json()
 
 
 def _load_json(path: Path):

@@ -52,6 +52,34 @@ export type CandidateGraphPayload = {
   artifact_paths: GraphCandidateArtifactPaths;
 };
 
+export type GraphManifest = {
+  graph_id: string;
+  domain: string;
+  version: string;
+  promoted_from_candidate_run: string;
+  nodes_file: string;
+  edges_file: string;
+  source: {
+    source_id: string;
+    title: string;
+    citation?: string | null;
+  }[];
+};
+
+export type ReviewedGraphArtifactPaths = {
+  output_dir_uri: string;
+  graph_manifest_uri: string;
+  authored_nodes_uri: string;
+  authored_edges_uri: string;
+};
+
+export type CandidateGraphPromotionResponse = {
+  benchmark_domain: string;
+  run_id: string;
+  graph_manifest: GraphManifest;
+  artifact_paths: ReviewedGraphArtifactPaths;
+};
+
 export type GraphCandidateResponse = {
   workflow: string;
   material: {
@@ -80,6 +108,16 @@ export type GraphCandidateResponse = {
 export type ApiError = {
   message: string;
 };
+
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
+}
 
 export async function listSourceMaterials(): Promise<SourceMaterialRecord[]> {
   const payload = await requestJson<{ source_materials: SourceMaterialRecord[] }>("/api/authoring/source-materials");
@@ -166,11 +204,26 @@ export async function saveCandidateGraph(
   );
 }
 
+export async function promoteCandidateGraph(
+  graph: CandidateGraphPayload,
+  version: string,
+  overwrite = false
+): Promise<CandidateGraphPromotionResponse> {
+  return requestJson<CandidateGraphPromotionResponse>(
+    `/api/authoring/candidate-graphs/${encodeURIComponent(graph.benchmark_domain)}/${encodeURIComponent(graph.run_id)}/promotion`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version, overwrite })
+    }
+  );
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   if (!response.ok) {
     const detail = await readError(response);
-    throw new Error(detail);
+    throw new ApiRequestError(detail, response.status);
   }
   return response.json() as Promise<T>;
 }

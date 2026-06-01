@@ -74,3 +74,51 @@ class KnowledgeGraph(BaseModel):
     @property
     def node_ids(self) -> set[str]:
         return {node.id for node in self.nodes}
+
+
+class GraphManifestSource(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    source_id: str
+    title: str
+    citation: str | None = None
+
+    @field_validator("source_id", "title")
+    @classmethod
+    def _must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("citation")
+    @classmethod
+    def _optional_values_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
+class GraphManifest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    graph_id: str
+    domain: str
+    version: str
+    promoted_from_candidate_run: str
+    nodes_file: str = "authored_nodes.json"
+    edges_file: str = "authored_edges.json"
+    source: tuple[GraphManifestSource, ...] = Field(default_factory=tuple)
+
+    @field_validator(
+        "graph_id",
+        "domain",
+        "version",
+        "promoted_from_candidate_run",
+        "nodes_file",
+        "edges_file",
+    )
+    @classmethod
+    def _must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value

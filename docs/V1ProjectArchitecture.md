@@ -388,6 +388,7 @@ Artifact policy:
 - `fixtures/` 可以小而稳定，用于 tests 和 local development。
 - `candidate_graphs/` 和 `candidate_maps/` 是 review input，不进入 formal evaluation。
 - `graphs/v1/` 和 `ground_truth_maps/` 是 reviewed benchmark data。
+- Phase 3 graph promotion 将重新校验后的 candidate snapshot 复制到 `graphs/{version}/`，保留原 candidate run，并生成只绑定 metadata 与 node/edge 文件引用的 `graph_manifest.json`。覆盖已有 version 必须显式确认。
 - `experiments/runs/` 是 generated output，应避免混入人工 authored ground truth。
 - 大型 source PDFs 可以本地保存，正式数据只引用 source metadata 和 `Source Locator`。
 

@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  ApiRequestError,
   CandidateGraphPayload,
+  CandidateGraphPromotionResponse,
   CandidateGraphRunSummary,
   KnowledgeEdge,
   KnowledgeNode,
@@ -8,6 +10,7 @@ import {
   generateCandidateGraph,
   listCandidateGraphRuns,
   listSourceMaterials,
+  promoteCandidateGraph,
   readCandidateGraph,
   saveCandidateGraph,
   uploadSourceMaterial
@@ -40,6 +43,8 @@ export function CandidateGraphWorkbench() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [layoutVersion, setLayoutVersion] = useState(0);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [graphVersion, setGraphVersion] = useState("");
 
   useEffect(() => {
     refreshMaterials();
@@ -145,6 +150,46 @@ export function CandidateGraphWorkbench() {
       const saved = await saveCandidateGraph(graph);
       setGraph(saved);
       setNotice("Candidate graph saved.");
+    });
+  }
+
+  function openConfirmDialog() {
+    if (!graph) return;
+    setError(null);
+    setGraphVersion("");
+    setConfirmDialogOpen(true);
+  }
+
+  async function handleConfirm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!graph) return;
+    const version = graphVersion.trim();
+    if (!version) {
+      setError("Graph version is required.");
+      return;
+    }
+    await runTask("confirm", async () => {
+      const saved = await saveCandidateGraph(graph);
+      setGraph(saved);
+      let promotion: CandidateGraphPromotionResponse;
+      try {
+        promotion = await promoteCandidateGraph(saved, version);
+      } catch (taskError) {
+        if (!(taskError instanceof ApiRequestError) || taskError.status !== 409) {
+          throw taskError;
+        }
+        const overwrite = window.confirm(`Version "${version}" already exists. Overwrite it?`);
+        if (!overwrite) {
+          setConfirmDialogOpen(false);
+          setGraphVersion("");
+          setNotice(`Promotion of ${version} cancelled. Candidate graph saved.`);
+          return;
+        }
+        promotion = await promoteCandidateGraph(saved, version, true);
+      }
+      setConfirmDialogOpen(false);
+      setGraphVersion("");
+      setNotice(`Published to ${promotion.artifact_paths.output_dir_uri}`);
     });
   }
 
@@ -330,6 +375,7 @@ export function CandidateGraphWorkbench() {
               <button type="button" onClick={addEdge} disabled={!graph || graph.candidate_nodes.length < 2}>Add Edge</button>
               <button type="button" onClick={deleteSelection} disabled={!selection}>Delete</button>
               <button type="button" onClick={handleSave} disabled={!graph || busy !== null}>Save</button>
+              <button type="button" onClick={openConfirmDialog} disabled={!graph || busy !== null}>Confirm</button>
             </div>
           </div>
           {graph ? (
@@ -361,6 +407,36 @@ export function CandidateGraphWorkbench() {
           {!selectedNode && !selectedEdge && <p className="empty">Select a node or edge.</p>}
         </aside>
       </section>
+      {confirmDialogOpen && graph && (
+        <div className="dialog-backdrop">
+          <form className="dialog" onSubmit={handleConfirm}>
+            <h2>Confirm Reviewed Graph</h2>
+            <p>Save the current candidate edits and publish them as a reviewed graph version.</p>
+            <label>
+              Graph Version
+              <input
+                autoFocus
+                value={graphVersion}
+                onChange={(event) => setGraphVersion(event.target.value)}
+                placeholder="v1"
+                pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
+                required
+              />
+            </label>
+            <div className="button-row dialog-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setConfirmDialogOpen(false)}
+                disabled={busy !== null}
+              >
+                Cancel
+              </button>
+              <button type="submit" disabled={busy !== null}>Confirm</button>
+            </div>
+          </form>
+        </div>
+      )}
     </main>
   );
 }
