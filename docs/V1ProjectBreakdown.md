@@ -19,7 +19,7 @@ The implementation should prioritize a narrow vertical slice first, but any smal
 | 0. Domain decision baseline | M0: v1 design baseline accepted | Existing glossary and ADRs are consistent enough to guide implementation |
 | 1. Schema and validation spine | M1: core structured objects validate | JSON fixtures for graph, maps, evidence, manifests, and scoring config pass schema checks |
 | 2. Graph authoring workflow | M2: source-grounded candidate graph workflow runs | Workflow produces `candidate_nodes.json` and `candidate_edges.json` from authoritative source material |
-| 3. Authored graph review and promotion | M3: reviewed v1 graph exists | Reviewed `authored_nodes.json`, `authored_edges.json`, and optional `graph_manifest.json` are available |
+| 3. Authored graph review and promotion | M3: reviewed v1 graph exists | Reviewed `authored_nodes.json`, `authored_edges.json`, and `graph_manifest.json` are available |
 | 4. Ground-truth map authoring | M4: reviewed hidden maps exist | Each map covers every node in the episode graph and cites hidden evidence |
 | 5. Episode runtime contract | M5: evaluation episode manifests validate | Manifests bind graph, hidden map, profile context, turn budget, interaction rule, and scoring profile |
 | 6. User simulator | M6: simulator can answer bounded diagnostic turns | Simulator answers naturally without leaking mastery labels, hidden evidence ids, or full maps |
@@ -31,16 +31,17 @@ The implementation should prioritize a narrow vertical slice first, but any smal
 
 ## Graph Authoring API Surface
 
-Before the formal research workbench is complete, the backend exposes a narrow authoring run endpoint for manually exercising the real graph authoring workflow. This surface is for producing reviewable candidate graph artifacts, not for formal evaluation runtime or automatic promotion into reviewed benchmark data.
+Before the formal research workbench is complete, the backend exposes narrow authoring and review endpoints for manually exercising the real graph authoring workflow and explicitly promoting reviewed candidate snapshots. This surface is separate from formal evaluation runtime.
 
 Current opened endpoint:
 
 - `GET /health`: backend process health.
 - `POST /api/authoring/graph-candidates`: reads one local textbook PDF by relative path under repository-level `storage/`, resolves same-directory same-stem `Parsed Source Markdown`, calls MinerU to create or regenerate that Markdown when needed, sends the Markdown text only to the Node Extraction Agent Step using the request-level `client_provider`, and returns `Source-Grounded Node Skeletons`, candidate `Knowledge Nodes`, candidate `Knowledge Edges`, Markdown cache metadata, and a compact run log summary. Later workflow steps consume structured intermediate artifacts rather than `SourceMaterial.text`. MinerU standard mode publishes the local PDF through a private Aliyun OSS staging object and short-lived signed URL, submits that URL to MinerU v4, then best-effort deletes the staging object. PDFs above `KNOWACT_MINERU_MAX_PAGES_PER_TASK` are split locally into chunks, parsed through separate MinerU tasks, and joined back into one Parsed Source Markdown. When `write_artifacts=true`, it writes `candidate_nodes.json`, `candidate_edges.json`, the sidecar `workflow_log.json`, validation-passed `intermediate/` artifacts, and per-step `agent_traces/{step}/` raw/parser artifacts under a candidate graph run directory by default; only the node and edge files are candidate graph review artifacts.
+- `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`: revalidates one saved candidate graph run, copies its node and edge lists into `graphs/{version}/` as reviewed authored graph artifacts, and generates `graph_manifest.json`. Publishing over an existing version requires an explicit `overwrite=true` retry after user confirmation.
 
 Guardrails:
 
-- The authoring API may call graph authoring workflows but must not promote artifacts into reviewed benchmark data.
+- Candidate generation must not automatically promote artifacts into reviewed benchmark data; Phase 3 promotion requires an explicit benchmark-author confirmation action.
 - The authoring API must stay visibly separate from future evaluation runtime routes.
 - Evaluation runtime endpoints must continue to load only reviewed `Authored Knowledge Graphs` and reviewed `Ground-Truth Knowledge Maps`.
 - PDF material requests must remain constrained to `storage/`, reject path traversal, and treat local books and generated Markdown as authoring inputs rather than reviewed benchmark artifacts.
@@ -135,7 +136,7 @@ Milestone M3:
 
 - Benchmark author review accepts, edits, or rejects candidate nodes and edges.
 - Reviewed graph data is stored as separate `authored_nodes.json` and `authored_edges.json` JSON list files.
-- Optional `graph_manifest.json` references graph id, version, source metadata, and the separate node/edge files.
+- `graph_manifest.json` references graph id, version, originating candidate run, optional source metadata, and the separate node/edge files.
 - Edge `curation_confidence` values are accepted or revised by the benchmark author.
 
 Review checklist:
@@ -146,14 +147,19 @@ Review checklist:
 - `contrasts_with` edges are not duplicated in both directions.
 - `part_of`, `prerequisite_for`, and `supports` are not used as generic relatedness labels.
 
-Decision point:
+Resolved `Graph File Layout`:
 
-- Resolve a lightweight `Graph File Layout` before promoting the first reviewed graph, because ADRs intentionally deferred directory paths.
+- Reviewed graph versions are published under `benchmark/domains/{benchmark_domain}/graphs/{version}/`.
+- Each reviewed graph version directory contains `graph_manifest.json`, `authored_nodes.json`, and `authored_edges.json`.
+- The benchmark author supplies the graph version during promotion; the implementation derives the graph id from the benchmark domain and version.
+- Promoting to an existing graph version requires an explicit overwrite confirmation; a normal promotion request must not silently replace reviewed graph artifacts.
+- Promotion copies the validated candidate node and edge files into the reviewed graph version directory as a published snapshot; the originating candidate graph run remains available for audit and later inspection.
+- `graph_manifest.json` records the originating candidate graph run. When the candidate run has a readable `workflow_log.json`, promotion also copies its source metadata into the manifest; missing optional audit metadata does not block Phase 3 promotion.
 
 Implementation note:
 
-- Structures to implement: `backend/knowact/storage/` repositories for candidate and reviewed graph files, review helpers for edited node/edge lists, and reviewed graph artifacts such as `graph_manifest.json`, `authored_nodes.json`, and `authored_edges.json`.
-- Interfaces to open: initially read-only inspection of candidate and reviewed graphs through the future stable API; promotion should remain manual or review-gated until the review workflow is explicit.
+- Implemented promotion slice: `backend/knowact/authoring/review_promotion.py` revalidates saved candidate node/edge files and builds `graph_manifest.json`; `backend/knowact/storage/reviewed_graphs.py` reads and publishes artifact snapshots.
+- Opened review-gated interface: `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`. Read-only inspection of reviewed graphs remains a future stable API addition.
 - Authoring API boundary: the Phase 2 candidate endpoint may create candidate files for review, but it must not create reviewed `authored_nodes.json` or `authored_edges.json`.
 
 ## Phase 4: Ground-Truth Map Authoring
@@ -380,8 +386,8 @@ M0 Domain decisions
 1. Should the first runnable implementation use a 5-8 node development fixture before the formal 30-50 node v1 graph?
    - Recommended answer: yes. It protects implementation speed while keeping the fixture clearly outside formal v1 evaluation.
 
-2. Should `Graph File Layout` be resolved before the first reviewed graph is promoted?
-   - Recommended answer: yes, but keep it lightweight. ADRs already fixed file contents and split storage; only directory placement remains.
+2. Resolved: `Graph File Layout` is lightweight and versioned under `benchmark/domains/{benchmark_domain}/graphs/{version}/`.
+   - Promotion copies validated candidate snapshots into reviewed graph data files and requires explicit confirmation before overwriting an existing version.
 
 3. Should the frontend wait until after the first scorer and report path exists?
    - Recommended answer: mostly yes. A minimal review helper is fine, but the core benchmark validity depends on schemas, authored data, simulator, agents, and scoring first.

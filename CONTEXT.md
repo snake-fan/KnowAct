@@ -265,12 +265,16 @@ The reviewed node and edge JSON list files that store an **Authored Knowledge Gr
 _Avoid_: combined graph blob, manifest-only graph, candidate files
 
 **Graph Manifest**:
-An optional metadata file that can name a graph version and reference its separate authored node and edge files.
+A metadata file that names a graph version and references its separate authored node and edge files.
 _Avoid_: combined node/edge storage, scoring override, source of node contents
 
 **Graph File Layout**:
 The repository or dataset directory structure used to place graph data files.
 _Avoid_: v1 schema requirement, implicit domain versioning, hardcoded path convention
+
+**Reviewed Graph Promotion**:
+The explicit benchmark-author confirmation that publishes a validated **Candidate Knowledge Graph** snapshot as one version of an **Authored Knowledge Graph**.
+_Avoid_: candidate save, automatic graph promotion, evaluation runtime
 
 **Candidate Knowledge Graph**:
 A draft graph produced during authoring before benchmark-author review.
@@ -467,8 +471,8 @@ _Avoid_: ground-truth edge, authored edge
 - V1 **Authored Graph Data Files** are typically `authored_nodes.json` and `authored_edges.json`.
 - A **Graph Manifest** may reference separate **Authored Graph Data Files** for graph id, version, source, and file binding metadata.
 - A **Graph Manifest** must not inline or replace the node and edge JSON lists.
-- V1 does not prescribe a **Graph File Layout** yet; directory paths will be specified later by the benchmark author.
-- Code and documentation should not assume a fixed graph directory path until **Graph File Layout** is explicitly defined.
+- V1 uses a lightweight **Graph File Layout** that publishes reviewed graph versions under `benchmark/domains/{benchmark_domain}/graphs/{version}/`.
+- **Reviewed Graph Promotion** preserves the originating **Candidate Knowledge Graph** artifacts and requires explicit confirmation before overwriting an existing graph version.
 - The v1 **Graph Authoring Pipeline** is implemented through a **Graph Authoring Agent Workflow**.
 - The **Graph Authoring Agent Workflow** contains a **Node Extraction Agent Step**, a **Node Rubric Authoring Agent Step**, and an **Edge Proposal Agent Step**.
 - The **Node Extraction Agent Step** may read the authoritative PDF or source material directly rather than relying on pre-cut chunks.

@@ -680,27 +680,28 @@ authored_edges.json = reviewed Knowledge Edge[]
 
 也就是说，candidate 阶段和 authored 阶段都保持 nodes / edges 分文件存储；review 过程可以通过复制、改名或发布目录来完成状态转换，但不把 node list 和 edge list 合并成一个大 JSON。
 
-v1 暂不规定这些文件在仓库或数据集中的目录结构。当前只固定文件内容 schema 和 nodes / edges 分文件存储；具体 `Graph File Layout` 由 benchmark author 后续指定。代码和文档在该布局明确前不应假设固定目录路径。
+Phase 3 使用轻量 `Graph File Layout`：reviewed graph version 发布到 `benchmark/domains/{benchmark_domain}/graphs/{version}/`。每个 version 目录包含 `authored_nodes.json`、`authored_edges.json` 和 `graph_manifest.json`。Promotion 复制已经重新校验的 candidate snapshot，不删除原 candidate run；覆盖已有 version 前必须由 benchmark author 显式确认。
 
-如果后续需要稳定记录 graph id、版本、source、文件路径或发布时间，可以额外使用轻量 `graph_manifest.json`：
+轻量 `graph_manifest.json` 用于稳定记录 graph id、版本、来源 candidate run、source metadata 和文件路径：
 
 ``` json
 {
   "graph_id": "kg_classical_supervised_ml_algorithms_v1",
   "domain": "classical_supervised_ml_algorithms",
   "version": "v1",
+  "promoted_from_candidate_run": "run_20260527T045054404861Z",
   "nodes_file": "authored_nodes.json",
   "edges_file": "authored_edges.json",
   "source": [
     {
-      "kind": "textbook",
+      "source_id": "isl_python",
       "title": "An Introduction to Statistical Learning with Applications in Python"
     }
   ]
 }
 ```
 
-`graph_manifest.json` 只负责绑定元数据和文件引用，不内联 nodes / edges，也不承载 scoring override。
+`graph_manifest.json` 只负责绑定元数据和文件引用，不内联 nodes / edges，也不承载 scoring override。Phase 3 中，candidate run 缺少可读取的 `workflow_log.json` 时可以省略可选 source metadata，不阻止人工确认后的 promotion。
 
 v1 的 primary authoritative source 选定为：
 

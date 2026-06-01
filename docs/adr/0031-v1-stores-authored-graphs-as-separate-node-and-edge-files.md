@@ -1,6 +1,6 @@
 # V1 stores authored graphs as separate node and edge files
 
-After benchmark-author review, KnowAct v1 stores an authored knowledge graph as separate JSON list files for nodes and edges, typically `authored_nodes.json` and `authored_edges.json`. A lightweight `graph_manifest.json` may exist to bind graph id, version, source metadata, and file paths, but it must not inline or replace the node and edge lists. V1 does not prescribe repository or dataset directory layout yet; the benchmark author will specify that later.
+After benchmark-author review, KnowAct v1 stores an authored knowledge graph as separate JSON list files for nodes and edges, typically `authored_nodes.json` and `authored_edges.json`. A lightweight `graph_manifest.json` may exist to bind graph id, version, source metadata, and file paths, but it must not inline or replace the node and edge lists. At the time of this decision, v1 did not prescribe a repository or dataset directory layout; the Phase 3 follow-up below resolves that deferred choice.
 
 **Considered Options**
 
@@ -12,3 +12,7 @@ After benchmark-author review, KnowAct v1 stores an authored knowledge graph as 
 **Consequences**
 
 Node and edge schemas remain independently inspectable and easy to diff from their candidate versions. A manifest can still provide stable graph metadata for runners or datasets, but graph content remains in the separate authored node and edge files. Implementations should avoid hardcoding graph directory paths until a graph file layout is explicitly defined.
+
+**Follow-up**
+
+Phase 3 later resolved the lightweight graph file layout as `benchmark/domains/{benchmark_domain}/graphs/{version}/`, with `graph_manifest.json`, `authored_nodes.json`, and `authored_edges.json` in each reviewed version directory.

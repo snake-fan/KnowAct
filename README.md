@@ -283,9 +283,9 @@ The V1 implementation has started with the schema and validation spine:
 - `backend/knowact/validation/`: cross-object validators for graph references, map coverage/evidence support, and episode manifest constraints.
 - `backend/knowact/authoring/`: the Phase 2 graph authoring workflow spine, with node extraction, node rubric authoring, edge proposal, candidate file export boundaries, and separate `templates/` and `parsers/` modules for agent prompts and raw model outputs.
 - `backend/knowact/llm/`: a model-client interface plus OpenAI and DeepSeek SDK-backed clients for text-based authoring steps.
-- `backend/knowact/storage/`: local artifact and material path helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
+- `backend/knowact/storage/`: local artifact, material path, and reviewed-graph promotion helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
 - `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
-- `frontend/`: a React/Vite Candidate Graph Review Workbench for uploading PDF source materials, generating candidate graphs, visualizing nodes/edges, editing candidate graph artifacts, and saving validated review edits.
+- `frontend/`: a React/Vite Candidate Graph Review Workbench for uploading PDF source materials, generating candidate graphs, visualizing nodes/edges, editing candidate graph artifacts, saving validated review edits, and explicitly promoting reviewed graph versions.
 - `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`: a 5-node development fixture for schema and validator checks, not the formal 30-50 node v1 graph.
 - `test/`: `unittest` coverage for the public schema and validation APIs.
 
@@ -349,6 +349,7 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 - `POST /api/authoring/source-materials` and `GET /api/authoring/source-materials`, which upload PDF source materials into `storage/source_materials/{source_id}/original.pdf`, write `metadata.json`, and list registered source materials for the workbench.
 - `POST /api/authoring/graph-candidates`, which reads one PDF by relative path under `storage/`, resolves same-directory same-stem Parsed Source Markdown, calls MinerU to create or regenerate that Markdown when needed, sends the Markdown text only to the node extraction step, returns source-grounded skeletons, candidate nodes, candidate edges, Markdown cache metadata, and a compact run log summary, and writes `candidate_nodes.json`, `candidate_edges.json`, validation-passed `intermediate/` artifacts, and sidecar `workflow_log.json` by default. The workflow log records step status and links to `agent_traces/{step}/model_raw_output.txt`, `agent_traces/{step}/parser_output.json`, and batch trace artifacts where applicable, while still avoiding full prompt/source-material text. MinerU standard mode publishes the local PDF through a private Aliyun OSS staging object and short-lived signed URL before submitting the URL to MinerU; PDFs above `KNOWACT_MINERU_MAX_PAGES_PER_TASK` are split into chunks and their Markdown results are joined in page order. Only the node and edge files are candidate graph review artifacts. Example request:
 - `GET /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}` and `PUT /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}`, which read and validate-save candidate graph review artifacts. The save endpoint overwrites `candidate_nodes.json` and `candidate_edges.json` only after schema and graph validation pass.
+- `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`, which revalidates saved candidate artifacts, copies them into `benchmark/domains/{benchmark_domain}/graphs/{version}/` as `authored_nodes.json` and `authored_edges.json`, and generates `graph_manifest.json`. Existing reviewed versions return `409 Conflict` unless the caller retries with `overwrite=true` after explicit confirmation.
 
 ```json
 {
@@ -359,7 +360,7 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 }
 ```
 
-PDF source material requests are constrained to `storage/` and reject absolute paths or `..` traversal. For `storage/books/isl_python.pdf`, the default Markdown cache path is `storage/books/isl_python.md`; existing Markdown is reused unless `force_reparse=true`. The LLM path uses Markdown text, not PDF base64 `input_file` or OpenAI `file_id`, and `client_provider` currently accepts `openai` or `deepseek` with `openai` as the default. OSS staging objects are temporary, private-bucket transport for MinerU URL parsing; signed URLs are not returned in API responses or workflow logs. The API produces Candidate Knowledge Graph artifacts only; it does not promote them into reviewed authored graph data.
+PDF source material requests are constrained to `storage/` and reject absolute paths or `..` traversal. For `storage/books/isl_python.pdf`, the default Markdown cache path is `storage/books/isl_python.md`; existing Markdown is reused unless `force_reparse=true`. The LLM path uses Markdown text, not PDF base64 `input_file` or OpenAI `file_id`, and `client_provider` currently accepts `openai` or `deepseek` with `openai` as the default. OSS staging objects are temporary, private-bucket transport for MinerU URL parsing; signed URLs are not returned in API responses or workflow logs. Candidate generation never auto-promotes its outputs; reviewed graph publication is a separate Phase 3 confirmation action in the workbench.
 
 Implemented / planned components include:
 
@@ -369,6 +370,7 @@ Implemented / planned components include:
 - [x] OpenAI and DeepSeek SDK client boundaries for LLM-backed steps
 - [x] FastAPI authoring API for real source-backed graph candidate runs
 - [x] Candidate Graph Review Workbench frontend
+- [x] Phase 3 review-gated authored graph promotion with generated manifests
 - [ ] Ground-truth map authoring
 - [ ] LLM-based profile generation
 - [ ] Human verification protocol
