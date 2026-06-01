@@ -25,14 +25,24 @@ class UserKnowledgeState(BaseModel):
 
     node_id: str
     mastery_level: MasteryLevel
-    confidence: float = Field(ge=0.0, le=1.0)
     evidence_refs: tuple[str, ...] = Field(default_factory=tuple)
+    misconceptions: tuple[str, ...]
+    unknowns: tuple[str, ...]
 
     @field_validator("node_id")
     @classmethod
     def _must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("must not be blank")
+        return value
+
+    @field_validator("misconceptions", "unknowns")
+    @classmethod
+    def _items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not item.strip() for item in value):
+            raise ValueError("must not contain blank items")
+        if len(value) != len(set(value)):
+            raise ValueError("must not contain duplicate items")
         return value
 
 

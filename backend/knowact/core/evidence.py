@@ -1,12 +1,11 @@
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class EvidenceType(StrEnum):
-    GROUND_TRUTH = "ground_truth"
+    GROUND_TRUTH_PROFILE = "ground_truth_profile"
     INTERACTION_OBSERVATION = "interaction_observation"
-    SYNTHETIC = "synthetic"
 
 
 class EvidenceKind(StrEnum):
@@ -18,8 +17,8 @@ class EvidenceKind(StrEnum):
 
 
 class EvidenceVisibility(StrEnum):
-    HIDDEN = "hidden"
-    VISIBLE = "visible"
+    SIMULATOR_ONLY = "simulator_only"
+    TESTED_AGENT = "tested_agent"
 
 
 class EvidenceRecord(BaseModel):
@@ -27,15 +26,22 @@ class EvidenceRecord(BaseModel):
 
     id: str
     node_id: str
-    type: EvidenceType
-    kind: EvidenceKind
+    evidence_type: EvidenceType
+    evidence_kind: EvidenceKind
     visibility: EvidenceVisibility
-    summary: str
-    source_turn_id: str | None = None
+    signal: str
+    turn_id: str | None = None
 
-    @field_validator("id", "node_id", "summary")
+    @field_validator("id", "node_id", "signal")
     @classmethod
     def _must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("turn_id")
+    @classmethod
+    def _optional_value_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
             raise ValueError("must not be blank")
         return value

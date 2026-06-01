@@ -5,74 +5,83 @@
     {
       "node_id": "train_test_split",
       "mastery_level": "L2",
-      "confidence": 0.76,
-      "evidence_refs": ["ev_train_test_split_self_report"]
+      "evidence_refs": ["ev_train_test_split_self_report"],
+      "misconceptions": [],
+      "unknowns": []
     },
     {
       "node_id": "linear_regression",
       "mastery_level": "L3",
-      "confidence": 0.82,
-      "evidence_refs": ["ev_linear_regression_prior_answer"]
+      "evidence_refs": ["ev_linear_regression_prior_answer"],
+      "misconceptions": [],
+      "unknowns": []
     },
     {
       "node_id": "logistic_regression",
       "mastery_level": "L1",
-      "confidence": 0.68,
-      "evidence_refs": ["ev_logistic_regression_misconception"]
+      "evidence_refs": ["ev_logistic_regression_misconception"],
+      "misconceptions": [
+        "Treats logistic regression as linear regression with a categorical target."
+      ],
+      "unknowns": [
+        "Cannot explain the sigmoid link between a linear score and a probability."
+      ]
     },
     {
       "node_id": "bias_variance_tradeoff",
       "mastery_level": "L2",
-      "confidence": 0.72,
-      "evidence_refs": ["ev_bias_variance_worked_example"]
+      "evidence_refs": ["ev_bias_variance_worked_example"],
+      "misconceptions": [],
+      "unknowns": []
     },
     {
       "node_id": "confusion_matrix",
       "mastery_level": "L3",
-      "confidence": 0.79,
-      "evidence_refs": ["ev_confusion_matrix_prior_answer"]
+      "evidence_refs": ["ev_confusion_matrix_prior_answer"],
+      "misconceptions": [],
+      "unknowns": []
     }
   ],
   "evidence": [
     {
       "id": "ev_train_test_split_self_report",
       "node_id": "train_test_split",
-      "type": "ground_truth",
-      "kind": "self_report",
-      "visibility": "hidden",
-      "summary": "The user reports using train/test split by copying examples but cannot explain leakage risks."
+      "evidence_type": "ground_truth_profile",
+      "evidence_kind": "self_report",
+      "visibility": "simulator_only",
+      "signal": "The user reports using train/test split by copying examples but cannot explain leakage risks."
     },
     {
       "id": "ev_linear_regression_prior_answer",
       "node_id": "linear_regression",
-      "type": "ground_truth",
-      "kind": "prior_answer",
-      "visibility": "hidden",
-      "summary": "The user interprets simple slopes correctly but gives weak answers about assumptions."
+      "evidence_type": "ground_truth_profile",
+      "evidence_kind": "prior_answer",
+      "visibility": "simulator_only",
+      "signal": "The user interprets simple slopes correctly but gives weak answers about assumptions."
     },
     {
       "id": "ev_logistic_regression_misconception",
       "node_id": "logistic_regression",
-      "type": "ground_truth",
-      "kind": "misconception_trace",
-      "visibility": "hidden",
-      "summary": "The user thinks logistic regression is mainly linear regression with a categorical target column."
+      "evidence_type": "ground_truth_profile",
+      "evidence_kind": "misconception_trace",
+      "visibility": "simulator_only",
+      "signal": "The user thinks logistic regression is mainly linear regression with a categorical target column."
     },
     {
       "id": "ev_bias_variance_worked_example",
       "node_id": "bias_variance_tradeoff",
-      "type": "ground_truth",
-      "kind": "worked_example",
-      "visibility": "hidden",
-      "summary": "The user can identify overfitting from training and test error but cannot explain expected error terms."
+      "evidence_type": "ground_truth_profile",
+      "evidence_kind": "worked_example",
+      "visibility": "simulator_only",
+      "signal": "The user can identify overfitting from training and test error but cannot explain expected error terms."
     },
     {
       "id": "ev_confusion_matrix_prior_answer",
       "node_id": "confusion_matrix",
-      "type": "ground_truth",
-      "kind": "prior_answer",
-      "visibility": "hidden",
-      "summary": "The user correctly explains false positives and false negatives in a binary classifier example."
+      "evidence_type": "ground_truth_profile",
+      "evidence_kind": "prior_answer",
+      "visibility": "simulator_only",
+      "signal": "The user correctly explains false positives and false negatives in a binary classifier example."
     }
   ]
 }

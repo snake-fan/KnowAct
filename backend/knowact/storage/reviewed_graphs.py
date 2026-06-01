@@ -4,7 +4,6 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
-from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
 
@@ -29,7 +28,7 @@ class CandidateGraphArtifactError(ValueError):
 
 
 class ReviewedGraphPromotionConflictError(FileExistsError):
-    """Raised when promotion would overwrite a reviewed graph without approval."""
+    """Raised when promotion would overwrite an immutable reviewed graph version."""
 
 
 @dataclass(frozen=True)
@@ -85,13 +84,12 @@ def publish_reviewed_graph(
     manifest: GraphManifest,
     nodes: tuple[KnowledgeNode, ...],
     edges: tuple[KnowledgeEdge, ...],
-    overwrite: bool = False,
 ) -> ReviewedGraphPromotion:
     benchmark_domain = _validate_safe_id(benchmark_domain, "benchmark_domain")
     version = _validate_safe_id(version, "version")
     graph_root = workspace_root / "benchmark" / "domains" / benchmark_domain / "graphs"
     output_dir = graph_root / version
-    if output_dir.exists() and not overwrite:
+    if output_dir.exists():
         raise ReviewedGraphPromotionConflictError(f"Reviewed graph version {version} already exists")
 
     graph_root.mkdir(parents=True, exist_ok=True)
@@ -138,18 +136,9 @@ def read_optional_manifest_sources(candidate_dir: Path) -> tuple[GraphManifestSo
 
 
 def _publish_staged_directory(staging_dir: Path, output_dir: Path) -> None:
-    if not output_dir.exists():
-        staging_dir.replace(output_dir)
-        return
-
-    backup_dir = output_dir.with_name(f".{output_dir.name}.backup-{uuid4().hex}")
-    output_dir.replace(backup_dir)
-    try:
-        staging_dir.replace(output_dir)
-    except Exception:
-        backup_dir.replace(output_dir)
-        raise
-    _remove_path(backup_dir)
+    if output_dir.exists():
+        raise ReviewedGraphPromotionConflictError(f"Reviewed graph version {output_dir.name} already exists")
+    staging_dir.replace(output_dir)
 
 
 def _read_json_list(path: Path) -> list[object]:

@@ -187,10 +187,9 @@ class CandidateGraphSaveRequest(BaseModel):
 
 
 class CandidateGraphPromotionRequest(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     version: str
-    overwrite: bool = False
 
     @field_validator("version")
     @classmethod
@@ -388,7 +387,6 @@ def build_authoring_router(
                 benchmark_domain=benchmark_domain,
                 run_id=run_id,
                 version=request.version,
-                overwrite=request.overwrite,
             )
         except CandidateGraphNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

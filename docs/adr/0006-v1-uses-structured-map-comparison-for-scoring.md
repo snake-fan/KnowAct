@@ -5,7 +5,7 @@ KnowAct v1 scores the tested agent by automatically comparing quantifiable user-
 **Considered Options**
 
 - Use an evaluator agent or LLM judge to rate the reconstructed profile.
-- Use structured map comparison over mastery levels, confidence, misconceptions, and evidence support.
+- Use structured map comparison over mastery levels, misconceptions, and evidence support.
 
 **Consequences**
 

@@ -368,7 +368,7 @@ class V1AuthoringApiTest(unittest.TestCase):
                 ).exists()
             )
 
-    def test_authoring_api_requires_explicit_confirmation_before_overwriting_reviewed_version(self):
+    def test_authoring_api_rejects_overwriting_reviewed_version(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_fixture_pdf(workspace_root)
@@ -408,13 +408,13 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertEqual(409, conflict_response.status_code)
             self.assertEqual("Train Test Split", _load_json(authored_nodes_path)[0]["name"])
 
-            overwrite_response = client.post(
+            unsupported_overwrite_response = client.post(
                 promotion_url,
                 json={"version": "v1", "overwrite": True},
             )
 
-            self.assertEqual(200, overwrite_response.status_code)
-            self.assertEqual("Train/Test Split Reviewed Again", _load_json(authored_nodes_path)[0]["name"])
+            self.assertEqual(422, unsupported_overwrite_response.status_code)
+            self.assertEqual("Train Test Split", _load_json(authored_nodes_path)[0]["name"])
 
     def test_authoring_api_revalidates_candidate_graph_before_promotion(self):
         with tempfile.TemporaryDirectory() as temp_dir:

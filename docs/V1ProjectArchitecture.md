@@ -177,7 +177,57 @@ core
 - `output.py`: candidate graph file export, especially `candidate_nodes.json` and `candidate_edges.json`, plus sidecar `workflow_log.json` export.
 - `sources.py`: authoring source preparation, including resolving cached `Parsed Source Markdown`, splitting PDFs that exceed MinerU's per-task page limit into local chunks, temporarily publishing local PDFs or PDF chunks through private Aliyun OSS signed URLs for MinerU standard-mode parsing, joining chunk Markdown in page order, calling MinerU when a same-directory same-stem Markdown file is missing or explicitly regenerated, and keeping source parsing outside the `llm/` completion boundary.
 - `openai_workflow.py`: shared graph authoring workflow wiring behind the `ModelClient` interface, with provider selection for OpenAI and DeepSeek clients.
-- Later, add `map_authoring.py` and `review_export.py` when ground-truth map generation and human review promotion need concrete workflow support.
+- Later, add `map_authoring.py` and `review_export.py` when ground-truth map generation and human review promotion need concrete workflow support. The initial map-authoring contract is intentionally single-map: one generation run receives `benchmark_domain`, one reviewed `graph_version`, one confirmed `user_id`, optional `run_id`, and `client_provider`. `map_id` is assigned only during reviewed-map promotion. The normal orchestration starts from a benchmark-author supplied rough user description, generates a reviewable `Profile Context`, and applies separate `Profile Context Validation` and explicit benchmark-author `Profile Context Confirmation` gates before invoking candidate-map generation. Candidate-map generation remains an independently callable authoring capability for focused debugging. Cohort generation remains an outer orchestration concern that can repeat the single-map contract.
+- `Profile Context` is a structured JSON artifact with `user_id`, `benchmark_domain`, readable `summary`, `background`, `prior_experience`, `goals`, and `preferences`. It carries coherence inputs for map authoring and later simulation, not node-level mastery values.
+- Initial profile-context validation is deterministic structural validation: nonblank summary, at least one nonblank background item, present optionally empty prior-experience list, at least one nonblank goal, present optionally empty preferences list, benchmark-domain equality with the artifact path, and forbidden extra fields. It does not call an LLM validator or use brittle text blacklists.
+- Profile-context authoring receives the rough user description, benchmark-domain identity, and optional domain summary only. It does not receive graph nodes, node rubrics, or edges. Candidate-map generation is the first map-authoring step that receives the confirmed `Profile Context` together with the complete reviewed `Authored Knowledge Graph`.
+- Candidate-map generation identifies its graph input by `benchmark_domain` and `graph_version`, then loads the reviewed snapshot from `benchmark/domains/{benchmark_domain}/graphs/{graph_version}/`. Standalone debugging uses the same reviewed-graph lookup path and must not accept uploaded or inline node and edge JSON payloads.
+- Candidate-map generation identifies profile input by `user_id`, then loads a saved and confirmed `Profile Context` artifact. Standalone debugging uses the same lookup and confirmation boundary and must not accept inline profile-context JSON payloads.
+- `Profile Context Confirmation` publishes an immutable snapshot under `benchmark/domains/{benchmark_domain}/users/{user_id}/profile_context.json`. Any later edit must publish a new domain-unique `user_id`; map generation and episodes keep referring to their original snapshot.
+- Profile-context confirmation never overwrites an existing `user_id` and does not expose `overwrite=true`.
+- One candidate profile-context run may be confirmed at most once. Another synthetic user requires a new candidate profile-context run so distinct user ids do not alias one draft.
+- Keep confirmed profile-context storage lightweight in the initial slice: `profile_context.json` is the immutable snapshot and no separate profile-context manifest is required. Candidate profile-context runs retain debugging artifacts.
+- Candidate profile-context generation uses a run id only. `Profile Context Confirmation` is where the benchmark author assigns formal `user_id`, so discarded persona drafts do not create synthetic-user identities.
+- Candidate profile-context artifacts do not contain `user_id` before confirmation. Their `PUT` endpoint edits persona content only: `summary`, `background`, `prior_experience`, `goals`, and `preferences`. Run identity and benchmark domain remain fixed.
+- Candidate profile-context `PUT` overwrites the current draft file in place. Do not retain candidate-profile revisions in the initial slice; immutability starts when confirmation publishes `users/{user_id}/profile_context.json`.
+- Confirmed profile-context snapshots bind `benchmark_domain` but remain independent of `graph_version`, allowing the same synthetic user profile to drive map generation against later reviewed graph versions in the same domain.
+- Candidate profile-context runs live under `benchmark/domains/{benchmark_domain}/candidate_profile_contexts/{run_id}/`. Candidate-map runs live under `benchmark/domains/{benchmark_domain}/candidate_maps/{run_id}/` with `candidate_map.json`, `consistency_warnings.json`, `workflow_log.json`, optional `intermediate/`, and optional `agent_traces/`. They are discardable synthetic samples: benchmark-author review accepts a generated candidate unchanged for promotion or rejects it. Poor candidates should be regenerated after improving profile input or workflow behavior rather than manually patched. Explicit benchmark-author promotion assigns a domain-unique `map_id` and publishes immutable reviewed snapshots under `benchmark/domains/{benchmark_domain}/ground_truth_maps/{map_id}/` with `ground_truth_map.json` and `map_manifest.json`.
+- Reviewed-map promotion never overwrites an existing `map_id` and does not expose `overwrite=true`. A replacement synthetic sample must use a new map id so existing episode references remain reproducible.
+- One successful candidate-map run may be promoted at most once. Another reviewed sample requires a new generation run so distinct map ids represent distinct synthetic samples rather than aliases of identical output.
+- Candidate profile-context runs use a minimal artifact set: `candidate_profile_context.json`, `workflow_log.json`, `agent_traces/model_raw_output.txt`, and `agent_traces/parser_output.json`. Do not add `intermediate/` or a redundant `profile_context_authoring/` trace subdirectory for this single-step workflow.
+- Candidate-map runs retain step-specific structure because generation has two real agent steps. `intermediate/` stores `state_outline.json` and `ground_truth_evidence.json`. `agent_traces/` stores `knowledge_state_outline/model_raw_output.txt`, `knowledge_state_outline/parser_output.json`, and per-batch `ground_truth_evidence/{batch_name}/model_raw_output.txt` plus `parser_output.json`. Do not copy confirmed profile-context or reviewed-graph payloads into the run directory; `workflow_log.json` records `user_id`, `benchmark_domain`, and `graph_version` references.
+- One confirmed `user_id` may produce multiple candidate-map runs for retry and debugging. One `(user_id, graph_version)` pair may also promote multiple independent ground-truth-map samples with distinct `map_id` values; episode manifests select the map sample they use.
+- Reviewed-map promotion allows multiple accepted samples for one `(user_id, graph_version)` pair as long as every published sample uses a new domain-unique `map_id`.
+- `map_manifest.json` binds `map_id`, `user_id`, `benchmark_domain`, `graph_version`, and `promoted_from_candidate_run`. Promotion revalidates graph coverage, one current state per node, evidence refs, mastery-sensitive simulator-support minimums, confirmed user-profile existence, and reviewed graph-version existence. It does not read or recompute edge-consistency warnings.
+- `consistency_warnings.json` is a generation-time review hint that stays in the originating candidate-map run only. Reviewed-map snapshots do not copy warnings, and Phase 5 runtime loaders do not read them.
+- `user_id` identifies the confirmed synthetic-user profile basis; `map_id` identifies one promoted synthetic knowledge-map sample generated from that basis.
+- Keep `map_manifest.json` minimal in the initial slice: do not add timestamps, model configuration, or copied warning payloads. Candidate-map run artifacts retain debugging metadata.
+- Candidate-map generation has two agent steps. `Knowledge-State Outline Agent Step` drafts full-graph node-level `mastery_level`, `misconceptions`, and `unknowns` from confirmed `Profile Context` and reviewed nodes with rubrics; it does not receive reviewed edges. `Ground-Truth Evidence Authoring Agent Step` then drafts hidden evidence from that outline, confirmed `Profile Context`, and reviewed node rubrics; it may batch nodes internally.
+- Each evidence-authoring batch receives confirmed `Profile Context`, reviewed rubrics for its batch nodes, and state outlines for its batch nodes only. It does not receive other node states, reviewed edges, or the complete graph. Deterministically reject batch output that references nodes outside the batch or fails mastery-sensitive evidence minimums for batch nodes.
+- Partition evidence-authoring batches as contiguous windows in stable reviewed `authored_nodes.json` order. Do not shuffle nodes or cluster batches by graph edges.
+- Initial knowledge-state outline authoring uses one full-graph model call for the reviewed 30-50 node target. Do not batch this step until larger graphs justify a separate global reconciliation design.
+- Knowledge-state-outline model output contains `node_id`, `mastery_level`, `misconceptions`, and `unknowns` only. It does not output `evidence_refs`, `user_id`, or lifecycle `kind`; workflow code supplies those during deterministic candidate-map assembly.
+- Outline output and assembled maps explicitly include `misconceptions` and `unknowns` arrays for every node state, even when empty. Missing arrays are invalid rather than defaulted.
+- Prompt outline authoring to avoid exact duplicate misconception or unknown items within one state. Validation rejects exact duplicates rather than silently rewriting generated samples. Do not add semantic-similarity merging.
+- Do not enforce mastery-specific item counts for misconceptions or unknowns. Prompt for plausible content without forcing generated filler.
+- Keep `evidence_refs` optional with schema-level default `[]`; context-specific ground-truth authoring, reconstruction, and scoring validation decide whether empty evidence is allowed.
+- Before evidence authoring starts, a blocking validation checkpoint requires the outline node-id set to exactly match the reviewed graph node-id set. Reject duplicate, unknown, or missing node ids, invalid mastery values, and blank misconception or unknown items.
+- After outline validation, normalize assembled states into stable reviewed `authored_nodes.json` order. Normalize generated evidence into the same node order; within one node preserve model-output order and assign deterministic evidence ordinals from that order.
+- Ground-truth evidence authoring defaults to `evidence_batch_size = 5`. `POST /api/authoring/map-candidates` accepts an optional positive-integer request-level override for provider or prompt tuning.
+- `POST /api/authoring/map-candidates` also accepts optional request-level `sampling_temperature`, defaulting to `0.7`, for synthetic-map sampling. It applies to map generation only; graph authoring and profile-context authoring keep their existing model configuration. Record effective temperature in the map workflow log. Do not add seed support initially. Provider adapters must reject unsupported temperature requests explicitly rather than silently ignore them.
+- One map-generation run uses the same effective sampling temperature for its outline step and every evidence-authoring batch. Do not expose separate outline and evidence temperature controls initially.
+- Initial evidence batching is fail-fast without partial resume. Any failed batch marks the candidate-map run failed; traces remain for debugging and retry creates a new run id. Defer resume semantics until model-call cost justifies immutable-outline replay design.
+- Workflow-authored ground-truth evidence uses `simulator_only`. Every reviewed ground-truth node state must cite at least one `simulator_only` evidence record so Phase 6 simulation has an actionable basis.
+- Evidence authoring uses a mastery-sensitive minimum-count policy: L0-L1 states receive at least one `simulator_only` record, L2-L3 states receive at least two records, and L4-L5 states receive at least one record. Prompt guidance suggests suitable evidence kinds and capability/boundary coverage, but validation does not require mastery-specific kinds.
+- Ground-truth-evidence model output contains `node_id`, `evidence_kind`, and `signal` only. Workflow code assigns deterministic `ev_{run_id}_{node_id}_{ordinal}` ids and fixed `evidence_type = ground_truth_profile`, `visibility = simulator_only`, and `turn_id = null`. Promotion preserves these run-scoped evidence ids unchanged.
+- Prompt evidence authoring to avoid exact duplicate `(evidence_kind, signal)` pairs within one node. Validation rejects exact duplicates rather than counting them toward mastery-sensitive minimums. Do not add semantic-similarity merging.
+- Keep initial evidence-kind validation lightweight. `background_fact` remains valid under the shared minimum rules; defer kind-specific restrictions until generated artifacts reveal a concrete failure mode.
+- Workflow code deterministically merges hidden evidence references into node-level states. Model output does not maintain cross-object `evidence_refs`.
+- Workflow output writes `candidate_map.json` with `kind = candidate`. Only reviewed-map promotion code converts it to `kind = ground_truth` when publishing `ground_truth_map.json`; model output does not control lifecycle kind.
+- Candidate-map output is written only after blocking validation passes. Reject missing, duplicate, or unknown node states; invalid mastery; missing or cross-node evidence refs; evidence counts below mastery-sensitive minimums; workflow evidence that is not `simulator_only`; `kind != candidate`; and `user_id` mismatch. On failure retain traces and intermediates but do not write a promotable `candidate_map.json`. Edge-aware consistency remains a separate non-blocking warning step.
+- Profile-map semantic coherence remains a benchmark-author accept-or-reject review concern. Do not add an LLM coherence judge or treat semantic persona alignment as blocking structural validation in the initial slice.
+- Reviewed `Knowledge Edges` act as soft consistency signals for candidate-map review. Deterministic edge-aware checks receive the drafted outline and reviewed edges, then produce review warnings for suspicious node-state combinations but do not automatically rewrite or reject uneven maps.
+- The initial deterministic warning rule is intentionally narrow: for a reviewed `prerequisite_for` edge, emit a warning when target mastery exceeds source mastery by at least two levels. Do not infer mastery ordering from `part_of`, `supports`, or `contrasts_with` edges. Warning records include edge id, endpoint node ids and mastery values, and the triggering rule.
 
 边界：
 
@@ -312,7 +362,6 @@ load Evaluation Episode Manifest
 - episode mastery distance。
 - missing prediction rate。
 - unsupported inference rate。
-- optional confidence calibration。
 - optional misconception diagnostics。
 - run metadata and scoring profile version。
 
@@ -324,6 +373,13 @@ load Evaluation Episode Manifest
 
 - `GET /health`
 - `POST /api/authoring/graph-candidates`
+- `POST /api/authoring/profile-context-candidates`
+- `GET /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`
+- `PUT /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`
+- `POST /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}/confirmation`
+- `POST /api/authoring/map-candidates`
+- `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`
+- `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`
 - `GET /graphs`
 - `GET /graphs/{graph_id}`
 - `GET /maps/{map_id}`
@@ -333,7 +389,9 @@ load Evaluation Episode Manifest
 - `GET /runs/{run_id}`
 - `GET /runs/{run_id}/report`
 
-早期可以先只做 authoring candidate run trigger、read-only inspection 和 evaluation run trigger。authoring API 只能生成 reviewable candidate graph artifacts；promotion/review 写操作等核心闭环稳定后再开放。
+Phase 4 的初始 authoring surface 保持 narrow and functional：profile-context candidate 支持生成、读取、编辑和显式 confirmation；candidate map 支持生成、读取和显式 promotion，但不提供 map `PUT`，因为 poor candidate maps 应重新生成而不是手工 patch。初始切片不增加 list endpoints，也不增加 one-shot orchestration endpoint。调用方显式串联窄接口，使 profile-context editing、confirmation、candidate-map inspection 和 promotion 保持可见 gate；待闭环调通后再考虑 browsing 和 workbench 产品形态。
+
+`POST /api/authoring/profile-context-candidates` 接收 required `benchmark_domain`、required `rough_description`、optional limited `domain_summary`、optional `run_id` 和 request-level `client_provider`。首版允许 inline `domain_summary`，但其中不得包含 node 或 rubric 明细；后续可由 domain manifest 提供稳定 summary。
 
 ## Benchmark Data Layout
 
@@ -364,7 +422,30 @@ benchmark/
         │       ├── graph_manifest.json
         │       ├── authored_nodes.json
         │       └── authored_edges.json
+        ├── candidate_profile_contexts/
+        │   └── run_001/
+        │       ├── candidate_profile_context.json
+        │       ├── workflow_log.json
+        │       └── agent_traces/
+        │           ├── model_raw_output.txt
+        │           └── parser_output.json
+        ├── users/
         ├── candidate_maps/
+        │   └── run_001/
+        │       ├── candidate_map.json
+        │       ├── consistency_warnings.json
+        │       ├── workflow_log.json
+        │       ├── intermediate/
+        │       │   ├── state_outline.json
+        │       │   └── ground_truth_evidence.json
+        │       └── agent_traces/
+        │           ├── knowledge_state_outline/
+        │           │   ├── model_raw_output.txt
+        │           │   └── parser_output.json
+        │           └── ground_truth_evidence/
+        │               └── batch_001/
+        │                   ├── model_raw_output.txt
+        │                   └── parser_output.json
         ├── ground_truth_maps/
         └── episodes/
             └── v1/
@@ -388,7 +469,7 @@ Artifact policy:
 - `fixtures/` 可以小而稳定，用于 tests 和 local development。
 - `candidate_graphs/` 和 `candidate_maps/` 是 review input，不进入 formal evaluation。
 - `graphs/v1/` 和 `ground_truth_maps/` 是 reviewed benchmark data。
-- Phase 3 graph promotion 将重新校验后的 candidate snapshot 复制到 `graphs/{version}/`，保留原 candidate run，并生成只绑定 metadata 与 node/edge 文件引用的 `graph_manifest.json`。覆盖已有 version 必须显式确认。
+- Phase 3 graph promotion 将重新校验后的 candidate snapshot 复制到 `graphs/{version}/`，保留原 candidate run，并生成只绑定 metadata 与 node/edge 文件引用的 `graph_manifest.json`。Reviewed graph version 不允许覆盖；修订必须发布新的 version。
 - `experiments/runs/` 是 generated output，应避免混入人工 authored ground truth。
 - 大型 source PDFs 可以本地保存，正式数据只引用 source metadata 和 `Source Locator`。
 
@@ -419,7 +500,7 @@ frontend/src/
 核心视图：
 
 - Graph inspector: 展示 nodes、edges、source locators、edge rationale、weight、curation confidence。
-- Map inspector: 展示 node-level `User Knowledge State`、mastery、confidence、evidence refs。
+- Map inspector: 展示 node-level `User Knowledge State`、mastery、evidence refs。
 - Episode runner: 展示 manifest、turn budget、visible context、transcript。
 - Report viewer: 展示 per-node distances、missing prediction、unsupported inference、episode mastery distance。
 - Review helper: 辅助 benchmark author 检查 candidate nodes/edges/maps，但不自动 promote。

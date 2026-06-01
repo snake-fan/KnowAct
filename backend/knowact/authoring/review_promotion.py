@@ -21,7 +21,6 @@ def promote_candidate_graph(
     benchmark_domain: str,
     run_id: str,
     version: str,
-    overwrite: bool = False,
 ) -> ReviewedGraphPromotion:
     candidate_graph = load_candidate_graph(
         workspace_root=workspace_root,
@@ -48,5 +47,4 @@ def promote_candidate_graph(
         manifest=manifest,
         nodes=candidate_graph.nodes,
         edges=candidate_graph.edges,
-        overwrite=overwrite,
     )
