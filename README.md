@@ -149,8 +149,9 @@ A possible user map structure is:
     {
       "node_id": "active_learning",
       "mastery_level": "L2",
-      "confidence": 0.72,
-      "evidence_refs": ["ev_104"]
+      "evidence_refs": ["ev_104"],
+      "misconceptions": [],
+      "unknowns": []
     }
   ]
 }
@@ -173,7 +174,6 @@ Possible supporting metrics include:
 * Misconception detection accuracy
 * Missing prediction rate
 * Unsupported inference rate, based on missing visible evidence references
-* Calibration error of confidence scores
 
 V1 does not require a separate evaluator agent or LLM judge for primary scoring. Evidence records are used to make reconstruction more grounded and auditable, not to add another subjective evaluation layer. Unsupported inference is reported separately from mastery-level distance.
 
@@ -349,7 +349,7 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 - `POST /api/authoring/source-materials` and `GET /api/authoring/source-materials`, which upload PDF source materials into `storage/source_materials/{source_id}/original.pdf`, write `metadata.json`, and list registered source materials for the workbench.
 - `POST /api/authoring/graph-candidates`, which reads one PDF by relative path under `storage/`, resolves same-directory same-stem Parsed Source Markdown, calls MinerU to create or regenerate that Markdown when needed, sends the Markdown text only to the node extraction step, returns source-grounded skeletons, candidate nodes, candidate edges, Markdown cache metadata, and a compact run log summary, and writes `candidate_nodes.json`, `candidate_edges.json`, validation-passed `intermediate/` artifacts, and sidecar `workflow_log.json` by default. The workflow log records step status and links to `agent_traces/{step}/model_raw_output.txt`, `agent_traces/{step}/parser_output.json`, and batch trace artifacts where applicable, while still avoiding full prompt/source-material text. MinerU standard mode publishes the local PDF through a private Aliyun OSS staging object and short-lived signed URL before submitting the URL to MinerU; PDFs above `KNOWACT_MINERU_MAX_PAGES_PER_TASK` are split into chunks and their Markdown results are joined in page order. Only the node and edge files are candidate graph review artifacts. Example request:
 - `GET /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}` and `PUT /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}`, which read and validate-save candidate graph review artifacts. The save endpoint overwrites `candidate_nodes.json` and `candidate_edges.json` only after schema and graph validation pass.
-- `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`, which revalidates saved candidate artifacts, copies them into `benchmark/domains/{benchmark_domain}/graphs/{version}/` as `authored_nodes.json` and `authored_edges.json`, and generates `graph_manifest.json`. Existing reviewed versions return `409 Conflict` unless the caller retries with `overwrite=true` after explicit confirmation.
+- `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`, which revalidates saved candidate artifacts, copies them into `benchmark/domains/{benchmark_domain}/graphs/{version}/` as `authored_nodes.json` and `authored_edges.json`, and generates `graph_manifest.json`. Reviewed graph versions are immutable: an existing version returns `409 Conflict`, and corrections must publish a new version.
 
 ```json
 {

@@ -85,12 +85,36 @@ The hidden **Knowledge Map** used as the benchmark reference for a simulated or 
 _Avoid_: user graph, true graph, ground-truth graph
 
 **Candidate Knowledge Map**:
-A draft user-specific **Knowledge Map** produced during authoring before benchmark-author review.
+A generated user-specific **Knowledge Map** sample produced during authoring before benchmark-author review.
 _Avoid_: ground-truth map, final profile, evaluation reference
 
 **Profile Context**:
-User persona, background, preferences, or task goals used to make a simulated user coherent.
-_Avoid_: scored profile, knowledge map, freeform ground truth
+A structured artifact containing a synthetic user's summary, background, prior experience, goals, and preferences so simulation and map authoring remain coherent.
+_Avoid_: scored profile, knowledge map, freeform ground truth, node-level mastery table
+
+**Profile Context Validation**:
+The structural check that determines whether a **Profile Context** is well-formed and suitable as map-authoring input.
+_Avoid_: benchmark-author acceptance, candidate-map review, persona scoring
+
+**Profile Context Confirmation**:
+The explicit benchmark-author acceptance of a validated **Profile Context** snapshot before the normal **Map Authoring Pipeline** continues to candidate-map generation.
+_Avoid_: schema validation, automatic acceptance, synthetic-user approval
+
+**Confirmed Profile Context Snapshot**:
+An immutable benchmark-author confirmed **Profile Context** artifact for one synthetic benchmark user, identified by `user_id` and bound to one benchmark domain without being bound to one graph version.
+_Avoid_: editable candidate profile, inline request payload, silently overwritten persona
+
+**Map Manifest**:
+A metadata file that names a reviewed **Ground-Truth Knowledge Map** snapshot and binds it to synthetic user identity, benchmark domain, reviewed graph version, confirmed profile context, and originating candidate run.
+_Avoid_: inline map storage, scoring override, candidate-map content
+
+**Reviewed Map Promotion**:
+The explicit benchmark-author confirmation that publishes a validated **Candidate Knowledge Map** snapshot as an immutable **Ground-Truth Knowledge Map**.
+_Avoid_: candidate save, automatic map promotion, evaluation runtime
+
+**Candidate Map Review**:
+The benchmark-author accept-or-reject inspection of a generated **Candidate Knowledge Map** before any **Reviewed Map Promotion**.
+_Avoid_: manual map correction, automatic acceptance, graph-style candidate editing
 
 **Reconstructed Knowledge Map**:
 The **Knowledge Map** inferred by the tested agent through interaction.
@@ -360,6 +384,18 @@ _Avoid_: v1 inclusion rule, replacement for rationale review, hidden filtering r
 The workflow that produces and reviews a **Candidate Knowledge Map** before it becomes a **Ground-Truth Knowledge Map**.
 _Avoid_: evaluation runtime, tested agent reconstruction, simulator answer generation
 
+**Knowledge-State Outline Agent Step**:
+The map-authoring step that drafts full-graph node-level mastery, misconceptions, and unknowns from a confirmed **Profile Context** and reviewed **Authored Knowledge Graph**.
+_Avoid_: evidence authoring, profile-context authoring, simulator response generation
+
+**Ground-Truth Evidence Authoring Agent Step**:
+The map-authoring step that drafts hidden **Ground-Truth Evidence** for node-level state outlines using confirmed **Profile Context** and reviewed node rubrics.
+_Avoid_: interaction observation extraction, state-outline generation, hidden chain-of-thought
+
+**Map Edge-Consistency Warning**:
+A review warning that highlights a suspicious combination of node-level user states in a **Candidate Knowledge Map** based on reviewed **Knowledge Edges**.
+_Avoid_: hard mastery constraint, automatic map rewrite, graph validation failure
+
 **Derived Knowledge Relationship**:
 A non-authoritative relationship inferred from traversal or reasoning over the **Authored Knowledge Graph**.
 _Avoid_: ground-truth edge, authored edge
@@ -378,7 +414,73 @@ _Avoid_: ground-truth edge, authored edge
 - A **Knowledge Graph** contains user-independent **Knowledge Nodes** and **Knowledge Edges**.
 - A **Knowledge Map** represents user-specific or reconstructed knowledge state over a **Knowledge Graph**.
 - A **Candidate Knowledge Map** must be reviewed before it becomes a **Ground-Truth Knowledge Map**.
-- **Profile Context** may guide generation of a **Candidate Knowledge Map**.
+- A **Map Authoring Pipeline** starts from a rough user description supplied by the benchmark author and expands it into a reviewable **Profile Context**.
+- The benchmark author may edit the generated **Profile Context**.
+- The normal **Map Authoring Pipeline** applies **Profile Context Validation** and then requires **Profile Context Confirmation** before invoking candidate-map generation.
+- Candidate-map generation remains an independently callable authoring capability for debugging and does not need to be fused into the normal workflow gate.
+- One initial **Map Authoring Pipeline** run produces one **Candidate Knowledge Map** for one synthetic benchmark user over one reviewed **Authored Knowledge Graph** version.
+- **Profile Context** is a structured JSON artifact with a readable summary plus background, prior experience, goals, and preferences.
+- **Profile Context** does not contain node-level mastery values; those belong to a **Knowledge Map**.
+- **Profile Context Validation** is deterministic structural validation, not an LLM-based semantic review.
+- Profile-context authoring receives a rough user description, benchmark-domain identity, and optional domain summary; it does not receive graph nodes, node rubrics, or edges.
+- Candidate-map generation receives the confirmed **Profile Context** and the reviewed **Authored Knowledge Graph**.
+- Candidate-map generation identifies its reviewed **Authored Knowledge Graph** by benchmark domain and graph version; it does not accept ad hoc uploaded node and edge JSON payloads.
+- Candidate-map generation identifies its confirmed **Profile Context** by `user_id`; it does not accept ad hoc inline profile-context JSON payloads.
+- Normal and standalone-debug candidate-map generation both require a confirmed **Profile Context**.
+- **Profile Context Confirmation** publishes an immutable **Confirmed Profile Context Snapshot** identified by `user_id`.
+- Candidate profile-context generation uses a run id only; formal `user_id` is assigned by the benchmark author during **Profile Context Confirmation**.
+- Candidate profile-context editing changes persona content only; run identity and benchmark domain remain fixed, and `user_id` does not exist until confirmation.
+- Candidate profile-context editing overwrites the current draft in place; revision history is not retained in the initial workflow.
+- Editing a confirmed profile context requires publishing a new **Confirmed Profile Context Snapshot** with a new `user_id`.
+- **Profile Context Confirmation** never overwrites an existing `user_id`; changing persona content requires a new `user_id`.
+- One candidate profile-context run may be confirmed at most once; another synthetic user requires a new candidate profile-context run.
+- A **Confirmed Profile Context Snapshot** binds one benchmark domain but does not bind one graph version.
+- Candidate profile-context runs, confirmed profile-context snapshots, candidate-map runs, and reviewed ground-truth-map snapshots are stored within their benchmark-domain scope.
+- `user_id` and `map_id` values need to be unique within one benchmark domain.
+- The same **Confirmed Profile Context Snapshot** may guide map generation against later reviewed graph versions within its benchmark domain.
+- **Reviewed Map Promotion** publishes an immutable **Ground-Truth Knowledge Map** snapshot and **Map Manifest** while retaining the originating candidate-map run.
+- A **Map Manifest** binds `map_id`, `user_id`, benchmark domain, reviewed graph version, and originating candidate-map run.
+- `user_id` identifies the confirmed synthetic-user profile basis; `map_id` identifies one promoted synthetic knowledge-map sample generated from that basis.
+- `map_id` is assigned by the benchmark author during **Reviewed Map Promotion**, not during candidate-map generation.
+- **Reviewed Map Promotion** never overwrites an existing `map_id`; replacing a reviewed synthetic sample requires a new `map_id`.
+- One successful candidate-map run may be promoted at most once; another reviewed sample requires a new candidate-map run.
+- A **Candidate Knowledge Map** is a discardable synthetic sample: **Candidate Map Review** accepts it unchanged for promotion or rejects it.
+- When a **Candidate Knowledge Map** is poor, the benchmark author improves profile input or the **Map Authoring Pipeline** and generates a new candidate run instead of manually correcting map content.
+- One **Confirmed Profile Context Snapshot** may produce multiple candidate-map runs for retry or debugging.
+- One `(user_id, graph_version)` pair may produce and promote multiple independent **Ground-Truth Knowledge Maps**, each identified by a distinct `map_id`.
+- A benchmark author selects which promoted `map_id` an **Evaluation Episode** uses rather than treating one synthetic user profile as having only one possible generated map sample.
+- Candidate-map generation supports explicit sampling temperature so one synthetic-user profile basis can produce varied knowledge-map samples.
+- One candidate-map run applies the same effective sampling temperature to its outline step and every evidence-authoring batch.
+- **Map Edge-Consistency Warnings** are generation-time review hints only; **Reviewed Map Promotion** does not consume them.
+- **Map Edge-Consistency Warnings** remain in the originating candidate-map run and are not copied into reviewed ground-truth-map snapshots.
+- The **Knowledge-State Outline Agent Step** drafts full-graph node-level mastery, misconceptions, and unknowns from the confirmed **Profile Context** and reviewed nodes with rubrics; it does not receive reviewed edges.
+- The initial **Knowledge-State Outline Agent Step** runs as one full-graph model call rather than splitting nodes into batches.
+- Knowledge-state-outline model output contains `node_id`, mastery, misconceptions, and unknowns only; workflow code supplies evidence references, user identity, and lifecycle kind later.
+- Knowledge-state-outline output and assembled maps explicitly include `misconceptions` and `unknowns` arrays for every node state, even when either array is empty.
+- Knowledge-state-outline prompts require exact-string uniqueness within each state's `misconceptions` and `unknowns` arrays; validation rejects exact duplicates rather than silently deduplicating them.
+- V1 does not enforce mastery-specific item counts for `misconceptions` or `unknowns`; prompts may guide plausible content without forcing fabricated items.
+- `evidence_refs` may default to an empty array at schema level; context-specific validation decides whether empty evidence is allowed.
+- Before evidence authoring starts, the **Map Authoring Pipeline** requires the state-outline node-id set to exactly match the reviewed graph node-id set and rejects duplicate, unknown, or missing node ids.
+- The **Ground-Truth Evidence Authoring Agent Step** drafts hidden **Ground-Truth Evidence** after a state outline exists and may run in node batches.
+- Each evidence-authoring batch receives the confirmed **Profile Context**, reviewed rubrics for its batch nodes, and state outlines for its batch nodes only; it does not receive other node states, reviewed edges, or the complete graph.
+- Evidence-authoring batches use contiguous windows in the stable reviewed authored-node list order; they are not shuffled or edge-clustered.
+- After each evidence-authoring batch, the **Map Authoring Pipeline** rejects output that references nodes outside the batch or fails mastery-sensitive evidence minimums for batch nodes.
+- If any evidence-authoring batch fails, the initial **Map Authoring Pipeline** marks the whole candidate-map run failed; retry uses a new run id rather than partial resume.
+- The **Ground-Truth Evidence Authoring Agent Step** produces `simulator_only` evidence by default so the **User Simulator** can express the authored knowledge state.
+- Each node-level state in a reviewed **Ground-Truth Knowledge Map** must cite at least one `simulator_only` **Ground-Truth Evidence** record.
+- The **Ground-Truth Evidence Authoring Agent Step** drafts at least one `simulator_only` evidence record for L0-L1 states, at least two for L2-L3 states, and at least one for L4-L5 states.
+- Evidence-authoring prompts guide L0-L1 evidence toward misconceptions or weak prior answers, L2-L3 evidence toward capability and boundary, and L4-L5 evidence toward worked examples or strong prior answers; validation does not require specific evidence kinds by mastery level.
+- Ground-truth-evidence model output contains `node_id`, `evidence_kind`, and `signal` only.
+- The **Map Authoring Pipeline** deterministically assigns run-scoped evidence ids and fixed `ground_truth_profile`, `simulator_only`, and null turn-id fields.
+- Evidence-authoring prompts avoid exact duplicate `(evidence_kind, signal)` pairs within one node; validation rejects exact duplicates rather than counting them toward mastery-sensitive minimums.
+- The **Map Authoring Pipeline** deterministically merges hidden evidence references into node-level states instead of asking a model to maintain cross-object references.
+- Candidate-map output uses `kind = candidate`; only **Reviewed Map Promotion** deterministically converts it to `kind = ground_truth`.
+- The **Map Authoring Pipeline** writes a successful candidate-map artifact only after blocking validation passes; edge-aware consistency remains a separate non-blocking warning step.
+- Profile-map semantic coherence is a **Candidate Map Review** concern rather than an automated blocking validation or LLM-judge step.
+- Deterministic edge-aware checks receive the drafted state outline and reviewed **Knowledge Edges**, then produce **Map Edge-Consistency Warnings** during candidate-map review.
+- A **Map Edge-Consistency Warning** does not automatically rewrite or reject a **Candidate Knowledge Map**.
+- The initial deterministic edge-aware check emits a **Map Edge-Consistency Warning** only for a reviewed `prerequisite_for` edge when target mastery exceeds source mastery by at least two levels.
+- Initial edge-aware checks do not infer mastery ordering from `part_of`, `supports`, or `contrasts_with` edges.
 - **Profile Context** should be consistent with the **Ground-Truth Knowledge Map** but is not part of **Episode Mastery Distance**.
 - A v1 **Evaluation Episode** should be declared by an **Evaluation Episode Manifest**.
 - An **Evaluation Episode Manifest** references the **Episode Knowledge Graph**, **Ground-Truth Knowledge Map**, optional **Profile Context**, **Turn Budget**, interaction rules, and scoring profile.
@@ -394,7 +496,7 @@ _Avoid_: ground-truth edge, authored edge
 - V1 scoring uses the **Final Reconstructed Knowledge Map**.
 - A **Reconstruction Trace** is optional and not required for primary v1 scoring.
 - V1 scoring uses **Structured Map Comparison** rather than a separate evaluator agent.
-- **Structured Map Comparison** focuses on quantifiable **User Knowledge State** fields such as mastery level and confidence.
+- **Structured Map Comparison** focuses on quantifiable **User Knowledge State** fields such as mastery level.
 - **Mastery Level Distance** is the primary v1 comparison signal for mastery-level scoring.
 - **Episode Mastery Distance** is the primary v1 episode-level result and lower is better.
 - The v1 **Mastery Distance Function** maps L0-L5 to scores 0-5 and uses squared score distance.
@@ -472,7 +574,7 @@ _Avoid_: ground-truth edge, authored edge
 - A **Graph Manifest** may reference separate **Authored Graph Data Files** for graph id, version, source, and file binding metadata.
 - A **Graph Manifest** must not inline or replace the node and edge JSON lists.
 - V1 uses a lightweight **Graph File Layout** that publishes reviewed graph versions under `benchmark/domains/{benchmark_domain}/graphs/{version}/`.
-- **Reviewed Graph Promotion** preserves the originating **Candidate Knowledge Graph** artifacts and requires explicit confirmation before overwriting an existing graph version.
+- **Reviewed Graph Promotion** preserves the originating **Candidate Knowledge Graph** artifacts and never overwrites an existing graph version; graph corrections require a new version.
 - The v1 **Graph Authoring Pipeline** is implemented through a **Graph Authoring Agent Workflow**.
 - The **Graph Authoring Agent Workflow** contains a **Node Extraction Agent Step**, a **Node Rubric Authoring Agent Step**, and an **Edge Proposal Agent Step**.
 - The **Node Extraction Agent Step** may read the authoritative PDF or source material directly rather than relying on pre-cut chunks.
@@ -513,7 +615,7 @@ _Avoid_: ground-truth edge, authored edge
 - KnowAct v1 uses `prior_answer`, `worked_example`, `self_report`, `misconception_trace`, and `background_fact` as initial **Evidence Kind** values.
 - **Evidence Visibility** describes who can access evidence during a benchmark run.
 - **Ground-Truth Evidence** belongs to the benchmark reference data and is hidden from the **Tested Agent**.
-- **Ground-Truth Evidence** should use simulator-only or evaluator-only visibility, not tested-agent visibility.
+- **Ground-Truth Evidence** should use simulator-only visibility, not tested-agent visibility.
 - An **Interaction Observation** is visible to the **Tested Agent** when it comes from the agent's own interaction history.
 - **Synthetic Evidence** may support a **Ground-Truth Knowledge Map**, but it must be treated as simulated benchmark data rather than real user data.
 - A **User Knowledge State** references exactly one **Knowledge Node**.
@@ -523,8 +625,8 @@ _Avoid_: ground-truth edge, authored edge
 
 ## Example dialogue
 
-> **Dev:** "Should we store confidence on the **Knowledge Node**?"
-> **Domain expert:** "No. The **Knowledge Node** is the concept itself; confidence belongs to the **User Knowledge State** for that concept."
+> **Dev:** "Should we store a user's mastery on the **Knowledge Node**?"
+> **Domain expert:** "No. The **Knowledge Node** is the concept itself; mastery belongs to the **User Knowledge State** for that concept."
 
 > **Dev:** "If a user does not understand active learning, does the prerequisite edge from epistemic uncertainty disappear?"
 > **Domain expert:** "No. The **Knowledge Edge** is part of the domain structure; v1 uses it to guide diagnosis of **Knowledge Nodes**, not to create edge-level user state."
@@ -592,7 +694,7 @@ _Avoid_: ground-truth edge, authored edge
 - "dragged position" can sound like graph data; resolved: manual placement is transient review state unless saved in a separate **Candidate Graph Review Layout Artifact**.
 - "foundational node" can sound like a stored node attribute; resolved: foundation is a derived **Candidate Graph Review Foundation Score** for layout only.
 - "edge type weight" can sound like domain scoring; resolved: edge type weighting is a review layout heuristic, with `prerequisite_for` stronger than `part_of`, and `part_of` stronger than `supports`.
-- "confidence" can mean curation confidence or user-state confidence; resolved: **Curation Confidence** is the author's confidence in an edge's validity.
+- "confidence" can sound like a user-state field; resolved: v1 stores **Curation Confidence** only on edges and omits user-state confidence until a precise need emerges.
 - "candidate curation confidence" can sound like final author judgment; resolved: candidate values may be agent suggestions, while authored values are benchmark-author reviewed.
 - "weight" can mean relationship strength or author confidence; resolved: **Knowledge Edge Weight** means relationship strength, while **Curation Confidence** means confidence in validity.
 - "evidence" can mean real human observation or generated benchmark support; resolved: **Synthetic Evidence** is allowed in v1 but must remain traceable simulated data.

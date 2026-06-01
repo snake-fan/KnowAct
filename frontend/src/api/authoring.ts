@@ -206,15 +206,14 @@ export async function saveCandidateGraph(
 
 export async function promoteCandidateGraph(
   graph: CandidateGraphPayload,
-  version: string,
-  overwrite = false
+  version: string
 ): Promise<CandidateGraphPromotionResponse> {
   return requestJson<CandidateGraphPromotionResponse>(
     `/api/authoring/candidate-graphs/${encodeURIComponent(graph.benchmark_domain)}/${encodeURIComponent(graph.run_id)}/promotion`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version, overwrite })
+      body: JSON.stringify({ version })
     }
   );
 }

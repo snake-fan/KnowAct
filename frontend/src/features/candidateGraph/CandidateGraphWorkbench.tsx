@@ -178,14 +178,9 @@ export function CandidateGraphWorkbench() {
         if (!(taskError instanceof ApiRequestError) || taskError.status !== 409) {
           throw taskError;
         }
-        const overwrite = window.confirm(`Version "${version}" already exists. Overwrite it?`);
-        if (!overwrite) {
-          setConfirmDialogOpen(false);
-          setGraphVersion("");
-          setNotice(`Promotion of ${version} cancelled. Candidate graph saved.`);
-          return;
-        }
-        promotion = await promoteCandidateGraph(saved, version, true);
+        throw new Error(
+          `Version "${version}" already exists and cannot be overwritten. Enter a new graph version. Candidate graph saved.`
+        );
       }
       setConfirmDialogOpen(false);
       setGraphVersion("");
