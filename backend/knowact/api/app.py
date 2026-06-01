@@ -9,11 +9,19 @@ from backend.knowact.authoring.openai_workflow import (
     GraphAuthoringClientProvider,
     build_graph_authoring_workflow_for_provider,
 )
+from backend.knowact.authoring.profile_context import (
+    ProfileContextAuthoringWorkflow,
+    build_profile_context_authoring_workflow_for_provider,
+)
 from backend.knowact.authoring.sources import MinerUHTTPSourceParser, SourceParser
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 
 
 GraphAuthoringWorkflowFactory = Callable[[GraphAuthoringClientProvider], GraphAuthoringAgentWorkflow]
+ProfileContextAuthoringWorkflowFactory = Callable[
+    [GraphAuthoringClientProvider],
+    ProfileContextAuthoringWorkflow,
+]
 
 
 class HealthResponse(BaseModel):
@@ -26,6 +34,7 @@ class HealthResponse(BaseModel):
 def create_app(
     *,
     graph_authoring_workflow_factory: GraphAuthoringWorkflowFactory | None = None,
+    profile_context_authoring_workflow_factory: ProfileContextAuthoringWorkflowFactory | None = None,
     source_parser: SourceParser | None = None,
     workspace_root: Path | None = None,
 ) -> FastAPI:
@@ -39,6 +48,8 @@ def create_app(
         build_authoring_router(
             graph_authoring_workflow_factory=graph_authoring_workflow_factory
             or build_graph_authoring_workflow_for_provider,
+            profile_context_authoring_workflow_factory=profile_context_authoring_workflow_factory
+            or build_profile_context_authoring_workflow_for_provider,
             source_parser=source_parser or MinerUHTTPSourceParser(),
             workspace_root=workspace_root,
         ),
