@@ -108,6 +108,14 @@ This repo uses a single-context domain documentation layout. See `docs/agents/do
 5. 运行可用的格式化、类型检查或测试命令。
 6. 在最终回复中说明改动内容、验证结果和遗留风险；若偏离 V1 架构文档，必须说明原因和后续文档同步需求。
 
+## GitHub CLI And Sandbox Proxy
+
+- 本机 GitHub CLI 通过 `gh` 使用 GitHub API，Git push 默认通过 SSH remote `git@github.com:snake-fan/KnowAct.git` 完成；两条访问路径应分别判断。
+- Codex 沙箱可能无法访问宿主机上的本地代理，例如 `127.0.0.1:10808`。如果沙箱内运行 `gh auth status`、`gh issue view` 或其他 `gh` API 命令时出现 `token ... is invalid`、`proxyconnect tcp` 或 `socket: operation not permitted`，不要立即判断 GitHub token 已失效。
+- 遇到上述情况时，应申请在沙箱外重新运行同一条 `gh` 命令，以宿主环境的结果确认认证状态。IDE terminal 能正常运行 `gh auth status` 时，也应优先考虑沙箱代理访问限制。
+- SSH push 成功不代表 `gh` API 调用一定可用；反之，沙箱内 `gh` API 调用失败也不代表 SSH push 会失败。
+- 排查和汇报时不要输出完整 token、密钥或其他凭据。
+
 ## Testing And Verification
 
 当前仓库尚未形成完整测试体系。添加前后端代码后，优先建立以下验证入口：
