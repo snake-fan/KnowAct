@@ -152,6 +152,358 @@ class V1ProfileContextAuthoringApiTest(unittest.TestCase):
                 payload["artifact_paths"],
             )
 
+    def test_authoring_api_edits_saved_profile_context_candidate(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            client = TestClient(
+                create_app(
+                    profile_context_authoring_workflow_factory=lambda client_provider: (
+                        build_profile_context_authoring_workflow(
+                            model_client=FixtureProfileContextModelClient()
+                        )
+                    ),
+                    workspace_root=workspace_root,
+                )
+            )
+            create_response = client.post(
+                "/api/authoring/profile-context-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "rough_description": "A practical beginner.",
+                    "run_id": "profile_edit_run_001",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+
+            response = client.put(
+                "/api/authoring/candidate-profile-contexts/"
+                "classical_supervised_ml_algorithms/profile_edit_run_001",
+                json={
+                    "summary": "A careful learner revising a generated persona.",
+                    "background": ["Has written small Python scripts."],
+                    "prior_experience": [],
+                    "goals": ["Understand supervised learning evaluation."],
+                    "preferences": [],
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("profile_edit_run_001", payload["run_id"])
+            self.assertEqual(
+                {
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "summary": "A careful learner revising a generated persona.",
+                    "background": ["Has written small Python scripts."],
+                    "prior_experience": [],
+                    "goals": ["Understand supervised learning evaluation."],
+                    "preferences": [],
+                },
+                payload["candidate_profile_context"],
+            )
+            self.assertEqual(
+                payload["candidate_profile_context"],
+                _load_json(
+                    workspace_root
+                    / payload["artifact_paths"]["candidate_profile_context_uri"]
+                ),
+            )
+
+    def test_authoring_api_rejects_invalid_profile_context_edits_without_overwriting_draft(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            client = TestClient(
+                create_app(
+                    profile_context_authoring_workflow_factory=lambda client_provider: (
+                        build_profile_context_authoring_workflow(
+                            model_client=FixtureProfileContextModelClient()
+                        )
+                    ),
+                    workspace_root=workspace_root,
+                )
+            )
+            create_response = client.post(
+                "/api/authoring/profile-context-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "rough_description": "A practical beginner.",
+                    "run_id": "profile_invalid_edit_run_001",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+            candidate_path = (
+                workspace_root
+                / create_response.json()["artifact_paths"]["candidate_profile_context_uri"]
+            )
+            original_candidate = _load_json(candidate_path)
+            valid_edit = {
+                "summary": "A careful learner.",
+                "background": ["Has written small Python scripts."],
+                "prior_experience": [],
+                "goals": ["Understand supervised learning evaluation."],
+                "preferences": [],
+            }
+            invalid_edits = (
+                {**valid_edit, "summary": "  "},
+                {**valid_edit, "background": []},
+                {key: value for key, value in valid_edit.items() if key != "prior_experience"},
+                {**valid_edit, "goals": []},
+                {key: value for key, value in valid_edit.items() if key != "preferences"},
+                {
+                    **valid_edit,
+                    "benchmark_domain": "another_domain",
+                },
+            )
+
+            for invalid_edit in invalid_edits:
+                with self.subTest(invalid_edit=invalid_edit):
+                    response = client.put(
+                        "/api/authoring/candidate-profile-contexts/"
+                        "classical_supervised_ml_algorithms/profile_invalid_edit_run_001",
+                        json=invalid_edit,
+                    )
+
+                    self.assertEqual(422, response.status_code)
+                    self.assertEqual(original_candidate, _load_json(candidate_path))
+
+    def test_authoring_api_confirms_profile_context_as_immutable_user_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            client = TestClient(
+                create_app(
+                    profile_context_authoring_workflow_factory=lambda client_provider: (
+                        build_profile_context_authoring_workflow(
+                            model_client=FixtureProfileContextModelClient()
+                        )
+                    ),
+                    workspace_root=workspace_root,
+                )
+            )
+            create_response = client.post(
+                "/api/authoring/profile-context-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "rough_description": "A practical beginner.",
+                    "run_id": "profile_confirmation_run_001",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+
+            response = client.post(
+                "/api/authoring/candidate-profile-contexts/"
+                "classical_supervised_ml_algorithms/profile_confirmation_run_001/confirmation",
+                json={"user_id": "synthetic_user_001"},
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("profile_confirmation_run_001", payload["run_id"])
+            self.assertEqual(
+                {
+                    "user_id": "synthetic_user_001",
+                    **create_response.json()["candidate_profile_context"],
+                },
+                payload["profile_context"],
+            )
+            artifact_paths = payload["artifact_paths"]
+            self.assertEqual(
+                "benchmark/domains/classical_supervised_ml_algorithms/users/synthetic_user_001",
+                artifact_paths["output_dir_uri"],
+            )
+            output_dir = workspace_root / artifact_paths["output_dir_uri"]
+            self.assertEqual({"profile_context.json"}, {path.name for path in output_dir.iterdir()})
+            self.assertEqual(
+                payload["profile_context"],
+                _load_json(workspace_root / artifact_paths["profile_context_uri"]),
+            )
+
+    def test_authoring_api_rejects_overwriting_confirmed_profile_context_user_id(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            client = TestClient(
+                create_app(
+                    profile_context_authoring_workflow_factory=lambda client_provider: (
+                        build_profile_context_authoring_workflow(
+                            model_client=FixtureProfileContextModelClient()
+                        )
+                    ),
+                    workspace_root=workspace_root,
+                )
+            )
+            for run_id in ("profile_first_run_001", "profile_second_run_001"):
+                create_response = client.post(
+                    "/api/authoring/profile-context-candidates",
+                    json={
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "rough_description": "A practical beginner.",
+                        "run_id": run_id,
+                    },
+                )
+                self.assertEqual(200, create_response.status_code)
+
+            confirmation_url = (
+                "/api/authoring/candidate-profile-contexts/"
+                "classical_supervised_ml_algorithms/profile_first_run_001/confirmation"
+            )
+            first_response = client.post(
+                confirmation_url,
+                json={"user_id": "synthetic_user_001"},
+            )
+            self.assertEqual(200, first_response.status_code)
+            profile_context_path = (
+                workspace_root
+                / first_response.json()["artifact_paths"]["profile_context_uri"]
+            )
+            published_snapshot = _load_json(profile_context_path)
+
+            edit_response = client.put(
+                "/api/authoring/candidate-profile-contexts/"
+                "classical_supervised_ml_algorithms/profile_second_run_001",
+                json={
+                    "summary": "A different synthetic user.",
+                    "background": ["Has stronger Python experience."],
+                    "prior_experience": [],
+                    "goals": ["Compare model evaluation strategies."],
+                    "preferences": [],
+                },
+            )
+            self.assertEqual(200, edit_response.status_code)
+            second_confirmation_url = (
+                "/api/authoring/candidate-profile-contexts/"
+                "classical_supervised_ml_algorithms/profile_second_run_001/confirmation"
+            )
+
+            conflict_response = client.post(
+                second_confirmation_url,
+                json={"user_id": "synthetic_user_001"},
+            )
+
+            self.assertEqual(409, conflict_response.status_code)
+            self.assertEqual(published_snapshot, _load_json(profile_context_path))
+
+            overwrite_response = client.post(
+                second_confirmation_url,
+                json={"user_id": "synthetic_user_001", "overwrite": True},
+            )
+
+            self.assertEqual(422, overwrite_response.status_code)
+            self.assertEqual(published_snapshot, _load_json(profile_context_path))
+
+    def test_authoring_api_rejects_confirming_one_profile_context_candidate_twice(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            client = TestClient(
+                create_app(
+                    profile_context_authoring_workflow_factory=lambda client_provider: (
+                        build_profile_context_authoring_workflow(
+                            model_client=FixtureProfileContextModelClient()
+                        )
+                    ),
+                    workspace_root=workspace_root,
+                )
+            )
+            create_response = client.post(
+                "/api/authoring/profile-context-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "rough_description": "A practical beginner.",
+                    "run_id": "profile_confirm_once_run_001",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+            confirmation_url = (
+                "/api/authoring/candidate-profile-contexts/"
+                "classical_supervised_ml_algorithms/profile_confirm_once_run_001/confirmation"
+            )
+            self.assertEqual(
+                200,
+                client.post(
+                    confirmation_url,
+                    json={"user_id": "synthetic_user_001"},
+                ).status_code,
+            )
+
+            response = client.post(
+                confirmation_url,
+                json={"user_id": "synthetic_user_002"},
+            )
+
+            self.assertEqual(409, response.status_code)
+            self.assertFalse(
+                (
+                    workspace_root
+                    / "benchmark"
+                    / "domains"
+                    / "classical_supervised_ml_algorithms"
+                    / "users"
+                    / "synthetic_user_002"
+                ).exists()
+            )
+
+    def test_authoring_api_revalidates_saved_profile_context_candidate_before_confirmation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            client = TestClient(
+                create_app(
+                    profile_context_authoring_workflow_factory=lambda client_provider: (
+                        build_profile_context_authoring_workflow(
+                            model_client=FixtureProfileContextModelClient()
+                        )
+                    ),
+                    workspace_root=workspace_root,
+                )
+            )
+            invalid_candidates = (
+                {"summary": "  "},
+                {"benchmark_domain": "another_domain"},
+                {"mastery_levels": {"train_test_split": "L2"}},
+            )
+
+            for index, invalid_fields in enumerate(invalid_candidates, start=1):
+                with self.subTest(invalid_fields=invalid_fields):
+                    run_id = f"profile_invalid_confirmation_run_{index:03d}"
+                    user_id = f"synthetic_invalid_user_{index:03d}"
+                    create_response = client.post(
+                        "/api/authoring/profile-context-candidates",
+                        json={
+                            "benchmark_domain": "classical_supervised_ml_algorithms",
+                            "rough_description": "A practical beginner.",
+                            "run_id": run_id,
+                        },
+                    )
+                    self.assertEqual(200, create_response.status_code)
+                    candidate_path = (
+                        workspace_root
+                        / create_response.json()["artifact_paths"]["candidate_profile_context_uri"]
+                    )
+                    candidate_path.write_text(
+                        json.dumps(
+                            {
+                                **create_response.json()["candidate_profile_context"],
+                                **invalid_fields,
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+
+                    response = client.post(
+                        "/api/authoring/candidate-profile-contexts/"
+                        f"classical_supervised_ml_algorithms/{run_id}/confirmation",
+                        json={"user_id": user_id},
+                    )
+
+                    self.assertEqual(422, response.status_code)
+                    self.assertFalse(
+                        (
+                            workspace_root
+                            / "benchmark"
+                            / "domains"
+                            / "classical_supervised_ml_algorithms"
+                            / "users"
+                            / user_id
+                        ).exists()
+                    )
+
     def test_authoring_api_rejects_graph_data_in_profile_context_authoring_input(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             fake_model_client = FixtureProfileContextModelClient()

@@ -12,6 +12,33 @@ from backend.knowact.llm.messages import DEEPSEEK_MESSAGE_PROFILE, OPENAI_MESSAG
 
 
 class V1AuthoringApiTest(unittest.TestCase):
+    def test_authoring_api_lists_existing_benchmark_domains(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            domains_dir = workspace_root / "benchmark" / "domains"
+            (domains_dir / "classical_supervised_ml_algorithms").mkdir(parents=True)
+            (domains_dir / "research_methods").mkdir()
+            (domains_dir / "invalid domain").mkdir()
+            (domains_dir / "README.md").write_text("not a domain", encoding="utf-8")
+            client = _test_client(
+                workspace_root,
+                FixtureGraphModelClient(),
+                FixtureSourceParser("unused"),
+            )
+
+            response = client.get("/api/authoring/benchmark-domains")
+
+            self.assertEqual(200, response.status_code)
+            self.assertEqual(
+                {
+                    "benchmark_domains": [
+                        "classical_supervised_ml_algorithms",
+                        "research_methods",
+                    ]
+                },
+                response.json(),
+            )
+
     def test_authoring_api_uploads_pdf_source_material_and_lists_catalog(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)

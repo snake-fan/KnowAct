@@ -969,6 +969,8 @@ Candidate-map run 不复制 confirmed profile-context 或 reviewed-graph payload
 Phase 4 初始 HTTP authoring surface 保持窄而可独立调试：
 
 ``` text
+GET  /api/authoring/benchmark-domains
+
 POST /api/authoring/profile-context-candidates
 GET  /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}
 PUT  /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}
@@ -979,7 +981,7 @@ GET  /api/authoring/candidate-maps/{benchmark_domain}/{run_id}
 POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion
 ```
 
-Profile-context candidate 可以在 confirmation 前编辑。Candidate map 只允许读取并 accept-or-reject review，不提供 map `PUT`。首版不增加 list endpoints；闭环调通后再设计 browsing 与 workbench 产品形态。
+Profile-context candidate 可以在 confirmation 前编辑。Candidate map 只允许读取并 accept-or-reject review，不提供 map `PUT`。首版不增加 candidate-profile 或 candidate-map browsing list endpoints；`GET /api/authoring/benchmark-domains` 是 workbench selector 所需的只读 discovery 例外，只列出现有安全 domain id，不创建或修改 benchmark data。闭环调通后再设计更宽的 browsing 与 workbench 产品形态。
 
 首版也不增加 one-shot orchestration endpoint。调用方显式串联：
 

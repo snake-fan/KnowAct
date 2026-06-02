@@ -158,6 +158,17 @@ class CandidateProfileContext(GeneratedProfileContext):
         return value
 
 
+class ConfirmedProfileContext(CandidateProfileContext):
+    user_id: str
+
+    @field_validator("user_id")
+    @classmethod
+    def _user_id_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
 class ProfileContextAuthoringInput(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
