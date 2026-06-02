@@ -354,6 +354,8 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 - `POST /api/authoring/profile-context-candidates`：生成一份可 review 的 synthetic-user Profile Context 草稿，并写出最小 candidate run artifacts。
 - `GET /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}` 和 `PUT /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`：读取和 validate-save 当前 Profile Context 草稿。保存端点只编辑 persona 字段；run identity 与 benchmark domain 保持固定。
 - `POST /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}/confirmation`：把一份已校验草稿发布为不可变的 `benchmark/domains/{benchmark_domain}/users/{user_id}/profile_context.json`。Confirmed user id 不允许覆盖，每个 candidate run 最多 confirmation 一次。
+- `POST /api/authoring/map-candidates`：按 identity 加载一个 reviewed graph version 与一个 confirmed Profile Context，运行当前 single-batch Candidate Knowledge Map tracer bullet，并写出 `candidate_map.json`、`workflow_log.json`、outline/evidence intermediates 和 step traces。在 multi-batch generation 实现前，这个已打开的窄切片会显式拒绝超过 `5` 个 nodes 的 reviewed graph。Candidate-map run id 不允许覆盖已有 run；重试必须使用新的 run id。
+- `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`：返回一份已保存的 Candidate Knowledge Map 及其 artifact references，供检查使用。
 
 ```json
 {
@@ -376,6 +378,7 @@ PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `.
 - [x] Candidate Graph Review Workbench 前端
 - [x] Phase 3 review-gated authored graph promotion 与 graph manifest generation
 - [x] 基于 LLM 的 Profile Context generation 与不可变 confirmation gate
+- [x] Single-batch Candidate Knowledge Map generation tracer bullet
 - [ ] Ground-truth map authoring
 - [ ] 人工校验协议
 - [ ] 用户模拟器

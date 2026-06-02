@@ -9,6 +9,10 @@ from backend.knowact.authoring.openai_workflow import (
     GraphAuthoringClientProvider,
     build_graph_authoring_workflow_for_provider,
 )
+from backend.knowact.authoring.map_authoring import (
+    CandidateMapAuthoringWorkflow,
+    build_candidate_map_authoring_workflow_for_provider,
+)
 from backend.knowact.authoring.profile_context import (
     ProfileContextAuthoringWorkflow,
     build_profile_context_authoring_workflow_for_provider,
@@ -21,6 +25,10 @@ GraphAuthoringWorkflowFactory = Callable[[GraphAuthoringClientProvider], GraphAu
 ProfileContextAuthoringWorkflowFactory = Callable[
     [GraphAuthoringClientProvider],
     ProfileContextAuthoringWorkflow,
+]
+CandidateMapAuthoringWorkflowFactory = Callable[
+    [GraphAuthoringClientProvider, Path],
+    CandidateMapAuthoringWorkflow,
 ]
 
 
@@ -35,6 +43,7 @@ def create_app(
     *,
     graph_authoring_workflow_factory: GraphAuthoringWorkflowFactory | None = None,
     profile_context_authoring_workflow_factory: ProfileContextAuthoringWorkflowFactory | None = None,
+    candidate_map_authoring_workflow_factory: CandidateMapAuthoringWorkflowFactory | None = None,
     source_parser: SourceParser | None = None,
     workspace_root: Path | None = None,
 ) -> FastAPI:
@@ -50,6 +59,13 @@ def create_app(
             or build_graph_authoring_workflow_for_provider,
             profile_context_authoring_workflow_factory=profile_context_authoring_workflow_factory
             or build_profile_context_authoring_workflow_for_provider,
+            candidate_map_authoring_workflow_factory=candidate_map_authoring_workflow_factory
+            or (
+                lambda client_provider, root: build_candidate_map_authoring_workflow_for_provider(
+                    workspace_root=root,
+                    client_provider=client_provider,
+                )
+            ),
             source_parser=source_parser or MinerUHTTPSourceParser(),
             workspace_root=workspace_root,
         ),

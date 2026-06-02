@@ -21,12 +21,24 @@ from backend.knowact.authoring.logging import (
     summarize_run_log,
     with_artifact_paths,
 )
+from backend.knowact.authoring.map_authoring import (
+    CandidateMapAuthoringInput,
+    CandidateMapAuthoringWorkflow,
+)
+from backend.knowact.authoring.map_authoring_output import (
+    CandidateMapArtifactError,
+    CandidateMapArtifactPaths,
+    CandidateMapNotFoundError,
+    CandidateMapRunConflictError,
+    read_candidate_map_run,
+)
 from backend.knowact.authoring.output import (
     GraphAuthoringIntermediateArtifactWriter,
     write_graph_authoring_output,
     write_graph_authoring_run_log,
 )
 from backend.knowact.authoring.parsers.graph_authoring import AuthoringOutputParseError
+from backend.knowact.authoring.parsers.map_authoring import CandidateMapOutputParseError
 from backend.knowact.authoring.parsers.profile_context import ProfileContextOutputParseError
 from backend.knowact.authoring.profile_context import (
     ProfileContextAuthoringWorkflow,
@@ -64,6 +76,7 @@ from backend.knowact.authoring.sources import (
 from backend.knowact.authoring.validation import validate_candidate_edges, validate_complete_candidate_nodes
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 from backend.knowact.core.graph import GraphManifest, KnowledgeEdge, KnowledgeNode
+from backend.knowact.core.map import KnowledgeMap
 from backend.knowact.llm.client import ModelClientError
 from backend.knowact.logging_config import get_knowact_logger
 from backend.knowact.storage.materials import (
@@ -83,7 +96,13 @@ from backend.knowact.storage.source_material_catalog import (
 from backend.knowact.storage.reviewed_graphs import (
     CandidateGraphArtifactError,
     CandidateGraphNotFoundError,
+    ReviewedGraphArtifactError,
+    ReviewedGraphNotFoundError,
     ReviewedGraphPromotionConflictError,
+)
+from backend.knowact.storage.profile_contexts import (
+    ConfirmedProfileContextArtifactError,
+    ConfirmedProfileContextNotFoundError,
 )
 from backend.knowact.validation.exceptions import KnowActValidationError
 
@@ -96,6 +115,10 @@ GraphAuthoringWorkflowFactory = Callable[[GraphAuthoringClientProvider], GraphAu
 ProfileContextAuthoringWorkflowFactory = Callable[
     [GraphAuthoringClientProvider],
     ProfileContextAuthoringWorkflow,
+]
+CandidateMapAuthoringWorkflowFactory = Callable[
+    [GraphAuthoringClientProvider, Path],
+    CandidateMapAuthoringWorkflow,
 ]
 _LOGGER = get_knowact_logger("api.authoring")
 
@@ -201,6 +224,36 @@ class ProfileContextConfirmationResponse(BaseModel):
     run_id: str
     profile_context: ConfirmedProfileContext
     artifact_paths: ConfirmedProfileContextArtifactPaths
+
+
+class CandidateMapAuthoringRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    benchmark_domain: str
+    graph_version: str
+    user_id: str
+    run_id: str | None = None
+    client_provider: GraphAuthoringClientProvider = DEFAULT_GRAPH_AUTHORING_CLIENT_PROVIDER
+
+    @field_validator("benchmark_domain", "graph_version", "user_id")
+    @classmethod
+    def _ids_must_be_safe(cls, value: str) -> str:
+        return _validate_safe_id(value, "id")
+
+    @field_validator("run_id")
+    @classmethod
+    def _run_id_must_be_safe(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return _validate_safe_id(value, "run_id")
+
+
+class CandidateMapAuthoringResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    run_id: str
+    candidate_map: KnowledgeMap
+    artifact_paths: CandidateMapArtifactPaths
 
 
 class BenchmarkDomainListResponse(BaseModel):
@@ -313,6 +366,7 @@ def build_authoring_router(
     *,
     graph_authoring_workflow_factory: GraphAuthoringWorkflowFactory,
     profile_context_authoring_workflow_factory: ProfileContextAuthoringWorkflowFactory,
+    candidate_map_authoring_workflow_factory: CandidateMapAuthoringWorkflowFactory,
     source_parser: SourceParser,
     workspace_root: Path | None = None,
 ) -> APIRouter:
@@ -514,6 +568,76 @@ def build_authoring_router(
             raise HTTPException(status_code=413, detail=str(exc)) from exc
         except MaterialFileError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @router.post(
+        "/map-candidates",
+        response_model=CandidateMapAuthoringResponse,
+        summary="Generate one single-batch Candidate Knowledge Map.",
+    )
+    def create_candidate_map(
+        request: CandidateMapAuthoringRequest,
+    ) -> CandidateMapAuthoringResponse:
+        run_id = request.run_id or default_graph_authoring_run_id()
+        try:
+            workflow = _build_candidate_map_authoring_workflow(
+                candidate_map_authoring_workflow_factory,
+                client_provider=request.client_provider,
+                workspace_root=root,
+            )
+            result = workflow.run(
+                CandidateMapAuthoringInput(
+                    benchmark_domain=request.benchmark_domain,
+                    graph_version=request.graph_version,
+                    user_id=request.user_id,
+                    run_id=run_id,
+                )
+            )
+        except (ReviewedGraphNotFoundError, ConfirmedProfileContextNotFoundError) as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except CandidateMapRunConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (
+            ReviewedGraphArtifactError,
+            ConfirmedProfileContextArtifactError,
+            KnowActValidationError,
+        ) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except (CandidateMapOutputParseError, ModelClientError) as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return CandidateMapAuthoringResponse(
+            run_id=run_id,
+            candidate_map=result.candidate_map,
+            artifact_paths=result.artifact_paths,
+        )
+
+    @router.get(
+        "/candidate-maps/{benchmark_domain}/{run_id}",
+        response_model=CandidateMapAuthoringResponse,
+        summary="Read one saved Candidate Knowledge Map.",
+    )
+    def read_candidate_map(
+        benchmark_domain: str,
+        run_id: str,
+    ) -> CandidateMapAuthoringResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        run_id = _validate_safe_id_or_422(run_id, "run_id")
+        try:
+            candidate_map, artifact_paths = read_candidate_map_run(
+                workspace_root=root,
+                benchmark_domain=benchmark_domain,
+                run_id=run_id,
+            )
+        except CandidateMapNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except CandidateMapArtifactError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return CandidateMapAuthoringResponse(
+            run_id=run_id,
+            candidate_map=candidate_map,
+            artifact_paths=artifact_paths,
+        )
 
     @router.get(
         "/source-materials",
@@ -863,6 +987,18 @@ def _build_profile_context_authoring_workflow(
 ) -> ProfileContextAuthoringWorkflow:
     try:
         return factory(client_provider)
+    except (ValueError, ModelClientError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+def _build_candidate_map_authoring_workflow(
+    factory: CandidateMapAuthoringWorkflowFactory,
+    *,
+    client_provider: GraphAuthoringClientProvider,
+    workspace_root: Path,
+) -> CandidateMapAuthoringWorkflow:
+    try:
+        return factory(client_provider, workspace_root)
     except (ValueError, ModelClientError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

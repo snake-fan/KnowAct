@@ -875,6 +875,8 @@ Checkpoint 通过后，workflow 将 assembled `states` 归一化为 reviewed `au
 
 `Ground-Truth Evidence Authoring Agent Step` 默认使用 `evidence_batch_size = 5`。`POST /api/authoring/map-candidates` 允许通过 optional positive-integer `evidence_batch_size` 做 request-level override，便于调试不同 provider 或 prompt 尺寸。
 
+当前已打开的 Candidate Knowledge Map tracer bullet 先固定使用一个 evidence-authoring batch，并显式拒绝超过 `5` 个 reviewed nodes 的 graph。它已经提供 identity-based `POST /api/authoring/map-candidates` 和 `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}` artifact inspection；candidate-map run id 不覆盖已有 run directory，retry 使用新的 run id。可配置 batch size、multi-batch execution、edge-consistency warnings、sampling temperature 和 reviewed-map promotion 按后续窄切片继续实现。
+
 首版 evidence batching fail-fast，不支持 partial resume。任一 batch 失败时，整次 candidate-map run 标记失败并保留 traces；修复问题后使用新的 `run_id` 重跑。后续只有在真实调用成本明显需要优化时，再设计基于 immutable outline snapshot 的 resume。
 
 Candidate-map generation 不接受临时上传或 inline 传入的 nodes / edges JSON。无论是正常 flow 还是独立调试调用，它都使用 `benchmark_domain` 与 `graph_version` 定位 `benchmark/domains/{benchmark_domain}/graphs/{graph_version}/` 下已经 promotion 的 reviewed graph snapshot，再读取其中的 `graph_manifest.json`、`authored_nodes.json` 和 `authored_edges.json`。不同 source basis 或书本对应的 reviewed graph snapshot 通过 graph version 选择。

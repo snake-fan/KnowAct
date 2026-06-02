@@ -1,0 +1,570 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from backend.knowact.api.app import create_app
+from backend.knowact.authoring.map_authoring import build_candidate_map_authoring_workflow
+from backend.knowact.llm.client import ModelClientMetadata
+from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE
+
+
+class V1CandidateMapAuthoringApiTest(unittest.TestCase):
+    def test_authoring_api_generates_single_batch_candidate_map_and_reads_saved_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            fake_model_client = FixtureCandidateMapModelClient()
+            client = TestClient(
+                create_app(
+                    candidate_map_authoring_workflow_factory=lambda client_provider, root: (
+                        build_candidate_map_authoring_workflow(
+                            workspace_root=root,
+                            model_client=fake_model_client,
+                        )
+                    ),
+                    workspace_root=workspace_root,
+                )
+            )
+
+            response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_run_001",
+                    "client_provider": "openai",
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("map_run_001", payload["run_id"])
+            self.assertEqual(
+                {
+                    "user_id": "synthetic_user_001",
+                    "kind": "candidate",
+                    "states": [
+                        {
+                            "node_id": "train_test_split",
+                            "mastery_level": "L2",
+                            "evidence_refs": [
+                                "ev_map_run_001_train_test_split_001",
+                                "ev_map_run_001_train_test_split_002",
+                            ],
+                            "misconceptions": ["Assumes the held-out set tunes the model."],
+                            "unknowns": [],
+                        },
+                        {
+                            "node_id": "cross_validation",
+                            "mastery_level": "L1",
+                            "evidence_refs": ["ev_map_run_001_cross_validation_001"],
+                            "misconceptions": [],
+                            "unknowns": ["How folds rotate validation data."],
+                        },
+                    ],
+                    "evidence": [
+                        {
+                            "id": "ev_map_run_001_train_test_split_001",
+                            "node_id": "train_test_split",
+                            "evidence_type": "ground_truth_profile",
+                            "evidence_kind": "misconception_trace",
+                            "visibility": "simulator_only",
+                            "signal": "Uses the held-out set while selecting model settings.",
+                            "turn_id": None,
+                        },
+                        {
+                            "id": "ev_map_run_001_train_test_split_002",
+                            "node_id": "train_test_split",
+                            "evidence_type": "ground_truth_profile",
+                            "evidence_kind": "prior_answer",
+                            "visibility": "simulator_only",
+                            "signal": "Can explain why a final held-out evaluation is useful.",
+                            "turn_id": None,
+                        },
+                        {
+                            "id": "ev_map_run_001_cross_validation_001",
+                            "node_id": "cross_validation",
+                            "evidence_type": "ground_truth_profile",
+                            "evidence_kind": "self_report",
+                            "visibility": "simulator_only",
+                            "signal": "Has heard of cross-validation but cannot describe fold rotation.",
+                            "turn_id": None,
+                        },
+                    ],
+                },
+                payload["candidate_map"],
+            )
+            artifact_paths = payload["artifact_paths"]
+            output_dir = workspace_root / artifact_paths["output_dir_uri"]
+            self.assertEqual(
+                {
+                    "candidate_map.json",
+                    "workflow_log.json",
+                    "intermediate",
+                    "agent_traces",
+                },
+                {path.name for path in output_dir.iterdir()},
+            )
+            self.assertEqual(
+                {"state_outline.json", "ground_truth_evidence.json"},
+                {path.name for path in (output_dir / "intermediate").iterdir()},
+            )
+            self.assertEqual(
+                payload["candidate_map"],
+                _load_json(workspace_root / artifact_paths["candidate_map_uri"]),
+            )
+
+            read_response = client.get(
+                "/api/authoring/candidate-maps/"
+                "classical_supervised_ml_algorithms/map_run_001"
+            )
+
+            self.assertEqual(200, read_response.status_code)
+            self.assertEqual(payload, read_response.json())
+            self.assertEqual(2, len(fake_model_client.calls))
+            outline_prompt = _render_messages(fake_model_client.calls[0])
+            evidence_prompt = _render_messages(fake_model_client.calls[1])
+            self.assertIn("Knowledge-State Outline Agent Step", outline_prompt)
+            self.assertIn("synthetic_user_001", outline_prompt)
+            self.assertIn("train_test_split", outline_prompt)
+            self.assertIn("cross_validation", outline_prompt)
+            self.assertNotIn("edge_train_test_split_prerequisite_for_cross_validation", outline_prompt)
+            self.assertIn("Ground-Truth Evidence Authoring Agent Step", evidence_prompt)
+            self.assertIn("train_test_split", evidence_prompt)
+            self.assertIn("cross_validation", evidence_prompt)
+            self.assertNotIn("edge_train_test_split_prerequisite_for_cross_validation", evidence_prompt)
+
+    def test_authoring_api_rejects_incomplete_outline_before_evidence_authoring_and_retains_debug_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            fake_model_client = MissingNodeOutlineCandidateMapModelClient()
+            client = _test_client(workspace_root, fake_model_client)
+
+            response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_missing_outline_run_001",
+                },
+            )
+
+            self.assertEqual(422, response.status_code)
+            self.assertIn("missing node ids", response.json()["detail"])
+            self.assertEqual(1, len(fake_model_client.calls))
+            output_dir = (
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "candidate_maps"
+                / "map_missing_outline_run_001"
+            )
+            self.assertFalse((output_dir / "candidate_map.json").exists())
+            self.assertTrue((output_dir / "workflow_log.json").exists())
+            self.assertTrue((output_dir / "intermediate" / "state_outline.json").exists())
+            self.assertTrue(
+                (
+                    output_dir
+                    / "agent_traces"
+                    / "knowledge_state_outline"
+                    / "model_raw_output.txt"
+                ).exists()
+            )
+            self.assertEqual("failed", _load_json(output_dir / "workflow_log.json")["status"])
+
+    def test_authoring_api_rejects_evidence_below_mastery_sensitive_minimum_and_retains_debug_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            fake_model_client = InsufficientEvidenceCandidateMapModelClient()
+            client = _test_client(workspace_root, fake_model_client)
+
+            response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_insufficient_evidence_run_001",
+                },
+            )
+
+            self.assertEqual(422, response.status_code)
+            self.assertIn("requires at least 2 simulator-only records", response.json()["detail"])
+            self.assertEqual(2, len(fake_model_client.calls))
+            output_dir = (
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "candidate_maps"
+                / "map_insufficient_evidence_run_001"
+            )
+            self.assertFalse((output_dir / "candidate_map.json").exists())
+            self.assertTrue(
+                (output_dir / "intermediate" / "ground_truth_evidence.json").exists()
+            )
+            self.assertTrue(
+                (
+                    output_dir
+                    / "agent_traces"
+                    / "ground_truth_evidence"
+                    / "batch_001"
+                    / "parser_output.json"
+                ).exists()
+            )
+            self.assertEqual("failed", _load_json(output_dir / "workflow_log.json")["status"])
+
+    def test_authoring_api_rejects_reviewed_graphs_that_do_not_fit_one_evidence_batch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            nodes_path = (
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "graphs"
+                / "v1"
+                / "authored_nodes.json"
+            )
+            nodes = _load_json(nodes_path)
+            nodes.extend(
+                _knowledge_node(f"extra_node_{index}", f"Extra Node {index}")
+                for index in range(1, 5)
+            )
+            _write_json(nodes_path, nodes)
+            fake_model_client = FixtureCandidateMapModelClient()
+            client = _test_client(workspace_root, fake_model_client)
+
+            response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_too_large_run_001",
+                },
+            )
+
+            self.assertEqual(422, response.status_code)
+            self.assertIn("at most 5 reviewed nodes", response.json()["detail"])
+            self.assertEqual([], fake_model_client.calls)
+            output_dir = (
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "candidate_maps"
+                / "map_too_large_run_001"
+            )
+            self.assertFalse((output_dir / "candidate_map.json").exists())
+            self.assertEqual("failed", _load_json(output_dir / "workflow_log.json")["status"])
+
+    def test_authoring_api_rejects_inline_graph_or_profile_context_payloads(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            fake_model_client = FixtureCandidateMapModelClient()
+            client = _test_client(workspace_root, fake_model_client)
+
+            response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "graph_nodes": [{"id": "train_test_split"}],
+                    "edges": [],
+                    "profile_context": {"summary": "Inline payload must not be accepted."},
+                },
+            )
+
+            self.assertEqual(422, response.status_code)
+            self.assertEqual([], fake_model_client.calls)
+            self.assertEqual(
+                {"edges", "graph_nodes", "profile_context"},
+                {
+                    item["loc"][-1]
+                    for item in response.json()["detail"]
+                    if item["type"] == "extra_forbidden"
+                },
+            )
+
+    def test_authoring_api_rejects_evidence_for_nodes_outside_the_single_batch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            fake_model_client = OutsideBatchEvidenceCandidateMapModelClient()
+            client = _test_client(workspace_root, fake_model_client)
+
+            response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_outside_batch_evidence_run_001",
+                },
+            )
+
+            self.assertEqual(422, response.status_code)
+            self.assertIn("nodes outside the batch", response.json()["detail"])
+            output_dir = (
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "candidate_maps"
+                / "map_outside_batch_evidence_run_001"
+            )
+            self.assertFalse((output_dir / "candidate_map.json").exists())
+            self.assertEqual("failed", _load_json(output_dir / "workflow_log.json")["status"])
+
+    def test_authoring_api_rejects_reusing_candidate_map_run_id(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            run_request = {
+                "benchmark_domain": "classical_supervised_ml_algorithms",
+                "graph_version": "v1",
+                "user_id": "synthetic_user_001",
+                "run_id": "map_unique_run_001",
+            }
+            first_client = _test_client(workspace_root, FixtureCandidateMapModelClient())
+            first_response = first_client.post("/api/authoring/map-candidates", json=run_request)
+            self.assertEqual(200, first_response.status_code)
+            candidate_path = (
+                workspace_root / first_response.json()["artifact_paths"]["candidate_map_uri"]
+            )
+            original_candidate = _load_json(candidate_path)
+            second_model_client = InsufficientEvidenceCandidateMapModelClient()
+            second_client = _test_client(workspace_root, second_model_client)
+
+            response = second_client.post("/api/authoring/map-candidates", json=run_request)
+
+            self.assertEqual(409, response.status_code)
+            self.assertEqual([], second_model_client.calls)
+            self.assertEqual(original_candidate, _load_json(candidate_path))
+
+
+class FixtureCandidateMapModelClient:
+    def __init__(self):
+        self.calls = []
+        self.message_profile = OPENAI_MESSAGE_PROFILE
+        self.metadata = ModelClientMetadata(
+            provider="openai",
+            model_name="fixture-map-model",
+            message_profile=OPENAI_MESSAGE_PROFILE.name,
+        )
+
+    def complete(self, *, messages):
+        self.calls.append(messages)
+        if len(self.calls) == 1:
+            return json.dumps(
+                {
+                    "states": [
+                        {
+                            "node_id": "cross_validation",
+                            "mastery_level": "L1",
+                            "misconceptions": [],
+                            "unknowns": ["How folds rotate validation data."],
+                        },
+                        {
+                            "node_id": "train_test_split",
+                            "mastery_level": "L2",
+                            "misconceptions": ["Assumes the held-out set tunes the model."],
+                            "unknowns": [],
+                        },
+                    ]
+                }
+            )
+        return json.dumps(
+            {
+                "evidence": [
+                    {
+                        "node_id": "cross_validation",
+                        "evidence_kind": "self_report",
+                        "signal": "Has heard of cross-validation but cannot describe fold rotation.",
+                    },
+                    {
+                        "node_id": "train_test_split",
+                        "evidence_kind": "misconception_trace",
+                        "signal": "Uses the held-out set while selecting model settings.",
+                    },
+                    {
+                        "node_id": "train_test_split",
+                        "evidence_kind": "prior_answer",
+                        "signal": "Can explain why a final held-out evaluation is useful.",
+                    },
+                ]
+            }
+        )
+
+
+class MissingNodeOutlineCandidateMapModelClient(FixtureCandidateMapModelClient):
+    def complete(self, *, messages):
+        raw_output = super().complete(messages=messages)
+        if len(self.calls) == 1:
+            payload = json.loads(raw_output)
+            payload["states"] = payload["states"][:1]
+            return json.dumps(payload)
+        return raw_output
+
+
+class InsufficientEvidenceCandidateMapModelClient(FixtureCandidateMapModelClient):
+    def complete(self, *, messages):
+        raw_output = super().complete(messages=messages)
+        if len(self.calls) == 2:
+            payload = json.loads(raw_output)
+            payload["evidence"] = [
+                evidence
+                for evidence in payload["evidence"]
+                if evidence["signal"] != "Can explain why a final held-out evaluation is useful."
+            ]
+            return json.dumps(payload)
+        return raw_output
+
+
+class OutsideBatchEvidenceCandidateMapModelClient(FixtureCandidateMapModelClient):
+    def complete(self, *, messages):
+        raw_output = super().complete(messages=messages)
+        if len(self.calls) == 2:
+            payload = json.loads(raw_output)
+            payload["evidence"].append(
+                {
+                    "node_id": "outside_batch_node",
+                    "evidence_kind": "self_report",
+                    "signal": "This node is not part of the supplied evidence batch.",
+                }
+            )
+            return json.dumps(payload)
+        return raw_output
+
+
+def _write_reviewed_graph(workspace_root: Path) -> None:
+    graph_dir = (
+        workspace_root
+        / "benchmark"
+        / "domains"
+        / "classical_supervised_ml_algorithms"
+        / "graphs"
+        / "v1"
+    )
+    graph_dir.mkdir(parents=True)
+    _write_json(
+        graph_dir / "graph_manifest.json",
+        {
+            "graph_id": "kg_classical_supervised_ml_algorithms_v1",
+            "domain": "classical_supervised_ml_algorithms",
+            "version": "v1",
+            "promoted_from_candidate_run": "graph_run_001",
+            "nodes_file": "authored_nodes.json",
+            "edges_file": "authored_edges.json",
+        },
+    )
+    _write_json(
+        graph_dir / "authored_nodes.json",
+        [
+            _knowledge_node("train_test_split", "Train/Test Split"),
+            _knowledge_node("cross_validation", "Cross-Validation"),
+        ],
+    )
+    _write_json(
+        graph_dir / "authored_edges.json",
+        [
+            {
+                "id": "edge_train_test_split_prerequisite_for_cross_validation",
+                "source": "train_test_split",
+                "target": "cross_validation",
+                "type": "prerequisite_for",
+                "rationale": "A held-out split motivates repeated validation splits.",
+                "weight": 0.7,
+                "curation_confidence": 0.8,
+            }
+        ],
+    )
+
+
+def _test_client(workspace_root: Path, model_client: FixtureCandidateMapModelClient) -> TestClient:
+    return TestClient(
+        create_app(
+            candidate_map_authoring_workflow_factory=lambda client_provider, root: (
+                build_candidate_map_authoring_workflow(
+                    workspace_root=root,
+                    model_client=model_client,
+                )
+            ),
+            workspace_root=workspace_root,
+        )
+    )
+
+
+def _write_confirmed_profile_context(workspace_root: Path) -> None:
+    profile_path = (
+        workspace_root
+        / "benchmark"
+        / "domains"
+        / "classical_supervised_ml_algorithms"
+        / "users"
+        / "synthetic_user_001"
+        / "profile_context.json"
+    )
+    profile_path.parent.mkdir(parents=True)
+    _write_json(
+        profile_path,
+        {
+            "user_id": "synthetic_user_001",
+            "benchmark_domain": "classical_supervised_ml_algorithms",
+            "summary": "A practical beginner with limited statistical foundations.",
+            "background": ["Has followed introductory sklearn examples."],
+            "prior_experience": ["Can run basic estimator workflows."],
+            "goals": ["Understand model evaluation."],
+            "preferences": ["Prefers concrete examples."],
+        },
+    )
+
+
+def _knowledge_node(node_id: str, name: str) -> dict[str, object]:
+    return {
+        "id": node_id,
+        "name": name,
+        "type": "concept",
+        "definition": f"Definition for {name}.",
+        "source_locators": [{"source_id": "isl_python", "locator": "chapter 5"}],
+        "diagnostic_goal": f"Diagnose understanding of {name}.",
+        "levels": {f"L{index}": f"L{index} rubric for {name}." for index in range(6)},
+        "diagnostic_signals": [f"Can discuss {name}."],
+        "simulator_behavior": f"Answer consistently about {name}.",
+    }
+
+
+def _write_json(path: Path, payload: object) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+        handle.write("\n")
+
+
+def _load_json(path: Path):
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _render_messages(messages) -> str:
+    return "\n\n".join(message.content for message in messages)
+
+
+if __name__ == "__main__":
+    unittest.main()

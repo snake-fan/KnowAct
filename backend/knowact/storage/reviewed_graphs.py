@@ -7,7 +7,15 @@ import tempfile
 
 from pydantic import BaseModel, ValidationError
 
-from backend.knowact.core.graph import GraphManifest, GraphManifestSource, KnowledgeEdge, KnowledgeNode
+from backend.knowact.core.graph import (
+    GraphManifest,
+    GraphManifestSource,
+    KnowledgeEdge,
+    KnowledgeGraph,
+    KnowledgeNode,
+)
+from backend.knowact.validation.exceptions import KnowActValidationError
+from backend.knowact.validation.graph import validate_knowledge_graph
 
 
 CANDIDATE_NODES_FILENAME = "candidate_nodes.json"
@@ -31,6 +39,14 @@ class ReviewedGraphPromotionConflictError(FileExistsError):
     """Raised when promotion would overwrite an immutable reviewed graph version."""
 
 
+class ReviewedGraphNotFoundError(FileNotFoundError):
+    """Raised when a reviewed graph snapshot does not exist."""
+
+
+class ReviewedGraphArtifactError(ValueError):
+    """Raised when reviewed graph artifacts cannot be parsed or validated."""
+
+
 @dataclass(frozen=True)
 class ReviewedGraphPromotion:
     manifest: GraphManifest
@@ -45,6 +61,13 @@ class CandidateGraphArtifacts:
     nodes: tuple[KnowledgeNode, ...]
     edges: tuple[KnowledgeEdge, ...]
     candidate_dir: Path
+
+
+@dataclass(frozen=True)
+class ReviewedGraphArtifacts:
+    manifest: GraphManifest
+    graph: KnowledgeGraph
+    graph_dir: Path
 
 
 def load_candidate_graph(
@@ -112,6 +135,54 @@ def publish_reviewed_graph(
     )
 
 
+def load_reviewed_graph(
+    *,
+    workspace_root: Path,
+    benchmark_domain: str,
+    version: str,
+) -> ReviewedGraphArtifacts:
+    benchmark_domain = _validate_safe_id(benchmark_domain, "benchmark_domain")
+    version = _validate_safe_id(version, "version")
+    graph_dir = (
+        workspace_root
+        / "benchmark"
+        / "domains"
+        / benchmark_domain
+        / "graphs"
+        / version
+    )
+    manifest_path = graph_dir / GRAPH_MANIFEST_FILENAME
+    if not manifest_path.exists():
+        raise ReviewedGraphNotFoundError(f"Reviewed graph version {version} does not exist")
+    try:
+        manifest = GraphManifest.model_validate(_read_json_payload(manifest_path))
+        if manifest.domain != benchmark_domain:
+            raise ValueError("Reviewed graph manifest domain does not match artifact path")
+        if manifest.version != version:
+            raise ValueError("Reviewed graph manifest version does not match artifact path")
+        if manifest.nodes_file != AUTHORED_NODES_FILENAME:
+            raise ValueError("Reviewed graph manifest nodes_file must be authored_nodes.json")
+        if manifest.edges_file != AUTHORED_EDGES_FILENAME:
+            raise ValueError("Reviewed graph manifest edges_file must be authored_edges.json")
+        nodes = tuple(
+            KnowledgeNode.model_validate(item)
+            for item in _read_json_list(graph_dir / manifest.nodes_file)
+        )
+        edges = tuple(
+            KnowledgeEdge.model_validate(item)
+            for item in _read_json_list(graph_dir / manifest.edges_file)
+        )
+        graph = KnowledgeGraph(nodes=nodes, edges=edges)
+        validate_knowledge_graph(graph)
+    except (OSError, ValueError, ValidationError, KnowActValidationError) as exc:
+        raise ReviewedGraphArtifactError(str(exc)) from exc
+    return ReviewedGraphArtifacts(
+        manifest=manifest,
+        graph=graph,
+        graph_dir=graph_dir,
+    )
+
+
 def read_optional_manifest_sources(candidate_dir: Path) -> tuple[GraphManifestSource, ...]:
     workflow_log_path = candidate_dir / WORKFLOW_LOG_FILENAME
     try:
@@ -142,11 +213,15 @@ def _publish_staged_directory(staging_dir: Path, output_dir: Path) -> None:
 
 
 def _read_json_list(path: Path) -> list[object]:
-    with path.open(encoding="utf-8") as handle:
-        payload = json.load(handle)
+    payload = _read_json_payload(path)
     if not isinstance(payload, list):
         raise ValueError(f"{path.name} must contain a JSON list")
     return payload
+
+
+def _read_json_payload(path: Path) -> object:
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def _write_json_list(path: Path, items: tuple[BaseModel, ...]) -> None:
