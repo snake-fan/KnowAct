@@ -34,13 +34,20 @@ from backend.knowact.authoring.profile_context import (
 from backend.knowact.authoring.profile_context_output import (
     CandidateProfileContextArtifactError,
     CandidateProfileContextArtifactPaths,
+    CandidateProfileContextConfirmationConflictError,
     CandidateProfileContextNotFoundError,
+    ConfirmedProfileContextArtifactPaths,
+    ConfirmedProfileContextConflictError,
+    confirm_candidate_profile_context,
     read_candidate_profile_context_run,
+    write_candidate_profile_context,
     write_candidate_profile_context_run,
 )
 from backend.knowact.authoring.review_promotion import promote_candidate_graph
 from backend.knowact.authoring.schemas import (
     CandidateProfileContext,
+    ConfirmedProfileContext,
+    GeneratedProfileContext,
     GraphAuthoringWorkflowResult,
     ProfileContextAuthoringInput,
     SourceGroundedNodeSkeleton,
@@ -171,6 +178,29 @@ class ProfileContextCandidateAuthoringResponse(BaseModel):
     run_id: str
     candidate_profile_context: CandidateProfileContext
     artifact_paths: CandidateProfileContextArtifactPaths
+
+
+class ProfileContextCandidateSaveRequest(GeneratedProfileContext):
+    pass
+
+
+class ProfileContextConfirmationRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    user_id: str
+
+    @field_validator("user_id")
+    @classmethod
+    def _user_id_must_be_safe(cls, value: str) -> str:
+        return _validate_safe_id(value, "user_id")
+
+
+class ProfileContextConfirmationResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    run_id: str
+    profile_context: ConfirmedProfileContext
+    artifact_paths: ConfirmedProfileContextArtifactPaths
 
 
 class SourceMaterialInfo(BaseModel):
@@ -340,6 +370,7 @@ def build_authoring_router(
             candidate, artifact_paths = read_candidate_profile_context_run(
                 workspace_root=root,
                 output_dir=_candidate_profile_context_output_dir(root, benchmark_domain, run_id),
+                benchmark_domain=benchmark_domain,
             )
         except CandidateProfileContextNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -349,6 +380,87 @@ def build_authoring_router(
         return ProfileContextCandidateAuthoringResponse(
             run_id=run_id,
             candidate_profile_context=candidate,
+            artifact_paths=artifact_paths,
+        )
+
+    @router.put(
+        "/candidate-profile-contexts/{benchmark_domain}/{run_id}",
+        response_model=ProfileContextCandidateAuthoringResponse,
+        summary="Validate and overwrite one Profile Context candidate draft.",
+    )
+    def save_profile_context_candidate(
+        benchmark_domain: str,
+        run_id: str,
+        request: ProfileContextCandidateSaveRequest,
+    ) -> ProfileContextCandidateAuthoringResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        run_id = _validate_safe_id_or_422(run_id, "run_id")
+        output_dir = _candidate_profile_context_output_dir(root, benchmark_domain, run_id)
+        try:
+            _, artifact_paths = read_candidate_profile_context_run(
+                workspace_root=root,
+                output_dir=output_dir,
+                benchmark_domain=benchmark_domain,
+            )
+            candidate = CandidateProfileContext(
+                benchmark_domain=benchmark_domain,
+                **request.model_dump(),
+            )
+            write_candidate_profile_context(output_dir=output_dir, candidate=candidate)
+        except CandidateProfileContextNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except CandidateProfileContextArtifactError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        return ProfileContextCandidateAuthoringResponse(
+            run_id=run_id,
+            candidate_profile_context=candidate,
+            artifact_paths=artifact_paths,
+        )
+
+    @router.post(
+        "/candidate-profile-contexts/{benchmark_domain}/{run_id}/confirmation",
+        response_model=ProfileContextConfirmationResponse,
+        summary="Confirm one Profile Context candidate as an immutable synthetic-user snapshot.",
+    )
+    def confirm_profile_context_candidate(
+        benchmark_domain: str,
+        run_id: str,
+        request: ProfileContextConfirmationRequest,
+    ) -> ProfileContextConfirmationResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        run_id = _validate_safe_id_or_422(run_id, "run_id")
+        output_dir = _candidate_profile_context_output_dir(root, benchmark_domain, run_id)
+        try:
+            candidate, _ = read_candidate_profile_context_run(
+                workspace_root=root,
+                output_dir=output_dir,
+                benchmark_domain=benchmark_domain,
+            )
+            profile_context, artifact_paths = confirm_candidate_profile_context(
+                workspace_root=root,
+                output_dir=output_dir,
+                benchmark_domain=benchmark_domain,
+                user_id=request.user_id,
+                candidate=candidate,
+            )
+        except CandidateProfileContextNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except (
+            CandidateProfileContextConfirmationConflictError,
+            ConfirmedProfileContextConflictError,
+        ) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except CandidateProfileContextArtifactError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        return ProfileContextConfirmationResponse(
+            run_id=run_id,
+            profile_context=profile_context,
             artifact_paths=artifact_paths,
         )
 

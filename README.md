@@ -350,6 +350,9 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 - `POST /api/authoring/graph-candidates`, which reads one PDF by relative path under `storage/`, resolves same-directory same-stem Parsed Source Markdown, calls MinerU to create or regenerate that Markdown when needed, sends the Markdown text only to the node extraction step, returns source-grounded skeletons, candidate nodes, candidate edges, Markdown cache metadata, and a compact run log summary, and writes `candidate_nodes.json`, `candidate_edges.json`, validation-passed `intermediate/` artifacts, and sidecar `workflow_log.json` by default. The workflow log records step status and links to `agent_traces/{step}/model_raw_output.txt`, `agent_traces/{step}/parser_output.json`, and batch trace artifacts where applicable, while still avoiding full prompt/source-material text. MinerU standard mode publishes the local PDF through a private Aliyun OSS staging object and short-lived signed URL before submitting the URL to MinerU; PDFs above `KNOWACT_MINERU_MAX_PAGES_PER_TASK` are split into chunks and their Markdown results are joined in page order. Only the node and edge files are candidate graph review artifacts. Example request:
 - `GET /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}` and `PUT /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}`, which read and validate-save candidate graph review artifacts. The save endpoint overwrites `candidate_nodes.json` and `candidate_edges.json` only after schema and graph validation pass.
 - `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`, which revalidates saved candidate artifacts, copies them into `benchmark/domains/{benchmark_domain}/graphs/{version}/` as `authored_nodes.json` and `authored_edges.json`, and generates `graph_manifest.json`. Reviewed graph versions are immutable: an existing version returns `409 Conflict`, and corrections must publish a new version.
+- `POST /api/authoring/profile-context-candidates`, which generates one reviewable synthetic-user Profile Context draft and writes the minimal candidate run artifacts.
+- `GET /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}` and `PUT /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`, which read and validate-save the current Profile Context draft. The save endpoint edits persona fields only; run identity and benchmark domain remain fixed.
+- `POST /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}/confirmation`, which publishes one validated draft as immutable `benchmark/domains/{benchmark_domain}/users/{user_id}/profile_context.json`. Confirmed user ids cannot be overwritten, and each candidate run can be confirmed at most once.
 
 ```json
 {
@@ -371,8 +374,8 @@ Implemented / planned components include:
 - [x] FastAPI authoring API for real source-backed graph candidate runs
 - [x] Candidate Graph Review Workbench frontend
 - [x] Phase 3 review-gated authored graph promotion with generated manifests
+- [x] LLM-based Profile Context generation and immutable confirmation gate
 - [ ] Ground-truth map authoring
-- [ ] LLM-based profile generation
 - [ ] Human verification protocol
 - [ ] User simulator
 - [ ] Tested agent interface

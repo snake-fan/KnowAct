@@ -350,6 +350,9 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 - `POST /api/authoring/graph-candidates`：按 `storage/` 下的相对路径读取一个 PDF，解析或复用同目录同 stem 的 Parsed Source Markdown，必要时调用 MinerU 创建或重新生成 Markdown，再只把 Markdown 文本发送给 node extraction step，返回 source-grounded skeletons、candidate nodes、candidate edges、Markdown cache metadata 和 compact run log summary，并默认写出 `candidate_nodes.json`、`candidate_edges.json`、通过 validation 的 `intermediate/` artifacts 以及 sidecar `workflow_log.json`。workflow log 记录 step 状态，并链接到 `agent_traces/{step}/model_raw_output.txt`、`agent_traces/{step}/parser_output.json` 和适用时的 batch trace artifacts 以便 debug，但仍不写入完整 prompt/source-material text。MinerU standard mode 会先把本地 PDF 发布为私有阿里云 OSS staging object 的短期 signed URL，再把这个 URL 提交给 MinerU；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会拆成 chunks 并按页码顺序拼接 Markdown。其中只有 node 和 edge 文件是 candidate graph review artifacts。示例请求：
 - `GET /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}` 和 `PUT /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}`：读取和 validate-save candidate graph review artifacts。保存端点只有在 schema 与 graph validation 通过后，才会覆盖 `candidate_nodes.json` 和 `candidate_edges.json`。
 - `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`：重新校验已保存的 candidate artifacts，将它们复制到 `benchmark/domains/{benchmark_domain}/graphs/{version}/` 下并命名为 `authored_nodes.json` 与 `authored_edges.json`，同时生成 `graph_manifest.json`。Reviewed graph version 不可变：已有 version 返回 `409 Conflict`，修订必须发布新的 version。
+- `POST /api/authoring/profile-context-candidates`：生成一份可 review 的 synthetic-user Profile Context 草稿，并写出最小 candidate run artifacts。
+- `GET /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}` 和 `PUT /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`：读取和 validate-save 当前 Profile Context 草稿。保存端点只编辑 persona 字段；run identity 与 benchmark domain 保持固定。
+- `POST /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}/confirmation`：把一份已校验草稿发布为不可变的 `benchmark/domains/{benchmark_domain}/users/{user_id}/profile_context.json`。Confirmed user id 不允许覆盖，每个 candidate run 最多 confirmation 一次。
 
 ```json
 {
@@ -371,8 +374,8 @@ PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `.
 - [x] FastAPI authoring API，用于真实 source-backed graph candidate runs
 - [x] Candidate Graph Review Workbench 前端
 - [x] Phase 3 review-gated authored graph promotion 与 graph manifest generation
+- [x] 基于 LLM 的 Profile Context generation 与不可变 confirmation gate
 - [ ] Ground-truth map authoring
-- [ ] 基于 LLM 的画像生成
 - [ ] 人工校验协议
 - [ ] 用户模拟器
 - [ ] 被测 agent 接口
