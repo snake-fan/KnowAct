@@ -6,6 +6,8 @@ from backend.knowact.authoring.templates.common import (
     JSON_ONLY_RULES,
     NODE_DESIGN_RULES,
     SOURCE_READING_RULES,
+    STOP_AFTER_JSON_RULES,
+    TASK_DATA_BOUNDARY_RULES,
     render_parsed_source_markdown,
     render_sections,
 )
@@ -21,24 +23,46 @@ def build_node_extraction_messages(
         ModelMessage(
             role=message_profile.high_priority_instruction_role,
             content=render_sections(
-                "You are the KnowAct Node Extraction Agent Step.",
+                """
+Role:
+You are the KnowAct Node Extraction Agent Step.
+""".strip(),
+                """
+Objective:
+Extract reviewable Source-Grounded Node Skeletons that can later become benchmark Knowledge Nodes.
+Success means every returned skeleton is source-grounded, diagnosable, moderately granular, and parseable by the exact JSON contract.
+""".strip(),
                 AUTHORING_CONTEXT,
+                TASK_DATA_BOUNDARY_RULES,
                 SOURCE_READING_RULES,
                 NODE_DESIGN_RULES,
                 """
+Input boundary:
 This step extracts only Source-Grounded Node Skeletons from Parsed Source Markdown.
 It is not the rubric-writing step and it is not the edge proposal step.
-
-Extract skeletons that can later become benchmark Knowledge Nodes:
+The Parsed Source Markdown is the only source-material text available to this step.
+""".strip(),
+                """
+Process:
+1. Scan the Parsed Source Markdown for stable concepts that matter for active knowledge-state diagnosis.
+2. Merge obvious duplicates and near-synonyms into one canonical skeleton id.
+3. Keep only concepts with enough source grounding to support a reviewer locator and concise source_grounding_notes.
+4. Prefer source-grounded definitions, boundaries, contrasts, dependencies, examples, and diagnostic clues over broad chapter headings or isolated notation.
+5. Remove anything that would belong to rubric authoring, edge proposal, user-state authoring, or evidence authoring.
+""".strip(),
+                """
+Decision rules:
 - Preserve a clear source trail for every skeleton.
 - Prefer stable domain concepts over section headings, implementation details, examples, or isolated formula notation.
-- Merge obvious duplicates and near-synonyms into one canonical skeleton id.
 - Use snake_case ids that are stable and meaningful.
 - Write definitions from the Parsed Source Markdown, not from outside memory.
 - Write concise source_grounding_notes that preserve the source-grounded facts later workflow steps need without copying long source passages.
+- If a concept cannot be grounded in the Parsed Source Markdown, omit it.
+- If no concept is sufficiently grounded, return {"skeletons": []}.
 - Do not output diagnostic_goal, levels, diagnostic_signals, simulator_behavior, edges, user states, or evidence.
 """.strip(),
                 """
+Output contract:
 Return JSON with this exact top-level shape:
 {
   "skeletons": [
@@ -62,8 +86,16 @@ Return JSON with this exact top-level shape:
 }
 
 The complete response must be a JSON object with exactly one top-level key: "skeletons".
-"skeletons" must be an array. If you cannot ground a concept in the Parsed Source Markdown, omit that concept rather than adding notes outside JSON.
+"skeletons" must be an array.
 """.strip(),
+                """
+Final check before output:
+- Each skeleton has a nonblank id, name, type, definition, source_locators, and source_grounding_notes.
+- Each locator uses a provided source_id and a reviewer-usable locator.
+- No skeleton relies on outside memory or invented source metadata.
+- No output contains user-state, evidence, candidate-status, edge, or rubric fields.
+""".strip(),
+                STOP_AFTER_JSON_RULES,
                 JSON_ONLY_RULES,
             ),
         ),
