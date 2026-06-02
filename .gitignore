@@ -97,3 +97,4 @@ intermediate/
 # benchmark
 candidate_edges.json
 candidate_nodes.json
+domains/
