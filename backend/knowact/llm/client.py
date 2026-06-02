@@ -33,5 +33,6 @@ class ModelClient(Protocol):
         self,
         *,
         messages: Sequence[ModelMessage],
+        temperature: float | None = None,
     ) -> str:
         """Return raw model text for a rendered message list."""

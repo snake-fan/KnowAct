@@ -875,7 +875,7 @@ Checkpoint 通过后，workflow 将 assembled `states` 归一化为 reviewed `au
 
 `Ground-Truth Evidence Authoring Agent Step` 默认使用 `evidence_batch_size = 5`。`POST /api/authoring/map-candidates` 允许通过 optional positive-integer `evidence_batch_size` 做 request-level override，便于调试不同 provider 或 prompt 尺寸。
 
-当前已打开的 Candidate Knowledge Map tracer bullet 先固定使用一个 evidence-authoring batch，并显式拒绝超过 `5` 个 reviewed nodes 的 graph。它已经提供 identity-based `POST /api/authoring/map-candidates` 和 `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}` artifact inspection；candidate-map run id 不覆盖已有 run directory，retry 使用新的 run id。可配置 batch size、multi-batch execution、edge-consistency warnings、sampling temperature 和 reviewed-map promotion 按后续窄切片继续实现。
+当前已打开的 Candidate Knowledge Map reviewed-graph slice 已提供 identity-based `POST /api/authoring/map-candidates` 和 `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}` artifact inspection。它运行一次 full-graph outline 调用，将 evidence authoring 按稳定 reviewed-node 顺序切成连续窗口，默认 `evidence_batch_size = 5` 并允许正整数 request-level override；同一个 request-level `sampling_temperature` 应用于 outline 与所有 evidence batches。成功 run 写出 edge-consistency warnings，失败 batch 立即终止整次 run 并保留已产生的 debug artifacts。Candidate-map run id 不覆盖已有 run directory，retry 使用新的 run id。Reviewed-map promotion 按后续窄切片继续实现。
 
 首版 evidence batching fail-fast，不支持 partial resume。任一 batch 失败时，整次 candidate-map run 标记失败并保留 traces；修复问题后使用新的 `run_id` 重跑。后续只有在真实调用成本明显需要优化时，再设计基于 immutable outline snapshot 的 resume。
 

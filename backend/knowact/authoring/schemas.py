@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.knowact.core.evidence import EvidenceKind
@@ -236,3 +238,29 @@ class GroundTruthEvidenceDraftList(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     evidence: tuple[GroundTruthEvidenceDraft, ...]
+
+
+class MapEdgeConsistencyWarning(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    edge_id: str
+    source_node_id: str
+    source_mastery_level: MasteryLevel
+    target_node_id: str
+    target_mastery_level: MasteryLevel
+    rule: Literal[
+        "prerequisite_target_mastery_exceeds_source_by_at_least_two_levels"
+    ] = "prerequisite_target_mastery_exceeds_source_by_at_least_two_levels"
+
+    @field_validator("edge_id", "source_node_id", "target_node_id", "rule")
+    @classmethod
+    def _values_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
+class MapEdgeConsistencyWarningList(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    warnings: tuple[MapEdgeConsistencyWarning, ...]

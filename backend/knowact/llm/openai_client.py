@@ -41,14 +41,18 @@ class OpenAIChatModelClient:
         self,
         *,
         messages: Sequence[ModelMessage],
+        temperature: float | None = None,
     ) -> str:
         params: dict[str, object] = {
             "model": self._config.model,
             "messages": render_messages_for_profile(messages, self.message_profile),
             "response_format": {"type": "json_object"},
         }
-        if self._config.temperature is not None:
-            params["temperature"] = self._config.temperature
+        effective_temperature = (
+            temperature if temperature is not None else self._config.temperature
+        )
+        if effective_temperature is not None:
+            params["temperature"] = effective_temperature
         completion = self._client.chat.completions.create(**params)
         return _extract_content(completion)
 

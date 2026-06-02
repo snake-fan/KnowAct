@@ -234,6 +234,8 @@ class CandidateMapAuthoringRequest(BaseModel):
     user_id: str
     run_id: str | None = None
     client_provider: GraphAuthoringClientProvider = DEFAULT_GRAPH_AUTHORING_CLIENT_PROVIDER
+    evidence_batch_size: int = Field(default=5, gt=0)
+    sampling_temperature: float = Field(default=0.7, ge=0.0)
 
     @field_validator("benchmark_domain", "graph_version", "user_id")
     @classmethod
@@ -572,7 +574,7 @@ def build_authoring_router(
     @router.post(
         "/map-candidates",
         response_model=CandidateMapAuthoringResponse,
-        summary="Generate one single-batch Candidate Knowledge Map.",
+        summary="Generate one Candidate Knowledge Map over a reviewed graph.",
     )
     def create_candidate_map(
         request: CandidateMapAuthoringRequest,
@@ -590,6 +592,8 @@ def build_authoring_router(
                     graph_version=request.graph_version,
                     user_id=request.user_id,
                     run_id=run_id,
+                    evidence_batch_size=request.evidence_batch_size,
+                    sampling_temperature=request.sampling_temperature,
                 )
             )
         except (ReviewedGraphNotFoundError, ConfirmedProfileContextNotFoundError) as exc:
