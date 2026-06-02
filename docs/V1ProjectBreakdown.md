@@ -284,6 +284,7 @@ Implementation note:
 
 - Structures to implement: map authoring helpers under `backend/knowact/authoring/`, map/evidence loaders under `backend/knowact/storage/`, candidate and confirmed profile-context artifacts, reviewed `ground_truth_maps/`, and validation checks for coverage and hidden evidence visibility.
 - Interfaces to open for the initial functional slice:
+  - `GET /api/authoring/benchmark-domains`
   - `POST /api/authoring/profile-context-candidates`
   - `GET /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`
   - `PUT /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`
@@ -291,7 +292,7 @@ Implementation note:
   - `POST /api/authoring/map-candidates`
   - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`
   - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`
-- Do not add list endpoints in the initial Phase 4 slice. Add browsing and workbench-oriented surfaces after the functional workflow is exercised end to end.
+- Do not add candidate-profile or candidate-map browsing list endpoints in the initial Phase 4 slice. `GET /api/authoring/benchmark-domains` is a narrow read-only discovery exception for workbench selectors: it lists existing safe domain ids without creating or mutating benchmark data. Add wider browsing surfaces after the functional workflow is exercised end to end.
 - Do not add a one-shot orchestration endpoint in the initial Phase 4 slice. Callers explicitly sequence the narrow endpoints so profile-context editing, confirmation, candidate-map inspection, and promotion remain visible gates.
 - Authoring API boundary: profile-context candidates may be edited before confirmation; candidate maps may be inspected and either promoted unchanged or rejected, but not edited through a map `PUT` endpoint.
 - `POST /api/authoring/profile-context-candidates` accepts required `benchmark_domain` and `rough_description`, optional limited `domain_summary`, optional `run_id`, and request-level `client_provider`. `domain_summary` may be supplied inline in the initial slice but must not contain node or rubric details; a later domain manifest may replace this temporary input.

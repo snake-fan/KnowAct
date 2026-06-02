@@ -203,6 +203,12 @@ class ProfileContextConfirmationResponse(BaseModel):
     artifact_paths: ConfirmedProfileContextArtifactPaths
 
 
+class BenchmarkDomainListResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domains: tuple[str, ...]
+
+
 class SourceMaterialInfo(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -313,6 +319,23 @@ def build_authoring_router(
     root = workspace_root or _default_workspace_root()
     storage_root = root / "storage"
     router = APIRouter()
+
+    @router.get(
+        "/benchmark-domains",
+        response_model=BenchmarkDomainListResponse,
+        summary="List existing benchmark domains available for authoring.",
+    )
+    def list_benchmark_domains() -> BenchmarkDomainListResponse:
+        domains_dir = root / "benchmark" / "domains"
+        if not domains_dir.exists():
+            return BenchmarkDomainListResponse(benchmark_domains=())
+        return BenchmarkDomainListResponse(
+            benchmark_domains=tuple(
+                entry.name
+                for entry in sorted(domains_dir.iterdir())
+                if entry.is_dir() and _SAFE_ID_PATTERN.fullmatch(entry.name)
+            )
+        )
 
     @router.post(
         "/profile-context-candidates",

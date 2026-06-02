@@ -372,6 +372,7 @@ load Evaluation Episode Manifest
 建议路由：
 
 - `GET /health`
+- `GET /api/authoring/benchmark-domains`
 - `POST /api/authoring/graph-candidates`
 - `POST /api/authoring/profile-context-candidates`
 - `GET /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`
@@ -389,7 +390,7 @@ load Evaluation Episode Manifest
 - `GET /runs/{run_id}`
 - `GET /runs/{run_id}/report`
 
-Phase 4 的初始 authoring surface 保持 narrow and functional：profile-context candidate 支持生成、读取、编辑和显式 confirmation；candidate map 支持生成、读取和显式 promotion，但不提供 map `PUT`，因为 poor candidate maps 应重新生成而不是手工 patch。初始切片不增加 list endpoints，也不增加 one-shot orchestration endpoint。调用方显式串联窄接口，使 profile-context editing、confirmation、candidate-map inspection 和 promotion 保持可见 gate；待闭环调通后再考虑 browsing 和 workbench 产品形态。
+Phase 4 的初始 authoring surface 保持 narrow and functional：profile-context candidate 支持生成、读取、编辑和显式 confirmation；candidate map 支持生成、读取和显式 promotion，但不提供 map `PUT`，因为 poor candidate maps 应重新生成而不是手工 patch。初始切片不增加 candidate-profile 或 candidate-map browsing list endpoints，也不增加 one-shot orchestration endpoint。为支持 workbench selector，允许一个只读 `GET /api/authoring/benchmark-domains` 从 `benchmark/domains/` 列出现有安全 domain id；它不创建或修改 benchmark data。调用方显式串联窄接口，使 profile-context editing、confirmation、candidate-map inspection 和 promotion 保持可见 gate；待闭环调通后再考虑更宽的 browsing 和 workbench 产品形态。
 
 `POST /api/authoring/profile-context-candidates` 接收 required `benchmark_domain`、required `rough_description`、optional limited `domain_summary`、optional `run_id` 和 request-level `client_provider`。首版允许 inline `domain_summary`，但其中不得包含 node 或 rubric 明细；后续可由 domain manifest 提供稳定 summary。
 

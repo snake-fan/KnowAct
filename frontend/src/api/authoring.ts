@@ -109,6 +109,48 @@ export type ApiError = {
   message: string;
 };
 
+export type BenchmarkDomainListResponse = {
+  benchmark_domains: string[];
+};
+
+export type CandidateProfileContext = {
+  benchmark_domain: string;
+  summary: string;
+  background: string[];
+  prior_experience: string[];
+  goals: string[];
+  preferences: string[];
+};
+
+export type CandidateProfileContextArtifactPaths = {
+  output_dir_uri: string;
+  candidate_profile_context_uri: string;
+  workflow_log_uri: string;
+  model_raw_output_uri: string;
+  parser_output_uri: string;
+};
+
+export type ProfileContextCandidateResponse = {
+  run_id: string;
+  candidate_profile_context: CandidateProfileContext;
+  artifact_paths: CandidateProfileContextArtifactPaths;
+};
+
+export type ConfirmedProfileContext = CandidateProfileContext & {
+  user_id: string;
+};
+
+export type ConfirmedProfileContextArtifactPaths = {
+  output_dir_uri: string;
+  profile_context_uri: string;
+};
+
+export type ProfileContextConfirmationResponse = {
+  run_id: string;
+  profile_context: ConfirmedProfileContext;
+  artifact_paths: ConfirmedProfileContextArtifactPaths;
+};
+
 export class ApiRequestError extends Error {
   readonly status: number;
 
@@ -117,6 +159,11 @@ export class ApiRequestError extends Error {
     this.name = "ApiRequestError";
     this.status = status;
   }
+}
+
+export async function listBenchmarkDomains(): Promise<string[]> {
+  const payload = await requestJson<BenchmarkDomainListResponse>("/api/authoring/benchmark-domains");
+  return payload.benchmark_domains;
 }
 
 export async function listSourceMaterials(): Promise<SourceMaterialRecord[]> {
@@ -214,6 +261,59 @@ export async function promoteCandidateGraph(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ version })
+    }
+  );
+}
+
+export async function generateProfileContextCandidate(input: {
+  benchmarkDomain: string;
+  roughDescription: string;
+  domainSummary?: string;
+  clientProvider: "openai" | "deepseek";
+}): Promise<ProfileContextCandidateResponse> {
+  return requestJson<ProfileContextCandidateResponse>("/api/authoring/profile-context-candidates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      benchmark_domain: input.benchmarkDomain,
+      rough_description: input.roughDescription,
+      domain_summary: input.domainSummary?.trim() || null,
+      client_provider: input.clientProvider
+    })
+  });
+}
+
+export async function saveProfileContextCandidate(
+  runId: string,
+  profileContext: CandidateProfileContext
+): Promise<ProfileContextCandidateResponse> {
+  return requestJson<ProfileContextCandidateResponse>(
+    `/api/authoring/candidate-profile-contexts/${encodeURIComponent(profileContext.benchmark_domain)}/${encodeURIComponent(runId)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        summary: profileContext.summary,
+        background: profileContext.background,
+        prior_experience: profileContext.prior_experience,
+        goals: profileContext.goals,
+        preferences: profileContext.preferences
+      })
+    }
+  );
+}
+
+export async function confirmProfileContextCandidate(
+  runId: string,
+  benchmarkDomain: string,
+  userId: string
+): Promise<ProfileContextConfirmationResponse> {
+  return requestJson<ProfileContextConfirmationResponse>(
+    `/api/authoring/candidate-profile-contexts/${encodeURIComponent(benchmarkDomain)}/${encodeURIComponent(runId)}/confirmation`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId })
     }
   );
 }

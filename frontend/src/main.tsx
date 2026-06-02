@@ -1,10 +1,10 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { CandidateGraphWorkbench } from "./features/candidateGraph/CandidateGraphWorkbench";
+import { App } from "./App";
 import "./styles.css";
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <CandidateGraphWorkbench />
+    <App />
   </React.StrictMode>
 );
