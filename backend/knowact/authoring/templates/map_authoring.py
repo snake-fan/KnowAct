@@ -6,6 +6,7 @@ from backend.knowact.authoring.schemas import ConfirmedProfileContext
 from backend.knowact.authoring.templates.common import JSON_ONLY_RULES, render_sections
 from backend.knowact.core.evidence import EvidenceKind
 from backend.knowact.core.graph import KnowledgeNode
+from backend.knowact.core.map import MasteryLevel
 from backend.knowact.llm.messages import ModelMessage, ModelMessageProfile, OPENAI_MESSAGE_PROFILE
 
 
@@ -15,15 +16,88 @@ def build_knowledge_state_outline_messages(
     nodes: tuple[KnowledgeNode, ...],
     message_profile: ModelMessageProfile = OPENAI_MESSAGE_PROFILE,
 ) -> tuple[ModelMessage, ...]:
+    allowed_mastery_levels = "\n".join(f"- {level.value}" for level in MasteryLevel)
     return (
         ModelMessage(
             role=message_profile.high_priority_instruction_role,
-            content=(
-                "You are the Knowledge-State Outline Agent Step. Draft one plausible synthetic "
-                "user knowledge state for every supplied reviewed node. Return JSON with a states "
-                "array. Each state must contain node_id, mastery_level from L0 through L5, and "
-                "explicit misconceptions and unknowns arrays. Do not emit evidence refs, user "
-                "identity, lifecycle kind, or graph edges. Avoid blank or exactly duplicated items."
+            content=render_sections(
+                "You are the Knowledge-State Outline Agent Step.",
+                dedent(
+                    """
+                    Task:
+                    - Draft one plausible synthetic user knowledge state for every supplied reviewed node.
+                    - Use the confirmed Profile Context only to keep the synthetic user coherent.
+                    - Use reviewed_nodes_with_rubrics as the complete node set for this outline.
+                    - Do not author evidence in this step.
+                    """
+                ).strip(),
+                dedent(
+                    """
+                    Return JSON with this exact top-level shape:
+                    {
+                      "states": [
+                        {
+                          "node_id": "node id from reviewed_nodes_with_rubrics",
+                          "mastery_level": "one allowed mastery level",
+                          "misconceptions": ["zero or more strings"],
+                          "unknowns": ["zero or more strings"]
+                        }
+                      ]
+                    }
+                    """
+                ).strip(),
+                dedent(
+                    """
+                    Allowed output fields for each state object:
+                    - node_id
+                    - mastery_level
+                    - misconceptions
+                    - unknowns
+                    """
+                ).strip(),
+                dedent(
+                    """
+                    Forbidden output:
+                    - evidence_refs
+                    - evidence ids
+                    - evidence objects
+                    - user identity
+                    - lifecycle kind
+                    - graph edges
+                    - scores
+                    - promotion metadata
+                    - any field not listed in Allowed output fields
+                    """
+                ).strip(),
+                dedent(
+                    """
+                    Node coverage:
+                    - Every state.node_id must exactly match one node id from reviewed_nodes_with_rubrics.
+                    - Return exactly one state object for every reviewed node.
+                    - Do not omit reviewed nodes.
+                    - Do not add nodes outside reviewed_nodes_with_rubrics.
+                    """
+                ).strip(),
+                f"Allowed mastery_level values:\n{allowed_mastery_levels}",
+                dedent(
+                    """
+                    Array rules:
+                    - misconceptions must always be present, even when empty.
+                    - unknowns must always be present, even when empty.
+                    - Items must be nonblank strings.
+                    - Do not repeat exact duplicate strings within one misconceptions or unknowns array.
+                    - If an item needs quotation marks inside the text, escape them as valid JSON or rewrite without quotation marks.
+                    """
+                ).strip(),
+                dedent(
+                    """
+                    Quality checks:
+                    - Keep each state node-level, not episode-level.
+                    - Do not force misconceptions or unknowns just to fill space.
+                    - Use concise strings that help later evidence authoring and simulation.
+                    """
+                ).strip(),
+                JSON_ONLY_RULES,
             ),
         ),
         ModelMessage(

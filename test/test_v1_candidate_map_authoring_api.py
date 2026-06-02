@@ -184,6 +184,26 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
             self.assertIn("synthetic_user_001", outline_prompt)
             self.assertIn("train_test_split", outline_prompt)
             self.assertIn("cross_validation", outline_prompt)
+            self.assertIn("Return JSON with this exact top-level shape:", outline_prompt)
+            self.assertIn('"states": [', outline_prompt)
+            self.assertIn('"node_id": "node id from reviewed_nodes_with_rubrics"', outline_prompt)
+            self.assertIn("Allowed output fields for each state object:", outline_prompt)
+            self.assertIn("- mastery_level", outline_prompt)
+            self.assertIn("Forbidden output:", outline_prompt)
+            self.assertIn("- evidence_refs", outline_prompt)
+            self.assertIn("Node coverage:", outline_prompt)
+            self.assertIn(
+                "Every state.node_id must exactly match one node id from "
+                "reviewed_nodes_with_rubrics",
+                outline_prompt,
+            )
+            self.assertIn("Allowed mastery_level values:", outline_prompt)
+            for mastery_level in ("L0", "L1", "L2", "L3", "L4", "L5"):
+                self.assertIn(f"- {mastery_level}", outline_prompt)
+            self.assertIn("Array rules:", outline_prompt)
+            self.assertIn("misconceptions must always be present", outline_prompt)
+            self.assertIn("unknowns must always be present", outline_prompt)
+            self.assertIn("escape them as valid JSON", outline_prompt)
             self.assertNotIn("edge_train_test_split_prerequisite_for_cross_validation", outline_prompt)
             self.assertIn("Ground-Truth Evidence Authoring Agent Step", evidence_prompt)
             self.assertIn("train_test_split", evidence_prompt)
