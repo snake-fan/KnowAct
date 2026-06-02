@@ -50,19 +50,25 @@ class V1ProfileContextAuthoringApiTest(unittest.TestCase):
                 )
             )
 
-            response = client.post(
-                "/api/authoring/profile-context-candidates",
-                json={
-                    "benchmark_domain": "classical_supervised_ml_algorithms",
-                    "rough_description": (
-                        "A beginner who can follow sklearn examples but has weak statistical foundations."
-                    ),
-                    "domain_summary": "Classical supervised machine learning algorithms.",
-                    "run_id": "profile_run_001",
-                },
-            )
+            with self.assertLogs("knowact.authoring.profile_context", level="INFO") as logs:
+                response = client.post(
+                    "/api/authoring/profile-context-candidates",
+                    json={
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "rough_description": (
+                            "A beginner who can follow sklearn examples but has weak statistical foundations."
+                        ),
+                        "domain_summary": "Classical supervised machine learning algorithms.",
+                        "run_id": "profile_run_001",
+                    },
+                )
 
             self.assertEqual(200, response.status_code)
+            rendered_logs = "\n".join(logs.output)
+            self.assertIn("Profile context authoring workflow started", rendered_logs)
+            self.assertIn("Profile context authoring model call started", rendered_logs)
+            self.assertIn("Profile context authoring parser succeeded", rendered_logs)
+            self.assertIn("Profile context authoring workflow succeeded", rendered_logs)
             payload = response.json()
             self.assertEqual("profile_run_001", payload["run_id"])
             self.assertEqual(

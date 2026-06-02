@@ -13,9 +13,11 @@ from backend.knowact.llm.config import deepseek_config_from_env, openai_config_f
 from backend.knowact.llm.deepseek_client import DeepSeekChatModelClient
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE
 from backend.knowact.llm.openai_client import OpenAIChatModelClient
+from backend.knowact.logging_config import get_knowact_logger
 
 
 PROFILE_CONTEXT_AUTHORING_WORKFLOW_NAME = "Profile Context Authoring Workflow"
+_LOGGER = get_knowact_logger("authoring.profile_context")
 
 
 class ProfileContextAuthoringWorkflowResult(BaseModel):
@@ -32,24 +34,62 @@ class ProfileContextAuthoringWorkflow:
         self._model_client = model_client
 
     def run(self, input_data: ProfileContextAuthoringInput) -> ProfileContextAuthoringWorkflowResult:
-        message_profile = getattr(self._model_client, "message_profile", OPENAI_MESSAGE_PROFILE)
-        raw_output = self._model_client.complete(
-            messages=build_profile_context_authoring_messages(
-                input_data,
-                message_profile=message_profile,
+        metadata = getattr(self._model_client, "metadata", None)
+        _LOGGER.info(
+            "Profile context authoring workflow started benchmark_domain=%s model_provider=%s model_name=%s",
+            input_data.benchmark_domain,
+            metadata.provider if metadata is not None else None,
+            metadata.model_name if metadata is not None else None,
+        )
+        try:
+            message_profile = getattr(self._model_client, "message_profile", OPENAI_MESSAGE_PROFILE)
+            _LOGGER.info(
+                "Profile context authoring model call started benchmark_domain=%s has_domain_summary=%s",
+                input_data.benchmark_domain,
+                input_data.domain_summary is not None,
             )
-        )
-        generated = parse_profile_context_authoring_output(raw_output)
-        candidate = CandidateProfileContext(
-            benchmark_domain=input_data.benchmark_domain,
-            **generated.model_dump(),
-        )
-        return ProfileContextAuthoringWorkflowResult(
-            candidate_profile_context=candidate,
-            model_raw_output=redact_logged_text(raw_output),
-            parser_output=generated.model_dump(mode="json"),
-            model_metadata=getattr(self._model_client, "metadata", None),
-        )
+            raw_output = self._model_client.complete(
+                messages=build_profile_context_authoring_messages(
+                    input_data,
+                    message_profile=message_profile,
+                )
+            )
+            _LOGGER.info(
+                "Profile context authoring model call succeeded benchmark_domain=%s raw_output_chars=%d",
+                input_data.benchmark_domain,
+                len(raw_output),
+            )
+            generated = parse_profile_context_authoring_output(raw_output)
+            _LOGGER.info(
+                "Profile context authoring parser succeeded benchmark_domain=%s background_items=%d prior_experience_items=%d goals=%d preferences=%d",
+                input_data.benchmark_domain,
+                len(generated.background),
+                len(generated.prior_experience),
+                len(generated.goals),
+                len(generated.preferences),
+            )
+            candidate = CandidateProfileContext(
+                benchmark_domain=input_data.benchmark_domain,
+                **generated.model_dump(),
+            )
+            _LOGGER.info(
+                "Profile context authoring workflow succeeded benchmark_domain=%s",
+                input_data.benchmark_domain,
+            )
+            return ProfileContextAuthoringWorkflowResult(
+                candidate_profile_context=candidate,
+                model_raw_output=redact_logged_text(raw_output),
+                parser_output=generated.model_dump(mode="json"),
+                model_metadata=metadata,
+            )
+        except Exception as exc:
+            _LOGGER.error(
+                "Profile context authoring workflow failed benchmark_domain=%s error_type=%s message=%s",
+                input_data.benchmark_domain,
+                type(exc).__name__,
+                redact_logged_text(str(exc)),
+            )
+            raise
 
 
 def build_profile_context_authoring_workflow(

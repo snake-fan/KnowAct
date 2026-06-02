@@ -76,18 +76,25 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
                 )
             )
 
-            response = client.post(
-                "/api/authoring/map-candidates",
-                json={
-                    "benchmark_domain": "classical_supervised_ml_algorithms",
-                    "graph_version": "v1",
-                    "user_id": "synthetic_user_001",
-                    "run_id": "map_run_001",
-                    "client_provider": "openai",
-                },
-            )
+            with self.assertLogs("knowact.authoring.map_authoring", level="INFO") as logs:
+                response = client.post(
+                    "/api/authoring/map-candidates",
+                    json={
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "graph_version": "v1",
+                        "user_id": "synthetic_user_001",
+                        "run_id": "map_run_001",
+                        "client_provider": "openai",
+                    },
+                )
 
             self.assertEqual(200, response.status_code)
+            rendered_logs = "\n".join(logs.output)
+            self.assertIn("Candidate map authoring workflow started", rendered_logs)
+            self.assertIn("Candidate map reviewed graph loaded", rendered_logs)
+            self.assertIn("Knowledge-state outline step started", rendered_logs)
+            self.assertIn("Ground-truth evidence batch started", rendered_logs)
+            self.assertIn("Candidate map authoring workflow succeeded", rendered_logs)
             payload = response.json()
             self.assertEqual("map_run_001", payload["run_id"])
             self.assertEqual(

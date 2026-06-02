@@ -43,6 +43,7 @@ from backend.knowact.llm.messages import ModelMessage, OPENAI_MESSAGE_PROFILE
 from backend.knowact.llm.openai_client import OpenAIChatModelClient
 from backend.knowact.storage.profile_contexts import load_confirmed_profile_context
 from backend.knowact.storage.reviewed_graphs import load_reviewed_graph
+from backend.knowact.logging_config import get_knowact_logger
 from backend.knowact.validation.exceptions import KnowActValidationError
 from backend.knowact.validation.map import validate_knowledge_map
 
@@ -50,6 +51,7 @@ from backend.knowact.validation.map import validate_knowledge_map
 CANDIDATE_MAP_AUTHORING_WORKFLOW_NAME = "Candidate Knowledge Map Authoring Workflow"
 DEFAULT_EVIDENCE_BATCH_SIZE = 5
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+_LOGGER = get_knowact_logger("authoring.map_authoring")
 
 
 class CandidateMapAuthoringInput(BaseModel):
@@ -85,26 +87,65 @@ class CandidateMapAuthoringWorkflow:
         self._model_client = model_client
 
     def run(self, input_data: CandidateMapAuthoringInput) -> CandidateMapAuthoringWorkflowResult:
-        writer = CandidateMapArtifactWriter(
-            workspace_root=self._workspace_root,
-            benchmark_domain=input_data.benchmark_domain,
-            run_id=input_data.run_id,
-        )
         metadata = getattr(self._model_client, "metadata", None)
+        _LOGGER.info(
+            "Candidate map authoring workflow started run_id=%s benchmark_domain=%s graph_version=%s user_id=%s evidence_batch_size=%d sampling_temperature=%s model_provider=%s model_name=%s",
+            input_data.run_id,
+            input_data.benchmark_domain,
+            input_data.graph_version,
+            input_data.user_id,
+            input_data.evidence_batch_size,
+            input_data.sampling_temperature,
+            metadata.provider if metadata is not None else None,
+            metadata.model_name if metadata is not None else None,
+        )
+        writer: CandidateMapArtifactWriter | None = None
         try:
+            writer = CandidateMapArtifactWriter(
+                workspace_root=self._workspace_root,
+                benchmark_domain=input_data.benchmark_domain,
+                run_id=input_data.run_id,
+            )
+            _LOGGER.info(
+                "Candidate map artifact directory prepared run_id=%s output_dir_uri=%s",
+                input_data.run_id,
+                writer.artifact_paths.output_dir_uri,
+            )
             reviewed_graph = load_reviewed_graph(
                 workspace_root=self._workspace_root,
                 benchmark_domain=input_data.benchmark_domain,
                 version=input_data.graph_version,
+            )
+            _LOGGER.info(
+                "Candidate map reviewed graph loaded run_id=%s graph_version=%s nodes=%d edges=%d",
+                input_data.run_id,
+                input_data.graph_version,
+                len(reviewed_graph.graph.nodes),
+                len(reviewed_graph.graph.edges),
             )
             profile_context = load_confirmed_profile_context(
                 workspace_root=self._workspace_root,
                 benchmark_domain=input_data.benchmark_domain,
                 user_id=input_data.user_id,
             )
+            _LOGGER.info(
+                "Candidate map profile context loaded run_id=%s user_id=%s background_items=%d prior_experience_items=%d goals=%d preferences=%d",
+                input_data.run_id,
+                input_data.user_id,
+                len(profile_context.background),
+                len(profile_context.prior_experience),
+                len(profile_context.goals),
+                len(profile_context.preferences),
+            )
             nodes = reviewed_graph.graph.nodes
 
             message_profile = getattr(self._model_client, "message_profile", OPENAI_MESSAGE_PROFILE)
+            _LOGGER.info(
+                "Knowledge-state outline step started run_id=%s nodes=%d temperature=%s",
+                input_data.run_id,
+                len(nodes),
+                input_data.sampling_temperature,
+            )
             outline_raw_output = _complete_with_temperature(
                 model_client=self._model_client,
                 temperature=input_data.sampling_temperature,
@@ -114,23 +155,52 @@ class CandidateMapAuthoringWorkflow:
                     message_profile=message_profile,
                 )
             )
+            _LOGGER.info(
+                "Knowledge-state outline model call succeeded run_id=%s raw_output_chars=%d",
+                input_data.run_id,
+                len(outline_raw_output),
+            )
             writer.write_outline_raw_output(redact_logged_text(outline_raw_output))
             outline_list = parse_knowledge_state_outline_output(outline_raw_output)
+            _LOGGER.info(
+                "Knowledge-state outline parser succeeded run_id=%s parsed_states=%d",
+                input_data.run_id,
+                len(outline_list.states),
+            )
             writer.write_outline_parser_output(outline_list)
             outlines = _validate_and_order_outlines(
                 graph=reviewed_graph.graph,
                 outlines=outline_list.states,
             )
+            _LOGGER.info(
+                "Knowledge-state outline validation passed run_id=%s ordered_states=%d",
+                input_data.run_id,
+                len(outlines),
+            )
 
             evidence: list[EvidenceRecord] = []
             ordered_evidence_drafts: list[GroundTruthEvidenceDraft] = []
             outline_by_node_id = {outline.node_id: outline for outline in outlines}
-            for batch_number, batch_nodes in enumerate(
-                _partition_nodes(nodes, input_data.evidence_batch_size),
-                start=1,
-            ):
+            evidence_batches = _partition_nodes(nodes, input_data.evidence_batch_size)
+            _LOGGER.info(
+                "Ground-truth evidence authoring batches prepared run_id=%s batch_count=%d batch_size=%d",
+                input_data.run_id,
+                len(evidence_batches),
+                input_data.evidence_batch_size,
+            )
+            for batch_number, batch_nodes in enumerate(evidence_batches, start=1):
                 batch_name = f"batch_{batch_number:03d}"
                 batch_outlines = tuple(outline_by_node_id[node.id] for node in batch_nodes)
+                _LOGGER.info(
+                    "Ground-truth evidence batch started run_id=%s batch_name=%s batch_number=%d batch_count=%d nodes=%d node_ids=%s temperature=%s",
+                    input_data.run_id,
+                    batch_name,
+                    batch_number,
+                    len(evidence_batches),
+                    len(batch_nodes),
+                    ",".join(node.id for node in batch_nodes),
+                    input_data.sampling_temperature,
+                )
                 evidence_raw_output = _complete_with_temperature(
                     model_client=self._model_client,
                     temperature=input_data.sampling_temperature,
@@ -141,23 +211,34 @@ class CandidateMapAuthoringWorkflow:
                         message_profile=message_profile,
                     )
                 )
+                _LOGGER.info(
+                    "Ground-truth evidence model call succeeded run_id=%s batch_name=%s raw_output_chars=%d",
+                    input_data.run_id,
+                    batch_name,
+                    len(evidence_raw_output),
+                )
                 writer.write_evidence_raw_output(
                     batch_name=batch_name,
                     raw_output=redact_logged_text(evidence_raw_output),
                 )
                 evidence_draft_list = parse_ground_truth_evidence_output(evidence_raw_output)
+                _LOGGER.info(
+                    "Ground-truth evidence parser succeeded run_id=%s batch_name=%s drafts=%d",
+                    input_data.run_id,
+                    batch_name,
+                    len(evidence_draft_list.evidence),
+                )
                 writer.write_evidence_parser_output(
                     batch_name=batch_name,
                     drafts=evidence_draft_list,
                 )
-                evidence.extend(
-                    _assemble_evidence(
-                        run_id=input_data.run_id,
-                        nodes=batch_nodes,
-                        outlines=batch_outlines,
-                        drafts=evidence_draft_list.evidence,
-                    )
+                batch_evidence = _assemble_evidence(
+                    run_id=input_data.run_id,
+                    nodes=batch_nodes,
+                    outlines=batch_outlines,
+                    drafts=evidence_draft_list.evidence,
                 )
+                evidence.extend(batch_evidence)
                 ordered_evidence_drafts.extend(
                     _order_evidence_drafts(
                         nodes=batch_nodes,
@@ -167,19 +248,46 @@ class CandidateMapAuthoringWorkflow:
                 writer.write_ground_truth_evidence_intermediate(
                     tuple(ordered_evidence_drafts)
                 )
+                _LOGGER.info(
+                    "Ground-truth evidence batch succeeded run_id=%s batch_name=%s evidence_records=%d total_evidence_records=%d",
+                    input_data.run_id,
+                    batch_name,
+                    len(batch_evidence),
+                    len(evidence),
+                )
+            _LOGGER.info(
+                "Ground-truth evidence authoring succeeded run_id=%s evidence_records=%d",
+                input_data.run_id,
+                len(evidence),
+            )
             candidate_map = _assemble_candidate_map(
                 user_id=input_data.user_id,
                 graph=reviewed_graph.graph,
                 outlines=outlines,
                 evidence=tuple(evidence),
             )
-            writer.write_consistency_warnings(
-                _build_edge_consistency_warnings(
-                    graph=reviewed_graph.graph,
-                    outlines=outlines,
-                )
+            _LOGGER.info(
+                "Candidate knowledge map assembled and validated run_id=%s states=%d evidence_records=%d",
+                input_data.run_id,
+                len(candidate_map.states),
+                len(candidate_map.evidence),
+            )
+            consistency_warnings = _build_edge_consistency_warnings(
+                graph=reviewed_graph.graph,
+                outlines=outlines,
+            )
+            writer.write_consistency_warnings(consistency_warnings)
+            _LOGGER.info(
+                "Candidate map consistency warnings written run_id=%s warnings=%d",
+                input_data.run_id,
+                len(consistency_warnings.warnings),
             )
             writer.write_candidate_map(candidate_map)
+            _LOGGER.info(
+                "Candidate map artifact written run_id=%s candidate_map_uri=%s",
+                input_data.run_id,
+                writer.artifact_paths.candidate_map_uri,
+            )
             writer.write_workflow_log(
                 run_id=input_data.run_id,
                 workflow_name=CANDIDATE_MAP_AUTHORING_WORKFLOW_NAME,
@@ -191,23 +299,47 @@ class CandidateMapAuthoringWorkflow:
                 sampling_temperature=input_data.sampling_temperature,
                 model_metadata=metadata,
             )
+            _LOGGER.info(
+                "Candidate map workflow log written run_id=%s workflow_log_uri=%s",
+                input_data.run_id,
+                writer.artifact_paths.workflow_log_uri,
+            )
+            _LOGGER.info(
+                "Candidate map authoring workflow succeeded run_id=%s states=%d evidence_records=%d warnings=%d",
+                input_data.run_id,
+                len(candidate_map.states),
+                len(candidate_map.evidence),
+                len(consistency_warnings.warnings),
+            )
             return CandidateMapAuthoringWorkflowResult(
                 candidate_map=candidate_map,
                 artifact_paths=writer.artifact_paths,
             )
         except Exception as exc:
-            writer.write_workflow_log(
-                run_id=input_data.run_id,
-                workflow_name=CANDIDATE_MAP_AUTHORING_WORKFLOW_NAME,
-                status="failed",
-                benchmark_domain=input_data.benchmark_domain,
-                graph_version=input_data.graph_version,
-                user_id=input_data.user_id,
-                evidence_batch_size=input_data.evidence_batch_size,
-                sampling_temperature=input_data.sampling_temperature,
-                model_metadata=metadata,
-                error=str(exc),
+            _LOGGER.error(
+                "Candidate map authoring workflow failed run_id=%s error_type=%s message=%s",
+                input_data.run_id,
+                type(exc).__name__,
+                redact_logged_text(str(exc)),
             )
+            if writer is not None:
+                writer.write_workflow_log(
+                    run_id=input_data.run_id,
+                    workflow_name=CANDIDATE_MAP_AUTHORING_WORKFLOW_NAME,
+                    status="failed",
+                    benchmark_domain=input_data.benchmark_domain,
+                    graph_version=input_data.graph_version,
+                    user_id=input_data.user_id,
+                    evidence_batch_size=input_data.evidence_batch_size,
+                    sampling_temperature=input_data.sampling_temperature,
+                    model_metadata=metadata,
+                    error=redact_logged_text(str(exc)),
+                )
+                _LOGGER.info(
+                    "Failed candidate map workflow log written run_id=%s workflow_log_uri=%s",
+                    input_data.run_id,
+                    writer.artifact_paths.workflow_log_uri,
+                )
             raise
 
 
