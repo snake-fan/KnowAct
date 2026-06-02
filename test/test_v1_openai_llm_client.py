@@ -116,6 +116,41 @@ class V1OpenAILLMClientTest(unittest.TestCase):
             fake_completions.last_params["messages"],
         )
 
+    def test_openai_client_applies_request_level_temperature_override(self):
+        fake_completions = FakeCompletions()
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=fake_completions),
+        )
+        config = openai_config_from_env(
+            {
+                "OPENAI_API_KEY": "test-key",
+                "KNOWACT_OPENAI_TEMPERATURE": "0.2",
+            }
+        )
+        client = OpenAIChatModelClient(config, client=fake_client)
+
+        client.complete(
+            messages=[ModelMessage(role="developer", content="Return JSON.")],
+            temperature=0.85,
+        )
+
+        self.assertEqual(0.85, fake_completions.last_params["temperature"])
+
+    def test_deepseek_client_applies_request_level_temperature(self):
+        fake_completions = FakeCompletions()
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=fake_completions),
+        )
+        config = deepseek_config_from_env({"DEEPSEEK_API_KEY": "deepseek-test-key"})
+        client = DeepSeekChatModelClient(config, client=fake_client)
+
+        client.complete(
+            messages=[ModelMessage(role="developer", content="Return JSON.")],
+            temperature=0.85,
+        )
+
+        self.assertEqual(0.85, fake_completions.last_params["temperature"])
+
 
 class FakeCompletions:
     def __init__(self):

@@ -1,9 +1,9 @@
-from collections.abc import Hashable
+from collections.abc import Hashable, Sequence
 from pathlib import Path
 import re
 from typing import TypeVar
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.knowact.authoring.logging import redact_logged_text
 from backend.knowact.authoring.map_authoring_output import (
@@ -21,23 +21,25 @@ from backend.knowact.authoring.parsers.map_authoring import (
 from backend.knowact.authoring.schemas import (
     GroundTruthEvidenceDraft,
     KnowledgeStateOutline,
+    MapEdgeConsistencyWarning,
+    MapEdgeConsistencyWarningList,
 )
 from backend.knowact.authoring.templates.map_authoring import (
     build_ground_truth_evidence_messages,
     build_knowledge_state_outline_messages,
 )
 from backend.knowact.core.evidence import EvidenceRecord, EvidenceType, EvidenceVisibility
-from backend.knowact.core.graph import KnowledgeGraph, KnowledgeNode
+from backend.knowact.core.graph import KnowledgeEdgeType, KnowledgeGraph, KnowledgeNode
 from backend.knowact.core.map import (
     KnowledgeMap,
     KnowledgeMapKind,
     MasteryLevel,
     UserKnowledgeState,
 )
-from backend.knowact.llm.client import ModelClient, ModelClientMetadata
+from backend.knowact.llm.client import ModelClient, ModelClientError, ModelClientMetadata
 from backend.knowact.llm.config import deepseek_config_from_env, openai_config_from_env
 from backend.knowact.llm.deepseek_client import DeepSeekChatModelClient
-from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE
+from backend.knowact.llm.messages import ModelMessage, OPENAI_MESSAGE_PROFILE
 from backend.knowact.llm.openai_client import OpenAIChatModelClient
 from backend.knowact.storage.profile_contexts import load_confirmed_profile_context
 from backend.knowact.storage.reviewed_graphs import load_reviewed_graph
@@ -46,7 +48,7 @@ from backend.knowact.validation.map import validate_knowledge_map
 
 
 CANDIDATE_MAP_AUTHORING_WORKFLOW_NAME = "Candidate Knowledge Map Authoring Workflow"
-MAX_SINGLE_BATCH_NODES = 5
+DEFAULT_EVIDENCE_BATCH_SIZE = 5
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 
@@ -57,6 +59,8 @@ class CandidateMapAuthoringInput(BaseModel):
     graph_version: str
     user_id: str
     run_id: str
+    evidence_batch_size: int = Field(default=DEFAULT_EVIDENCE_BATCH_SIZE, gt=0)
+    sampling_temperature: float = Field(default=0.7, ge=0.0)
 
     @field_validator("benchmark_domain", "graph_version", "user_id", "run_id")
     @classmethod
@@ -99,14 +103,11 @@ class CandidateMapAuthoringWorkflow:
                 user_id=input_data.user_id,
             )
             nodes = reviewed_graph.graph.nodes
-            if len(nodes) > MAX_SINGLE_BATCH_NODES:
-                raise KnowActValidationError(
-                    "Candidate-map tracer bullet supports at most "
-                    f"{MAX_SINGLE_BATCH_NODES} reviewed nodes in one evidence batch"
-                )
 
             message_profile = getattr(self._model_client, "message_profile", OPENAI_MESSAGE_PROFILE)
-            outline_raw_output = self._model_client.complete(
+            outline_raw_output = _complete_with_temperature(
+                model_client=self._model_client,
+                temperature=input_data.sampling_temperature,
                 messages=build_knowledge_state_outline_messages(
                     profile_context=profile_context,
                     nodes=nodes,
@@ -121,28 +122,62 @@ class CandidateMapAuthoringWorkflow:
                 outlines=outline_list.states,
             )
 
-            evidence_raw_output = self._model_client.complete(
-                messages=build_ground_truth_evidence_messages(
-                    profile_context=profile_context,
-                    nodes=nodes,
-                    state_outlines=outlines,
-                    message_profile=message_profile,
+            evidence: list[EvidenceRecord] = []
+            ordered_evidence_drafts: list[GroundTruthEvidenceDraft] = []
+            outline_by_node_id = {outline.node_id: outline for outline in outlines}
+            for batch_number, batch_nodes in enumerate(
+                _partition_nodes(nodes, input_data.evidence_batch_size),
+                start=1,
+            ):
+                batch_name = f"batch_{batch_number:03d}"
+                batch_outlines = tuple(outline_by_node_id[node.id] for node in batch_nodes)
+                evidence_raw_output = _complete_with_temperature(
+                    model_client=self._model_client,
+                    temperature=input_data.sampling_temperature,
+                    messages=build_ground_truth_evidence_messages(
+                        profile_context=profile_context,
+                        nodes=batch_nodes,
+                        state_outlines=batch_outlines,
+                        message_profile=message_profile,
+                    )
                 )
-            )
-            writer.write_evidence_raw_output(redact_logged_text(evidence_raw_output))
-            evidence_draft_list = parse_ground_truth_evidence_output(evidence_raw_output)
-            writer.write_evidence_parser_output(evidence_draft_list)
-            evidence = _assemble_evidence(
-                run_id=input_data.run_id,
-                nodes=nodes,
-                outlines=outlines,
-                drafts=evidence_draft_list.evidence,
-            )
+                writer.write_evidence_raw_output(
+                    batch_name=batch_name,
+                    raw_output=redact_logged_text(evidence_raw_output),
+                )
+                evidence_draft_list = parse_ground_truth_evidence_output(evidence_raw_output)
+                writer.write_evidence_parser_output(
+                    batch_name=batch_name,
+                    drafts=evidence_draft_list,
+                )
+                evidence.extend(
+                    _assemble_evidence(
+                        run_id=input_data.run_id,
+                        nodes=batch_nodes,
+                        outlines=batch_outlines,
+                        drafts=evidence_draft_list.evidence,
+                    )
+                )
+                ordered_evidence_drafts.extend(
+                    _order_evidence_drafts(
+                        nodes=batch_nodes,
+                        drafts=evidence_draft_list.evidence,
+                    )
+                )
+                writer.write_ground_truth_evidence_intermediate(
+                    tuple(ordered_evidence_drafts)
+                )
             candidate_map = _assemble_candidate_map(
                 user_id=input_data.user_id,
                 graph=reviewed_graph.graph,
                 outlines=outlines,
-                evidence=evidence,
+                evidence=tuple(evidence),
+            )
+            writer.write_consistency_warnings(
+                _build_edge_consistency_warnings(
+                    graph=reviewed_graph.graph,
+                    outlines=outlines,
+                )
             )
             writer.write_candidate_map(candidate_map)
             writer.write_workflow_log(
@@ -152,6 +187,8 @@ class CandidateMapAuthoringWorkflow:
                 benchmark_domain=input_data.benchmark_domain,
                 graph_version=input_data.graph_version,
                 user_id=input_data.user_id,
+                evidence_batch_size=input_data.evidence_batch_size,
+                sampling_temperature=input_data.sampling_temperature,
                 model_metadata=metadata,
             )
             return CandidateMapAuthoringWorkflowResult(
@@ -166,6 +203,8 @@ class CandidateMapAuthoringWorkflow:
                 benchmark_domain=input_data.benchmark_domain,
                 graph_version=input_data.graph_version,
                 user_id=input_data.user_id,
+                evidence_batch_size=input_data.evidence_batch_size,
+                sampling_temperature=input_data.sampling_temperature,
                 model_metadata=metadata,
                 error=str(exc),
             )
@@ -271,6 +310,78 @@ def _assemble_evidence(
                 )
             )
     return tuple(evidence)
+
+
+def _order_evidence_drafts(
+    *,
+    nodes: tuple[KnowledgeNode, ...],
+    drafts: tuple[GroundTruthEvidenceDraft, ...],
+) -> tuple[GroundTruthEvidenceDraft, ...]:
+    return tuple(
+        draft
+        for node in nodes
+        for draft in drafts
+        if draft.node_id == node.id
+    )
+
+
+def _partition_nodes(
+    nodes: tuple[KnowledgeNode, ...],
+    batch_size: int,
+) -> tuple[tuple[KnowledgeNode, ...], ...]:
+    return tuple(
+        nodes[index : index + batch_size]
+        for index in range(0, len(nodes), batch_size)
+    )
+
+
+def _complete_with_temperature(
+    *,
+    model_client: ModelClient,
+    messages: Sequence[ModelMessage],
+    temperature: float,
+) -> str:
+    try:
+        return model_client.complete(
+            messages=messages,
+            temperature=temperature,
+        )
+    except TypeError as exc:
+        if "temperature" in str(exc) and "unexpected keyword argument" in str(exc):
+            raise ModelClientError(
+                "Candidate-map model client does not support sampling_temperature"
+            ) from exc
+        raise
+
+
+def _build_edge_consistency_warnings(
+    *,
+    graph: KnowledgeGraph,
+    outlines: tuple[KnowledgeStateOutline, ...],
+) -> MapEdgeConsistencyWarningList:
+    outline_by_node_id = {outline.node_id: outline for outline in outlines}
+    return MapEdgeConsistencyWarningList(
+        warnings=tuple(
+            MapEdgeConsistencyWarning(
+                edge_id=edge.id,
+                source_node_id=edge.source,
+                source_mastery_level=outline_by_node_id[edge.source].mastery_level,
+                target_node_id=edge.target,
+                target_mastery_level=outline_by_node_id[edge.target].mastery_level,
+            )
+            for edge in graph.edges
+            if edge.type == KnowledgeEdgeType.PREREQUISITE_FOR
+            and (
+                _mastery_level_value(outline_by_node_id[edge.target].mastery_level)
+                - _mastery_level_value(outline_by_node_id[edge.source].mastery_level)
+                >= 2
+            )
+        )
+    )
+
+
+def _mastery_level_value(mastery_level: MasteryLevel) -> int:
+    return int(mastery_level.value[1:])
 
 
 def _assemble_candidate_map(

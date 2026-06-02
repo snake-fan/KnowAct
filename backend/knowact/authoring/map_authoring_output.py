@@ -6,8 +6,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from backend.knowact.authoring.schemas import (
+    GroundTruthEvidenceDraft,
     GroundTruthEvidenceDraftList,
     KnowledgeStateOutlineList,
+    MapEdgeConsistencyWarningList,
 )
 from backend.knowact.core.map import KnowledgeMap
 from backend.knowact.core.map import KnowledgeMapKind
@@ -19,13 +21,22 @@ WORKFLOW_LOG_FILENAME = "workflow_log.json"
 INTERMEDIATE_DIRNAME = "intermediate"
 STATE_OUTLINE_FILENAME = "state_outline.json"
 GROUND_TRUTH_EVIDENCE_FILENAME = "ground_truth_evidence.json"
+CONSISTENCY_WARNINGS_FILENAME = "consistency_warnings.json"
 AGENT_TRACES_DIRNAME = "agent_traces"
 KNOWLEDGE_STATE_OUTLINE_STEP = "knowledge_state_outline"
 GROUND_TRUTH_EVIDENCE_STEP = "ground_truth_evidence"
-SINGLE_BATCH_NAME = "batch_001"
+FIRST_EVIDENCE_BATCH_NAME = "batch_001"
 MODEL_RAW_OUTPUT_FILENAME = "model_raw_output.txt"
 PARSER_OUTPUT_FILENAME = "parser_output.json"
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+
+class CandidateMapEvidenceBatchArtifactPaths(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    batch_name: str
+    model_raw_output_uri: str
+    parser_output_uri: str
 
 
 class CandidateMapArtifactPaths(BaseModel):
@@ -33,6 +44,7 @@ class CandidateMapArtifactPaths(BaseModel):
 
     output_dir_uri: str
     candidate_map_uri: str
+    consistency_warnings_uri: str
     workflow_log_uri: str
     state_outline_uri: str
     ground_truth_evidence_uri: str
@@ -40,6 +52,7 @@ class CandidateMapArtifactPaths(BaseModel):
     outline_parser_output_uri: str
     evidence_model_raw_output_uri: str
     evidence_parser_output_uri: str
+    evidence_batch_artifacts: tuple[CandidateMapEvidenceBatchArtifactPaths, ...]
 
 
 class CandidateMapAuthoringRunLog(BaseModel):
@@ -51,6 +64,8 @@ class CandidateMapAuthoringRunLog(BaseModel):
     benchmark_domain: str
     graph_version: str
     user_id: str
+    evidence_batch_size: int
+    sampling_temperature: float
     model_provider: str | None = None
     model_name: str | None = None
     message_profile: str | None = None
@@ -87,15 +102,9 @@ class CandidateMapArtifactWriter:
         self._outline_trace_dir = (
             self._output_dir / AGENT_TRACES_DIRNAME / KNOWLEDGE_STATE_OUTLINE_STEP
         )
-        self._evidence_trace_dir = (
-            self._output_dir
-            / AGENT_TRACES_DIRNAME
-            / GROUND_TRUTH_EVIDENCE_STEP
-            / SINGLE_BATCH_NAME
-        )
+        self._evidence_drafts: list[GroundTruthEvidenceDraft] = []
         self._intermediate_dir.mkdir(parents=True, exist_ok=True)
         self._outline_trace_dir.mkdir(parents=True, exist_ok=True)
-        self._evidence_trace_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def artifact_paths(self) -> CandidateMapArtifactPaths:
@@ -115,21 +124,46 @@ class CandidateMapArtifactWriter:
         _write_json_payload(self._outline_trace_dir / PARSER_OUTPUT_FILENAME, payload)
         _write_json_payload(self._intermediate_dir / STATE_OUTLINE_FILENAME, payload)
 
-    def write_evidence_raw_output(self, raw_output: str) -> None:
-        (self._evidence_trace_dir / MODEL_RAW_OUTPUT_FILENAME).write_text(
+    def write_evidence_raw_output(self, *, batch_name: str, raw_output: str) -> None:
+        evidence_trace_dir = self._evidence_trace_dir(batch_name)
+        evidence_trace_dir.mkdir(parents=True, exist_ok=True)
+        (evidence_trace_dir / MODEL_RAW_OUTPUT_FILENAME).write_text(
             raw_output,
             encoding="utf-8",
         )
 
-    def write_evidence_parser_output(self, drafts: GroundTruthEvidenceDraftList) -> None:
+    def write_evidence_parser_output(
+        self,
+        *,
+        batch_name: str,
+        drafts: GroundTruthEvidenceDraftList,
+    ) -> None:
+        evidence_trace_dir = self._evidence_trace_dir(batch_name)
+        evidence_trace_dir.mkdir(parents=True, exist_ok=True)
         payload = drafts.model_dump(mode="json")
-        _write_json_payload(self._evidence_trace_dir / PARSER_OUTPUT_FILENAME, payload)
-        _write_json_payload(self._intermediate_dir / GROUND_TRUTH_EVIDENCE_FILENAME, payload)
+        _write_json_payload(evidence_trace_dir / PARSER_OUTPUT_FILENAME, payload)
+        self._evidence_drafts.extend(drafts.evidence)
+        self.write_ground_truth_evidence_intermediate(tuple(self._evidence_drafts))
+
+    def write_ground_truth_evidence_intermediate(
+        self,
+        drafts: tuple[GroundTruthEvidenceDraft, ...],
+    ) -> None:
+        _write_json_payload(
+            self._intermediate_dir / GROUND_TRUTH_EVIDENCE_FILENAME,
+            GroundTruthEvidenceDraftList(evidence=drafts).model_dump(mode="json"),
+        )
 
     def write_candidate_map(self, candidate_map: KnowledgeMap) -> None:
         _write_json_payload(
             self._output_dir / CANDIDATE_MAP_FILENAME,
             candidate_map.model_dump(mode="json"),
+        )
+
+    def write_consistency_warnings(self, warnings: MapEdgeConsistencyWarningList) -> None:
+        _write_json_payload(
+            self._output_dir / CONSISTENCY_WARNINGS_FILENAME,
+            warnings.model_dump(mode="json"),
         )
 
     def write_workflow_log(
@@ -141,6 +175,8 @@ class CandidateMapArtifactWriter:
         benchmark_domain: str,
         graph_version: str,
         user_id: str,
+        evidence_batch_size: int,
+        sampling_temperature: float,
         model_metadata: ModelClientMetadata | None,
         error: str | None = None,
     ) -> None:
@@ -153,6 +189,8 @@ class CandidateMapArtifactWriter:
                 benchmark_domain=benchmark_domain,
                 graph_version=graph_version,
                 user_id=user_id,
+                evidence_batch_size=evidence_batch_size,
+                sampling_temperature=sampling_temperature,
                 model_provider=model_metadata.provider if model_metadata is not None else None,
                 model_name=model_metadata.model_name if model_metadata is not None else None,
                 message_profile=(
@@ -161,6 +199,14 @@ class CandidateMapArtifactWriter:
                 error=error,
                 artifact_paths=self.artifact_paths,
             ),
+        )
+
+    def _evidence_trace_dir(self, batch_name: str) -> Path:
+        return (
+            self._output_dir
+            / AGENT_TRACES_DIRNAME
+            / GROUND_TRUTH_EVIDENCE_STEP
+            / batch_name
         )
 
 
@@ -199,10 +245,35 @@ def read_candidate_map_run(
 def _artifact_paths(*, workspace_root: Path, output_dir: Path) -> CandidateMapArtifactPaths:
     traces_dir = output_dir / AGENT_TRACES_DIRNAME
     outline_trace_dir = traces_dir / KNOWLEDGE_STATE_OUTLINE_STEP
-    evidence_trace_dir = traces_dir / GROUND_TRUTH_EVIDENCE_STEP / SINGLE_BATCH_NAME
+    evidence_traces_dir = traces_dir / GROUND_TRUTH_EVIDENCE_STEP
+    evidence_trace_dir = evidence_traces_dir / FIRST_EVIDENCE_BATCH_NAME
+    evidence_batch_dirs = (
+        tuple(sorted(evidence_traces_dir.iterdir()))
+        if evidence_traces_dir.exists()
+        else ()
+    )
+    evidence_batch_artifacts = tuple(
+        CandidateMapEvidenceBatchArtifactPaths(
+            batch_name=batch_dir.name,
+            model_raw_output_uri=_relative_uri(
+                batch_dir / MODEL_RAW_OUTPUT_FILENAME,
+                workspace_root,
+            ),
+            parser_output_uri=_relative_uri(
+                batch_dir / PARSER_OUTPUT_FILENAME,
+                workspace_root,
+            ),
+        )
+        for batch_dir in evidence_batch_dirs
+        if batch_dir.is_dir()
+    )
     return CandidateMapArtifactPaths(
         output_dir_uri=_relative_uri(output_dir, workspace_root),
         candidate_map_uri=_relative_uri(output_dir / CANDIDATE_MAP_FILENAME, workspace_root),
+        consistency_warnings_uri=_relative_uri(
+            output_dir / CONSISTENCY_WARNINGS_FILENAME,
+            workspace_root,
+        ),
         workflow_log_uri=_relative_uri(output_dir / WORKFLOW_LOG_FILENAME, workspace_root),
         state_outline_uri=_relative_uri(
             output_dir / INTERMEDIATE_DIRNAME / STATE_OUTLINE_FILENAME,
@@ -228,6 +299,7 @@ def _artifact_paths(*, workspace_root: Path, output_dir: Path) -> CandidateMapAr
             evidence_trace_dir / PARSER_OUTPUT_FILENAME,
             workspace_root,
         ),
+        evidence_batch_artifacts=evidence_batch_artifacts,
     )
 
 

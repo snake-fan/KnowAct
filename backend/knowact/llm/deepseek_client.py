@@ -38,12 +38,15 @@ class DeepSeekChatModelClient:
         self,
         *,
         messages: Sequence[ModelMessage],
+        temperature: float | None = None,
     ) -> str:
         params: dict[str, object] = {
             "model": self._config.model,
             "messages": render_messages_for_profile(tuple(messages), self.message_profile),
             "response_format": {"type": "json_object"},
         }
+        if temperature is not None:
+            params["temperature"] = temperature
         completion = self._client.chat.completions.create(**params)
         return _extract_content(completion)
 
