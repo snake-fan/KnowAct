@@ -82,7 +82,7 @@ Output rules:
 - Do not wrap JSON in Markdown fences.
 - Do not include commentary, reasoning notes, review notes, or debug logs.
 - Do not add fields outside the requested schema.
-- Any content before or after the JSON object will fail the workflow parser.
+- Any content before or after the JSON object will be rejected by the parser.
 """.strip()
 
 

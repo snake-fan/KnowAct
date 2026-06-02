@@ -7,11 +7,36 @@ from fastapi.testclient import TestClient
 
 from backend.knowact.api.app import create_app
 from backend.knowact.authoring.profile_context import build_profile_context_authoring_workflow
+from backend.knowact.authoring.schemas import ProfileContextAuthoringInput
+from backend.knowact.authoring.templates.profile_context import (
+    build_profile_context_authoring_messages,
+)
 from backend.knowact.llm.client import ModelClientMetadata
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE
 
 
 class V1ProfileContextAuthoringApiTest(unittest.TestCase):
+    def test_profile_context_prompt_is_standalone_and_task_specific(self):
+        messages = build_profile_context_authoring_messages(
+            ProfileContextAuthoringInput(
+                benchmark_domain="classical_supervised_ml_algorithms",
+                rough_description="A practical beginner.",
+                domain_summary="Classical supervised machine learning algorithms.",
+            )
+        )
+        instruction_prompt = messages[0].content
+        user_prompt = messages[1].content
+        complete_prompt = "\n".join(message.content for message in messages)
+
+        self.assertNotIn("KnowAct", complete_prompt)
+        self.assertNotIn("workflow", complete_prompt.lower())
+        self.assertNotIn("benchmark author", complete_prompt.lower())
+        self.assertNotIn("Knowledge Map", complete_prompt)
+        self.assertIn("topic-by-topic knowledge assessment", instruction_prompt)
+        self.assertIn("Do not invent specific institutions", instruction_prompt)
+        self.assertIn("Subject area: classical_supervised_ml_algorithms", user_prompt)
+        self.assertIn("Rough person description: A practical beginner.", user_prompt)
+
     def test_authoring_api_generates_reviewable_profile_context_candidate_with_minimal_artifacts(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
