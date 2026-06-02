@@ -27,8 +27,25 @@ from backend.knowact.authoring.output import (
     write_graph_authoring_run_log,
 )
 from backend.knowact.authoring.parsers.graph_authoring import AuthoringOutputParseError
+from backend.knowact.authoring.parsers.profile_context import ProfileContextOutputParseError
+from backend.knowact.authoring.profile_context import (
+    ProfileContextAuthoringWorkflow,
+)
+from backend.knowact.authoring.profile_context_output import (
+    CandidateProfileContextArtifactError,
+    CandidateProfileContextArtifactPaths,
+    CandidateProfileContextNotFoundError,
+    read_candidate_profile_context_run,
+    write_candidate_profile_context_run,
+)
 from backend.knowact.authoring.review_promotion import promote_candidate_graph
-from backend.knowact.authoring.schemas import GraphAuthoringWorkflowResult, SourceGroundedNodeSkeleton, SourceMaterial
+from backend.knowact.authoring.schemas import (
+    CandidateProfileContext,
+    GraphAuthoringWorkflowResult,
+    ProfileContextAuthoringInput,
+    SourceGroundedNodeSkeleton,
+    SourceMaterial,
+)
 from backend.knowact.authoring.sources import (
     ParsedMarkdownMaterial,
     ParsedMarkdownEmptyError,
@@ -69,6 +86,10 @@ _DEFAULT_BENCHMARK_DOMAIN = "classical_supervised_ml_algorithms"
 _DEFAULT_SOURCE_ID = "isl_python"
 _DEFAULT_SOURCE_TITLE = "An Introduction to Statistical Learning with Applications in Python"
 GraphAuthoringWorkflowFactory = Callable[[GraphAuthoringClientProvider], GraphAuthoringAgentWorkflow]
+ProfileContextAuthoringWorkflowFactory = Callable[
+    [GraphAuthoringClientProvider],
+    ProfileContextAuthoringWorkflow,
+]
 _LOGGER = get_knowact_logger("api.authoring")
 
 
@@ -113,6 +134,43 @@ class GraphCandidateAuthoringRequest(BaseModel):
         if value is None:
             return value
         return _validate_safe_id(value, "run_id")
+
+
+class ProfileContextCandidateAuthoringRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    benchmark_domain: str
+    rough_description: str
+    domain_summary: str | None = None
+    run_id: str | None = None
+    client_provider: GraphAuthoringClientProvider = DEFAULT_GRAPH_AUTHORING_CLIENT_PROVIDER
+
+    @field_validator("benchmark_domain")
+    @classmethod
+    def _benchmark_domain_must_be_safe(cls, value: str) -> str:
+        return _validate_safe_id(value, "benchmark_domain")
+
+    @field_validator("rough_description", "domain_summary")
+    @classmethod
+    def _text_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("run_id")
+    @classmethod
+    def _run_id_must_be_safe(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return _validate_safe_id(value, "run_id")
+
+
+class ProfileContextCandidateAuthoringResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    run_id: str
+    candidate_profile_context: CandidateProfileContext
+    artifact_paths: CandidateProfileContextArtifactPaths
 
 
 class SourceMaterialInfo(BaseModel):
@@ -218,12 +276,81 @@ class CandidateGraphPromotionResponse(BaseModel):
 def build_authoring_router(
     *,
     graph_authoring_workflow_factory: GraphAuthoringWorkflowFactory,
+    profile_context_authoring_workflow_factory: ProfileContextAuthoringWorkflowFactory,
     source_parser: SourceParser,
     workspace_root: Path | None = None,
 ) -> APIRouter:
     root = workspace_root or _default_workspace_root()
     storage_root = root / "storage"
     router = APIRouter()
+
+    @router.post(
+        "/profile-context-candidates",
+        response_model=ProfileContextCandidateAuthoringResponse,
+        summary="Generate one reviewable Profile Context candidate.",
+    )
+    def create_profile_context_candidate(
+        request: ProfileContextCandidateAuthoringRequest,
+    ) -> ProfileContextCandidateAuthoringResponse:
+        run_id = request.run_id or default_graph_authoring_run_id()
+        output_dir = _candidate_profile_context_output_dir(root, request.benchmark_domain, run_id)
+        try:
+            workflow = _build_profile_context_authoring_workflow(
+                profile_context_authoring_workflow_factory,
+                client_provider=request.client_provider,
+            )
+            result = workflow.run(
+                ProfileContextAuthoringInput(
+                    benchmark_domain=request.benchmark_domain,
+                    rough_description=request.rough_description,
+                    domain_summary=request.domain_summary,
+                )
+            )
+            artifact_paths = write_candidate_profile_context_run(
+                workspace_root=root,
+                output_dir=output_dir,
+                run_id=run_id,
+                result=result,
+            )
+        except ProfileContextOutputParseError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except ModelClientError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        return ProfileContextCandidateAuthoringResponse(
+            run_id=run_id,
+            candidate_profile_context=result.candidate_profile_context,
+            artifact_paths=artifact_paths,
+        )
+
+    @router.get(
+        "/candidate-profile-contexts/{benchmark_domain}/{run_id}",
+        response_model=ProfileContextCandidateAuthoringResponse,
+        summary="Read one saved Profile Context candidate.",
+    )
+    def read_profile_context_candidate(
+        benchmark_domain: str,
+        run_id: str,
+    ) -> ProfileContextCandidateAuthoringResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        run_id = _validate_safe_id_or_422(run_id, "run_id")
+        try:
+            candidate, artifact_paths = read_candidate_profile_context_run(
+                workspace_root=root,
+                output_dir=_candidate_profile_context_output_dir(root, benchmark_domain, run_id),
+            )
+        except CandidateProfileContextNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except CandidateProfileContextArtifactError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        return ProfileContextCandidateAuthoringResponse(
+            run_id=run_id,
+            candidate_profile_context=candidate,
+            artifact_paths=artifact_paths,
+        )
 
     @router.post(
         "/source-materials",
@@ -594,6 +721,17 @@ def _build_graph_authoring_workflow(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+def _build_profile_context_authoring_workflow(
+    factory: ProfileContextAuthoringWorkflowFactory,
+    *,
+    client_provider: GraphAuthoringClientProvider,
+) -> ProfileContextAuthoringWorkflow:
+    try:
+        return factory(client_provider)
+    except (ValueError, ModelClientError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 def _source_material_from_markdown(
     parsed_markdown: ParsedMarkdownMaterial,
     request: GraphCandidateAuthoringRequest,
@@ -649,6 +787,10 @@ def _default_workspace_root() -> Path:
 
 def _candidate_graph_output_dir(root: Path, benchmark_domain: str, run_id: str) -> Path:
     return root / "benchmark" / "domains" / benchmark_domain / "candidate_graphs" / run_id
+
+
+def _candidate_profile_context_output_dir(root: Path, benchmark_domain: str, run_id: str) -> Path:
+    return root / "benchmark" / "domains" / benchmark_domain / "candidate_profile_contexts" / run_id
 
 
 def _copy_markdown_to_domain_sources(

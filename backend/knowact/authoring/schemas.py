@@ -121,3 +121,53 @@ class GraphAuthoringWorkflowResult(BaseModel):
     source_grounded_node_skeletons: tuple[SourceGroundedNodeSkeleton, ...]
     candidate_nodes: tuple[KnowledgeNode, ...]
     candidate_edges: tuple[KnowledgeEdge, ...]
+
+
+class GeneratedProfileContext(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    summary: str
+    background: tuple[str, ...] = Field(min_length=1)
+    prior_experience: tuple[str, ...]
+    goals: tuple[str, ...] = Field(min_length=1)
+    preferences: tuple[str, ...]
+
+    @field_validator("summary")
+    @classmethod
+    def _summary_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("background", "prior_experience", "goals", "preferences")
+    @classmethod
+    def _items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not item.strip() for item in value):
+            raise ValueError("must not contain blank items")
+        return value
+
+
+class CandidateProfileContext(GeneratedProfileContext):
+    benchmark_domain: str
+
+    @field_validator("benchmark_domain")
+    @classmethod
+    def _benchmark_domain_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
+class ProfileContextAuthoringInput(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    benchmark_domain: str
+    rough_description: str
+    domain_summary: str | None = None
+
+    @field_validator("benchmark_domain", "rough_description", "domain_summary")
+    @classmethod
+    def _values_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("must not be blank")
+        return value
