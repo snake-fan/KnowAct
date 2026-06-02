@@ -7,11 +7,57 @@ from fastapi.testclient import TestClient
 
 from backend.knowact.api.app import create_app
 from backend.knowact.authoring.map_authoring import build_candidate_map_authoring_workflow
+from backend.knowact.authoring.schemas import ConfirmedProfileContext, KnowledgeStateOutline
+from backend.knowact.authoring.templates.map_authoring import (
+    build_ground_truth_evidence_messages,
+    build_knowledge_state_outline_messages,
+)
+from backend.knowact.core.graph import KnowledgeNode
 from backend.knowact.llm.client import ModelClientMetadata
-from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE
+from backend.knowact.llm.messages import DEEPSEEK_MESSAGE_PROFILE, OPENAI_MESSAGE_PROFILE
 
 
 class V1CandidateMapAuthoringApiTest(unittest.TestCase):
+    def test_map_authoring_templates_use_message_profile_high_priority_role(self):
+        profile_context = _confirmed_profile_context()
+        nodes = (KnowledgeNode.model_validate(_knowledge_node("train_test_split", "Train/Test Split")),)
+        state_outlines = (
+            KnowledgeStateOutline(
+                node_id="train_test_split",
+                mastery_level="L2",
+                misconceptions=[],
+                unknowns=[],
+            ),
+        )
+
+        default_outline_messages = build_knowledge_state_outline_messages(
+            profile_context=profile_context,
+            nodes=nodes,
+        )
+        deepseek_outline_messages = build_knowledge_state_outline_messages(
+            profile_context=profile_context,
+            nodes=nodes,
+            message_profile=DEEPSEEK_MESSAGE_PROFILE,
+        )
+        default_evidence_messages = build_ground_truth_evidence_messages(
+            profile_context=profile_context,
+            nodes=nodes,
+            state_outlines=state_outlines,
+        )
+        deepseek_evidence_messages = build_ground_truth_evidence_messages(
+            profile_context=profile_context,
+            nodes=nodes,
+            state_outlines=state_outlines,
+            message_profile=DEEPSEEK_MESSAGE_PROFILE,
+        )
+
+        self.assertEqual("developer", default_outline_messages[0].role)
+        self.assertEqual("system", deepseek_outline_messages[0].role)
+        self.assertEqual("developer", default_evidence_messages[0].role)
+        self.assertEqual("system", deepseek_evidence_messages[0].role)
+        self.assertEqual("user", deepseek_outline_messages[1].role)
+        self.assertEqual("user", deepseek_evidence_messages[1].role)
+
     def test_authoring_api_generates_single_batch_candidate_map_and_reads_saved_artifacts(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -142,6 +188,29 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
             self.assertIn("Ground-Truth Evidence Authoring Agent Step", evidence_prompt)
             self.assertIn("train_test_split", evidence_prompt)
             self.assertIn("cross_validation", evidence_prompt)
+            self.assertIn(
+                "evidence_kind is a functional role, not a surface format",
+                evidence_prompt,
+            )
+            for allowed_kind in (
+                "prior_answer",
+                "worked_example",
+                "self_report",
+                "misconception_trace",
+                "background_fact",
+            ):
+                self.assertIn(allowed_kind, evidence_prompt)
+            for forbidden_surface_kind in (
+                "quiz_answer",
+                "verbal_explanation",
+                "written_response",
+                "discussion_comment",
+                "residual_plot_interpretation",
+                "theorem_reference",
+            ):
+                self.assertIn(forbidden_surface_kind, evidence_prompt)
+            self.assertIn("never invent fine-grained evidence_kind values", evidence_prompt)
+            self.assertIn("Put the specific surface form in signal", evidence_prompt)
             self.assertNotIn("edge_train_test_split_prerequisite_for_cross_validation", evidence_prompt)
 
     def test_authoring_api_generates_evidence_in_contiguous_reviewed_node_batches(self):
@@ -867,6 +936,18 @@ def _write_confirmed_profile_context(workspace_root: Path) -> None:
             "goals": ["Understand model evaluation."],
             "preferences": ["Prefers concrete examples."],
         },
+    )
+
+
+def _confirmed_profile_context() -> ConfirmedProfileContext:
+    return ConfirmedProfileContext(
+        user_id="synthetic_user_001",
+        benchmark_domain="classical_supervised_ml_algorithms",
+        summary="A practical beginner with limited statistical foundations.",
+        background=("Has followed introductory sklearn examples.",),
+        prior_experience=("Can run basic estimator workflows.",),
+        goals=("Understand model evaluation.",),
+        preferences=("Prefers concrete examples.",),
     )
 
 
