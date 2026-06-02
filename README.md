@@ -354,6 +354,8 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 - `POST /api/authoring/profile-context-candidates`, which generates one reviewable synthetic-user Profile Context draft and writes the minimal candidate run artifacts.
 - `GET /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}` and `PUT /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`, which read and validate-save the current Profile Context draft. The save endpoint edits persona fields only; run identity and benchmark domain remain fixed.
 - `POST /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}/confirmation`, which publishes one validated draft as immutable `benchmark/domains/{benchmark_domain}/users/{user_id}/profile_context.json`. Confirmed user ids cannot be overwritten, and each candidate run can be confirmed at most once.
+- `POST /api/authoring/map-candidates`, which loads one reviewed graph version and one confirmed Profile Context by identity, runs the current single-batch Candidate Knowledge Map tracer bullet, and writes `candidate_map.json`, `workflow_log.json`, outline/evidence intermediates, and step traces. This opened slice intentionally rejects reviewed graphs with more than `5` nodes until multi-batch generation is implemented. Candidate-map run ids cannot overwrite existing runs; retry with a new run id.
+- `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`, which returns one saved Candidate Knowledge Map and its artifact references for inspection.
 
 ```json
 {
@@ -376,6 +378,7 @@ Implemented / planned components include:
 - [x] Candidate Graph Review Workbench frontend
 - [x] Phase 3 review-gated authored graph promotion with generated manifests
 - [x] LLM-based Profile Context generation and immutable confirmation gate
+- [x] Single-batch Candidate Knowledge Map generation tracer bullet
 - [ ] Ground-truth map authoring
 - [ ] Human verification protocol
 - [ ] User simulator
