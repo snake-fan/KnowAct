@@ -192,6 +192,28 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
                 "evidence_kind is a functional role, not a surface format",
                 evidence_prompt,
             )
+            self.assertIn("Task:", evidence_prompt)
+            self.assertIn("Return JSON with this exact top-level shape:", evidence_prompt)
+            self.assertIn('"evidence": [', evidence_prompt)
+            self.assertIn('"node_id": "node id from this batch"', evidence_prompt)
+            self.assertIn("Allowed output fields for each evidence object:", evidence_prompt)
+            self.assertIn("Forbidden output:", evidence_prompt)
+            self.assertIn("- evidence_type", evidence_prompt)
+            self.assertIn("- visibility", evidence_prompt)
+            self.assertIn("Node boundary:", evidence_prompt)
+            self.assertIn(
+                "Every evidence.node_id must exactly match one node_id from "
+                "batch_nodes_with_rubrics",
+                evidence_prompt,
+            )
+            self.assertIn("Evidence count per node:", evidence_prompt)
+            self.assertIn(
+                "For each node, inspect its target mastery_level from batch_state_outlines",
+                evidence_prompt,
+            )
+            self.assertIn("- L0-L1: at least 1 evidence record", evidence_prompt)
+            self.assertIn("- L2-L3: at least 2 evidence records", evidence_prompt)
+            self.assertIn("- L4-L5: at least 1 evidence record", evidence_prompt)
             for allowed_kind in (
                 "prior_answer",
                 "worked_example",
