@@ -362,7 +362,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 - `GET /api/authoring/candidate-maps/{benchmark_domain}`：列出 candidate-map runs，包括保留 workflow log 但没有写出可 promotion `candidate_map.json` 的 failed runs。
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`：返回一份已保存的 Candidate Knowledge Map 及其 artifact references，供检查使用。
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`：返回 candidate-map review 用的 generation-time edge-consistency warnings。
-- `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`：用 reviewed graph 与 confirmed Profile Context 重新校验一份已保存的 Candidate Knowledge Map，将 `kind` 转换为 `ground_truth`，并发布不可变的 `ground_truth_maps/{map_id}/ground_truth_map.json` 与 `map_manifest.json`。已有 `map_id` 返回 `409 Conflict`，同一个 candidate run 最多 promotion 一次，generation-time `consistency_warnings.json` 不会复制到 reviewed data。
+- `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`：用 reviewed graph 与 confirmed Profile Context 重新校验一份已保存的 Candidate Knowledge Map，将 `kind` 转换为 `ground_truth`，并发布不可变的 `maps/{map_id}/map.json` 与 `map_manifest.json`。已有 `map_id` 返回 `409 Conflict`，generation-time `consistency_warnings.json` 不会复制到 reviewed data，成功发布后的 run 会从 `candidate_maps/` 移除。
 
 ```json
 {
@@ -373,7 +373,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 }
 ```
 
-PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `..` 路径穿越。对于 `storage/books/isl_python.pdf`，默认 Markdown 缓存路径是 `storage/books/isl_python.md`；除非 `force_reparse=true`，已有 Markdown 会被复用。LLM 路径使用 Markdown text，不使用 PDF base64 `input_file` 或 OpenAI `file_id`；`client_provider` 当前接受 `openai` 或 `deepseek`，默认值为 `openai`。OSS staging object 只是 MinerU URL parsing 的私有临时传输层；signed URL 不会出现在 API response 或 workflow log 中。Candidate generation 不会自动 promotion；reviewed graph 与 ground-truth map publication 都是独立的显式 promotion 操作。
+PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `..` 路径穿越。对于 `storage/books/isl_python.pdf`，默认 Markdown 缓存路径是 `storage/books/isl_python.md`；除非 `force_reparse=true`，已有 Markdown 会被复用。LLM 路径使用 Markdown text，不使用 PDF base64 `input_file` 或 OpenAI `file_id`；`client_provider` 当前接受 `openai` 或 `deepseek`，默认值为 `openai`。OSS staging object 只是 MinerU URL parsing 的私有临时传输层；signed URL 不会出现在 API response 或 workflow log 中。Candidate generation 不会自动 promotion；reviewed graph 与 map publication 都是独立的显式 promotion 操作。
 
 已实现或计划中的组件包括：
 
@@ -387,7 +387,7 @@ PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `.
 - [x] Phase 3 review-gated authored graph promotion 与 graph manifest generation
 - [x] 基于 LLM 的 Profile Context generation 与不可变 confirmation gate
 - [x] Single-batch Candidate Knowledge Map generation tracer bullet
-- [x] Reviewed Ground-Truth Knowledge Map promotion 与 map manifest generation
+- [x] Reviewed map promotion 与 map manifest generation
 - [ ] Ground-truth map authoring
 - [ ] 人工校验协议
 - [ ] 用户模拟器

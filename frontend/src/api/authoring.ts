@@ -252,7 +252,7 @@ export type MapEdgeConsistencyWarningListResponse = {
   warnings: MapEdgeConsistencyWarning[];
 };
 
-export type GroundTruthMapManifest = {
+export type MapManifest = {
   map_id: string;
   user_id: string;
   benchmark_domain: string;
@@ -262,15 +262,15 @@ export type GroundTruthMapManifest = {
 
 export type ReviewedMapArtifactPaths = {
   output_dir_uri: string;
-  ground_truth_map_uri: string;
+  map_uri: string;
   map_manifest_uri: string;
 };
 
 export type CandidateMapPromotionResponse = {
   benchmark_domain: string;
   run_id: string;
-  ground_truth_map: KnowledgeMap;
-  map_manifest: GroundTruthMapManifest;
+  map: KnowledgeMap;
+  map_manifest: MapManifest;
   artifact_paths: ReviewedMapArtifactPaths;
 };
 

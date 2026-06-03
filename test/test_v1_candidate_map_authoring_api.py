@@ -384,6 +384,53 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
                 warnings_response.json()["warnings"],
             )
 
+    def test_authoring_api_omits_already_promoted_candidate_map_runs_from_list(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            client = _test_client(workspace_root, FixtureCandidateMapModelClient())
+            create_response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "stale_promoted_run",
+                    "client_provider": "openai",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+            map_dir = (
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "maps"
+                / "published_stale"
+            )
+            map_dir.mkdir(parents=True)
+            _write_json(
+                map_dir / "map_manifest.json",
+                {
+                    "map_id": "published_stale",
+                    "user_id": "synthetic_user_001",
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "promoted_from_candidate_run": "stale_promoted_run",
+                },
+            )
+
+            list_response = client.get(
+                "/api/authoring/candidate-maps/classical_supervised_ml_algorithms"
+            )
+
+            self.assertEqual(200, list_response.status_code)
+            self.assertNotIn(
+                "stale_promoted_run",
+                [run["run_id"] for run in list_response.json()["runs"]],
+            )
+
     def test_authoring_api_promotes_candidate_map_into_reviewed_ground_truth_snapshot(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -401,6 +448,8 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
             )
             self.assertEqual(200, candidate_response.status_code)
             candidate_payload = candidate_response.json()
+            candidate_output_dir = workspace_root / candidate_payload["artifact_paths"]["output_dir_uri"]
+            self.assertTrue(candidate_output_dir.exists())
 
             response = client.post(
                 "/api/authoring/candidate-maps/"
@@ -420,27 +469,27 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
             self.assertEqual("classical_supervised_ml_algorithms", payload["benchmark_domain"])
             self.assertEqual("map_promotion_run_001", payload["run_id"])
             self.assertEqual(expected_manifest, payload["map_manifest"])
-            ground_truth_map = {
+            reviewed_map = {
                 **candidate_payload["candidate_map"],
                 "kind": "ground_truth",
             }
-            self.assertEqual(ground_truth_map, payload["ground_truth_map"])
+            self.assertEqual(reviewed_map, payload["map"])
             self.assertEqual(
                 [
                     evidence["id"]
                     for evidence in candidate_payload["candidate_map"]["evidence"]
                 ],
-                [evidence["id"] for evidence in payload["ground_truth_map"]["evidence"]],
+                [evidence["id"] for evidence in payload["map"]["evidence"]],
             )
 
             artifact_paths = payload["artifact_paths"]
             self.assertEqual(
-                "benchmark/domains/classical_supervised_ml_algorithms/ground_truth_maps/gt_map_001",
+                "benchmark/domains/classical_supervised_ml_algorithms/maps/gt_map_001",
                 artifact_paths["output_dir_uri"],
             )
             self.assertEqual(
-                ground_truth_map,
-                _load_json(workspace_root / artifact_paths["ground_truth_map_uri"]),
+                reviewed_map,
+                _load_json(workspace_root / artifact_paths["map_uri"]),
             )
             self.assertEqual(
                 expected_manifest,
@@ -448,14 +497,17 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
             )
             published_dir = workspace_root / artifact_paths["output_dir_uri"]
             self.assertEqual(
-                {"ground_truth_map.json", "map_manifest.json"},
+                {"map.json", "map_manifest.json"},
                 {path.name for path in published_dir.iterdir()},
             )
-            self.assertTrue(
-                (
-                    workspace_root
-                    / candidate_payload["artifact_paths"]["consistency_warnings_uri"]
-                ).exists()
+            self.assertFalse(candidate_output_dir.exists())
+            list_response = client.get(
+                "/api/authoring/candidate-maps/classical_supervised_ml_algorithms"
+            )
+            self.assertEqual(200, list_response.status_code)
+            self.assertNotIn(
+                "map_promotion_run_001",
+                [run["run_id"] for run in list_response.json()["runs"]],
             )
 
     def test_authoring_api_rejects_map_promotion_conflicts_without_overwrite_escape_hatch(self):
@@ -474,30 +526,118 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
                 },
             )
             self.assertEqual(200, create_response.status_code)
-            promotion_url = (
+            first_promotion_url = (
                 "/api/authoring/candidate-maps/"
                 "classical_supervised_ml_algorithms/map_conflict_run_001/promotion"
             )
-            self.assertEqual(200, client.post(promotion_url, json={"map_id": "gt_map_001"}).status_code)
+            first_promotion_response = client.post(
+                first_promotion_url,
+                json={"map_id": "gt_map_001"},
+            )
+            self.assertEqual(200, first_promotion_response.status_code)
+            second_client = _test_client(workspace_root, FixtureCandidateMapModelClient())
+            second_create_response = second_client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_conflict_run_002",
+                },
+            )
+            self.assertEqual(200, second_create_response.status_code)
+            second_candidate_dir = (
+                workspace_root
+                / second_create_response.json()["artifact_paths"]["output_dir_uri"]
+            )
+            second_promotion_url = (
+                "/api/authoring/candidate-maps/"
+                "classical_supervised_ml_algorithms/map_conflict_run_002/promotion"
+            )
 
-            same_map_id_response = client.post(promotion_url, json={"map_id": "gt_map_001"})
-            unsupported_overwrite_response = client.post(
-                promotion_url,
+            same_map_id_response = second_client.post(
+                second_promotion_url,
+                json={"map_id": "gt_map_001"},
+            )
+            unsupported_overwrite_response = second_client.post(
+                second_promotion_url,
                 json={"map_id": "gt_map_001", "overwrite": True},
             )
-            second_map_id_response = client.post(promotion_url, json={"map_id": "gt_map_002"})
 
             self.assertEqual(409, same_map_id_response.status_code)
             self.assertEqual(422, unsupported_overwrite_response.status_code)
-            self.assertEqual(409, second_map_id_response.status_code)
-            self.assertFalse(
+            self.assertTrue(second_candidate_dir.exists())
+
+            second_map_id_response = second_client.post(
+                second_promotion_url,
+                json={"map_id": "gt_map_002"},
+            )
+
+            self.assertEqual(200, second_map_id_response.status_code)
+            self.assertFalse(second_candidate_dir.exists())
+            self.assertTrue(
                 (
                     workspace_root
                     / "benchmark"
                     / "domains"
                     / "classical_supervised_ml_algorithms"
-                    / "ground_truth_maps"
+                    / "maps"
                     / "gt_map_002"
+                ).exists()
+            )
+
+    def test_authoring_api_removes_candidate_map_run_after_promotion(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            client = _test_client(workspace_root, FixtureCandidateMapModelClient())
+            create_response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_cleanup_run_001",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+            candidate_dir = (
+                workspace_root
+                / create_response.json()["artifact_paths"]["output_dir_uri"]
+            )
+            self.assertTrue(candidate_dir.exists())
+            promotion_url = (
+                "/api/authoring/candidate-maps/"
+                "classical_supervised_ml_algorithms/map_cleanup_run_001/promotion"
+            )
+
+            promotion_response = client.post(
+                promotion_url,
+                json={"map_id": "gt_cleanup_map_001"},
+            )
+            read_after_promotion_response = client.get(
+                "/api/authoring/candidate-maps/"
+                "classical_supervised_ml_algorithms/map_cleanup_run_001"
+            )
+            promote_again_response = client.post(
+                promotion_url,
+                json={"map_id": "gt_cleanup_map_002"},
+            )
+
+            self.assertEqual(200, promotion_response.status_code)
+            self.assertFalse(candidate_dir.exists())
+            self.assertEqual(404, read_after_promotion_response.status_code)
+            self.assertEqual(404, promote_again_response.status_code)
+            self.assertTrue(
+                (
+                    workspace_root
+                    / "benchmark"
+                    / "domains"
+                    / "classical_supervised_ml_algorithms"
+                    / "maps"
+                    / "gt_cleanup_map_001"
+                    / "map.json"
                 ).exists()
             )
 
@@ -517,7 +657,10 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
                 },
             )
             self.assertEqual(200, create_response.status_code)
-            candidate_path = workspace_root / create_response.json()["artifact_paths"]["candidate_map_uri"]
+            candidate_path = (
+                workspace_root
+                / create_response.json()["artifact_paths"]["candidate_map_uri"]
+            )
             candidate_map = _load_json(candidate_path)
             candidate_map["states"][0]["evidence_refs"] = candidate_map["states"][0]["evidence_refs"][:1]
             _write_json(candidate_path, candidate_map)
@@ -539,7 +682,7 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
                     / "benchmark"
                     / "domains"
                     / "classical_supervised_ml_algorithms"
-                    / "ground_truth_maps"
+                    / "maps"
                     / "gt_invalid_map_001"
                 ).exists()
             )
@@ -560,7 +703,14 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
                 },
             )
             self.assertEqual(200, create_response.status_code)
-            warnings_path = workspace_root / create_response.json()["artifact_paths"]["consistency_warnings_uri"]
+            candidate_dir = (
+                workspace_root
+                / create_response.json()["artifact_paths"]["output_dir_uri"]
+            )
+            warnings_path = (
+                workspace_root
+                / create_response.json()["artifact_paths"]["consistency_warnings_uri"]
+            )
             warnings_path.write_text("not json", encoding="utf-8")
 
             response = client.post(
@@ -572,9 +722,10 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
             self.assertEqual(200, response.status_code)
             published_dir = workspace_root / response.json()["artifact_paths"]["output_dir_uri"]
             self.assertEqual(
-                {"ground_truth_map.json", "map_manifest.json"},
+                {"map.json", "map_manifest.json"},
                 {path.name for path in published_dir.iterdir()},
             )
+            self.assertFalse(candidate_dir.exists())
 
     def test_authoring_api_allows_multiple_reviewed_map_samples_for_one_user_basis(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -631,9 +782,9 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
                     / "benchmark"
                     / "domains"
                     / "classical_supervised_ml_algorithms"
-                    / "ground_truth_maps"
+                    / "maps"
                     / "gt_sample_map_001"
-                    / "ground_truth_map.json"
+                    / "map.json"
                 ).exists()
             )
             self.assertTrue(
@@ -642,9 +793,9 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
                     / "benchmark"
                     / "domains"
                     / "classical_supervised_ml_algorithms"
-                    / "ground_truth_maps"
+                    / "maps"
                     / "gt_sample_map_002"
-                    / "ground_truth_map.json"
+                    / "map.json"
                 ).exists()
             )
 

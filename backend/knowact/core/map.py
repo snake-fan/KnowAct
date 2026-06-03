@@ -66,7 +66,7 @@ class KnowledgeMap(BaseModel):
         return {state.node_id: state for state in self.states}
 
 
-class GroundTruthMapManifest(BaseModel):
+class MapManifest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     map_id: str

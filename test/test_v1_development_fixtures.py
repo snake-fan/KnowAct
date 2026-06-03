@@ -24,11 +24,11 @@ class V1DevelopmentFixturesTest(unittest.TestCase):
             for raw_edge in _load_json("authored_edges.json")
         ]
         graph = KnowledgeGraph(nodes=nodes, edges=edges)
-        ground_truth_map = KnowledgeMap.model_validate(_load_json("ground_truth_map.json"))
+        reviewed_map = KnowledgeMap.model_validate(_load_json("map.json"))
         manifest = EvaluationEpisodeManifest.model_validate(_load_json("episode_manifest.json"))
 
         validate_knowledge_graph(graph)
-        validate_knowledge_map(ground_truth_map, graph)
+        validate_knowledge_map(reviewed_map, graph)
         validate_episode_manifest(manifest)
 
 

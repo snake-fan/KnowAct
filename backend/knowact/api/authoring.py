@@ -81,7 +81,7 @@ from backend.knowact.authoring.sources import (
 from backend.knowact.authoring.validation import validate_candidate_edges, validate_complete_candidate_nodes
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 from backend.knowact.core.graph import GraphManifest, KnowledgeEdge, KnowledgeNode
-from backend.knowact.core.map import GroundTruthMapManifest, KnowledgeMap
+from backend.knowact.core.map import KnowledgeMap, MapManifest
 from backend.knowact.llm.client import ModelClientError
 from backend.knowact.logging_config import get_knowact_logger
 from backend.knowact.storage.materials import (
@@ -109,7 +109,10 @@ from backend.knowact.storage.reviewed_graphs import (
     ReviewedGraphPromotionConflictError,
     load_reviewed_graph,
 )
-from backend.knowact.storage.reviewed_maps import ReviewedMapPromotionConflictError
+from backend.knowact.storage.reviewed_maps import (
+    ReviewedMapPromotionConflictError,
+    find_reviewed_map_id_for_candidate_run,
+)
 from backend.knowact.storage.profile_contexts import (
     CONFIRMED_PROFILE_CONTEXT_FILENAME,
     ConfirmedProfileContextArtifactError,
@@ -285,7 +288,7 @@ class ReviewedMapArtifactPaths(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     output_dir_uri: str
-    ground_truth_map_uri: str
+    map_uri: str
     map_manifest_uri: str
 
 
@@ -294,8 +297,8 @@ class CandidateMapPromotionResponse(BaseModel):
 
     benchmark_domain: str
     run_id: str
-    ground_truth_map: KnowledgeMap
-    map_manifest: GroundTruthMapManifest
+    map: KnowledgeMap
+    map_manifest: MapManifest
     artifact_paths: ReviewedMapArtifactPaths
 
 
@@ -854,6 +857,15 @@ def build_authoring_router(
                     run_id = _validate_safe_id(entry.name, "run_id")
                 except ValueError:
                     continue
+                if (
+                    find_reviewed_map_id_for_candidate_run(
+                        workspace_root=root,
+                        benchmark_domain=benchmark_domain,
+                        run_id=run_id,
+                    )
+                    is not None
+                ):
+                    continue
                 summaries.append(
                     _candidate_map_run_summary(
                         run_dir=entry,
@@ -962,7 +974,7 @@ def build_authoring_router(
     @router.post(
         "/candidate-maps/{benchmark_domain}/{run_id}/promotion",
         response_model=CandidateMapPromotionResponse,
-        summary="Promote one accepted Candidate Knowledge Map into an immutable ground-truth snapshot.",
+        summary="Promote one accepted Candidate Knowledge Map into an immutable map snapshot.",
     )
     def promote_candidate_map_artifacts(
         benchmark_domain: str,
@@ -993,11 +1005,11 @@ def build_authoring_router(
         return CandidateMapPromotionResponse(
             benchmark_domain=benchmark_domain,
             run_id=run_id,
-            ground_truth_map=promotion.ground_truth_map,
+            map=promotion.knowledge_map,
             map_manifest=promotion.manifest,
             artifact_paths=ReviewedMapArtifactPaths(
                 output_dir_uri=_relative_uri(promotion.output_dir, root),
-                ground_truth_map_uri=_relative_uri(promotion.ground_truth_map_path, root),
+                map_uri=_relative_uri(promotion.map_path, root),
                 map_manifest_uri=_relative_uri(promotion.map_manifest_path, root),
             ),
         )

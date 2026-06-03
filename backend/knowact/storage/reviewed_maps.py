@@ -7,10 +7,10 @@ import tempfile
 
 from pydantic import BaseModel, ValidationError
 
-from backend.knowact.core.map import GroundTruthMapManifest, KnowledgeMap
+from backend.knowact.core.map import KnowledgeMap, MapManifest
 
 
-GROUND_TRUTH_MAP_FILENAME = "ground_truth_map.json"
+MAP_FILENAME = "map.json"
 MAP_MANIFEST_FILENAME = "map_manifest.json"
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
@@ -21,27 +21,27 @@ class ReviewedMapPromotionConflictError(FileExistsError):
 
 @dataclass(frozen=True)
 class ReviewedMapPromotion:
-    manifest: GroundTruthMapManifest
-    ground_truth_map: KnowledgeMap
+    manifest: MapManifest
+    knowledge_map: KnowledgeMap
     output_dir: Path
     map_manifest_path: Path
-    ground_truth_map_path: Path
+    map_path: Path
 
 
-def publish_reviewed_ground_truth_map(
+def publish_reviewed_map(
     *,
     workspace_root: Path,
     benchmark_domain: str,
     map_id: str,
-    manifest: GroundTruthMapManifest,
-    ground_truth_map: KnowledgeMap,
+    manifest: MapManifest,
+    knowledge_map: KnowledgeMap,
 ) -> ReviewedMapPromotion:
     benchmark_domain = _validate_safe_id(benchmark_domain, "benchmark_domain")
     map_id = _validate_safe_id(map_id, "map_id")
-    map_root = workspace_root / "benchmark" / "domains" / benchmark_domain / "ground_truth_maps"
+    map_root = workspace_root / "benchmark" / "domains" / benchmark_domain / "maps"
     output_dir = map_root / map_id
     if output_dir.exists():
-        raise ReviewedMapPromotionConflictError(f"Ground-truth map id {map_id} already exists")
+        raise ReviewedMapPromotionConflictError(f"Map id {map_id} already exists")
     existing_map_id = _find_existing_map_id_for_candidate_run(
         map_root=map_root,
         run_id=manifest.promoted_from_candidate_run,
@@ -49,13 +49,13 @@ def publish_reviewed_ground_truth_map(
     if existing_map_id is not None:
         raise ReviewedMapPromotionConflictError(
             f"Candidate map run {manifest.promoted_from_candidate_run} was already "
-            f"promoted as ground-truth map {existing_map_id}"
+            f"promoted as map {existing_map_id}"
         )
 
     map_root.mkdir(parents=True, exist_ok=True)
     staging_dir = Path(tempfile.mkdtemp(prefix=f".{map_id}.", dir=map_root))
     try:
-        _write_json_model(staging_dir / GROUND_TRUTH_MAP_FILENAME, ground_truth_map)
+        _write_json_model(staging_dir / MAP_FILENAME, knowledge_map)
         _write_json_model(staging_dir / MAP_MANIFEST_FILENAME, manifest)
         _publish_staged_directory(staging_dir, output_dir)
     except Exception:
@@ -64,17 +64,29 @@ def publish_reviewed_ground_truth_map(
 
     return ReviewedMapPromotion(
         manifest=manifest,
-        ground_truth_map=ground_truth_map,
+        knowledge_map=knowledge_map,
         output_dir=output_dir,
         map_manifest_path=output_dir / MAP_MANIFEST_FILENAME,
-        ground_truth_map_path=output_dir / GROUND_TRUTH_MAP_FILENAME,
+        map_path=output_dir / MAP_FILENAME,
     )
+
+
+def find_reviewed_map_id_for_candidate_run(
+    *,
+    workspace_root: Path,
+    benchmark_domain: str,
+    run_id: str,
+) -> str | None:
+    benchmark_domain = _validate_safe_id(benchmark_domain, "benchmark_domain")
+    run_id = _validate_safe_id(run_id, "run_id")
+    map_root = workspace_root / "benchmark" / "domains" / benchmark_domain / "maps"
+    return _find_existing_map_id_for_candidate_run(map_root=map_root, run_id=run_id)
 
 
 def _publish_staged_directory(staging_dir: Path, output_dir: Path) -> None:
     if output_dir.exists():
         raise ReviewedMapPromotionConflictError(
-            f"Ground-truth map id {output_dir.name} already exists"
+            f"Map id {output_dir.name} already exists"
         )
     staging_dir.replace(output_dir)
 
@@ -88,7 +100,7 @@ def _find_existing_map_id_for_candidate_run(*, map_root: Path, run_id: str) -> s
             continue
         try:
             with manifest_path.open(encoding="utf-8") as handle:
-                manifest = GroundTruthMapManifest.model_validate(json.load(handle))
+                manifest = MapManifest.model_validate(json.load(handle))
         except (OSError, ValueError, ValidationError, json.JSONDecodeError):
             continue
         if manifest.promoted_from_candidate_run == run_id:

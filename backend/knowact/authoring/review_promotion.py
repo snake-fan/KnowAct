@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from backend.knowact.authoring.map_authoring_output import (
     CandidateMapArtifactError,
     CandidateMapAuthoringRunLog,
+    discard_candidate_map_run,
     read_candidate_map_run,
 )
 from backend.knowact.authoring.validation import (
@@ -15,9 +16,9 @@ from backend.knowact.authoring.validation import (
 from backend.knowact.core.evidence import EvidenceType, EvidenceVisibility
 from backend.knowact.core.graph import GraphManifest
 from backend.knowact.core.map import (
-    GroundTruthMapManifest,
     KnowledgeMap,
     KnowledgeMapKind,
+    MapManifest,
     MasteryLevel,
 )
 from backend.knowact.storage.profile_contexts import load_confirmed_profile_context
@@ -31,7 +32,7 @@ from backend.knowact.storage.reviewed_graphs import (
 )
 from backend.knowact.storage.reviewed_maps import (
     ReviewedMapPromotion,
-    publish_reviewed_ground_truth_map,
+    publish_reviewed_map,
 )
 from backend.knowact.validation.exceptions import KnowActValidationError
 from backend.knowact.validation.map import validate_knowledge_map
@@ -104,32 +105,38 @@ def promote_candidate_map(
         benchmark_domain=benchmark_domain,
         user_id=run_log.user_id,
     )
-    ground_truth_map = KnowledgeMap(
+    reviewed_map = KnowledgeMap(
         user_id=candidate_map.user_id,
         kind=KnowledgeMapKind.GROUND_TRUTH,
         states=candidate_map.states,
         evidence=candidate_map.evidence,
     )
     try:
-        validate_knowledge_map(ground_truth_map, reviewed_graph.graph)
-        _validate_mastery_sensitive_simulator_evidence_minimums(ground_truth_map)
+        validate_knowledge_map(reviewed_map, reviewed_graph.graph)
+        _validate_mastery_sensitive_simulator_evidence_minimums(reviewed_map)
     except KnowActValidationError as exc:
         raise CandidateMapArtifactError(str(exc)) from exc
 
-    manifest = GroundTruthMapManifest(
+    manifest = MapManifest(
         map_id=map_id,
         user_id=run_log.user_id,
         benchmark_domain=benchmark_domain,
         graph_version=run_log.graph_version,
         promoted_from_candidate_run=run_id,
     )
-    return publish_reviewed_ground_truth_map(
+    promotion = publish_reviewed_map(
         workspace_root=workspace_root,
         benchmark_domain=benchmark_domain,
         map_id=map_id,
         manifest=manifest,
-        ground_truth_map=ground_truth_map,
+        knowledge_map=reviewed_map,
     )
+    discard_candidate_map_run(
+        workspace_root=workspace_root,
+        benchmark_domain=benchmark_domain,
+        run_id=run_id,
+    )
+    return promotion
 
 
 def _read_candidate_map_run_log(
@@ -164,9 +171,9 @@ def _validate_candidate_map_run_identity(
         raise CandidateMapArtifactError("Candidate map user_id does not match workflow log")
 
 
-def _validate_mastery_sensitive_simulator_evidence_minimums(ground_truth_map: KnowledgeMap) -> None:
-    evidence_by_id = {record.id: record for record in ground_truth_map.evidence}
-    for state in ground_truth_map.states:
+def _validate_mastery_sensitive_simulator_evidence_minimums(reviewed_map: KnowledgeMap) -> None:
+    evidence_by_id = {record.id: record for record in reviewed_map.evidence}
+    for state in reviewed_map.states:
         simulator_only_count = sum(
             1
             for evidence_ref in state.evidence_refs

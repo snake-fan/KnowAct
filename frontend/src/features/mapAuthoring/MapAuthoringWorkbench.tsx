@@ -1,7 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiRequestError,
-  CandidateMapPromotionResponse,
   CandidateMapResponse,
   CandidateMapRunSummary,
   ConfirmedProfileContext,
@@ -56,10 +55,10 @@ export function MapAuthoringWorkbench() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [promotionDialogOpen, setPromotionDialogOpen] = useState(false);
   const [mapId, setMapId] = useState("");
-  const [promotion, setPromotion] = useState<CandidateMapPromotionResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const composerStageRef = useRef<HTMLElement | null>(null);
   const reviewStageRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -199,7 +198,6 @@ export function MapAuthoringWorkbench() {
         warnings
       });
       setSelectedNodeId(null);
-      setPromotion(null);
       setNotice(`Generated Candidate Knowledge Map ${candidate.run_id}.`);
       scrollToReview();
     });
@@ -239,7 +237,6 @@ export function MapAuthoringWorkbench() {
         warnings
       });
       setSelectedNodeId(null);
-      setPromotion(null);
       setNotice(`Loaded Candidate Knowledge Map ${summary.run_id}.`);
       scrollToReview();
     });
@@ -262,25 +259,28 @@ export function MapAuthoringWorkbench() {
     }
 
     await runTask("promote map", async () => {
-      let response: CandidateMapPromotionResponse;
+      let publishedMapId = trimmedMapId;
       try {
-        response = await promoteCandidateMap({
+        const response = await promoteCandidateMap({
           benchmarkDomain: reviewContext.benchmarkDomain,
           runId: reviewContext.candidate.run_id,
           mapId: trimmedMapId
         });
+        publishedMapId = response.map_manifest.map_id;
       } catch (taskError) {
         if (!(taskError instanceof ApiRequestError) || taskError.status !== 409) {
           throw taskError;
         }
-        throw new Error(
-          `Map ID "${trimmedMapId}" is unavailable or this candidate run was already promoted. Choose a new map ID or generate another candidate.`
-        );
+        throw new Error(taskError.message);
       }
-      setPromotion(response);
+      const nextRuns = await listCandidateMapRuns(reviewContext.benchmarkDomain);
+      setCandidateRuns(nextRuns);
+      setReviewContext(null);
+      setSelectedNodeId(null);
       setPromotionDialogOpen(false);
-      setNotice(`Published immutable Ground-Truth Knowledge Map ${response.map_manifest.map_id}.`);
-      setCandidateRuns(await listCandidateMapRuns(reviewContext.benchmarkDomain));
+      setMapId("");
+      setNotice(`Published immutable Map ${publishedMapId}.`);
+      scrollToComposer();
     });
   }
 
@@ -303,6 +303,12 @@ export function MapAuthoringWorkbench() {
     });
   }
 
+  function scrollToComposer() {
+    requestAnimationFrame(() => {
+      composerStageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   return (
     <main className="map-workbench">
       <section className="topbar map-topbar">
@@ -319,7 +325,7 @@ export function MapAuthoringWorkbench() {
       </section>
 
       <div className="map-scroll">
-        <section className="map-composer-stage">
+        <section className="map-composer-stage" ref={composerStageRef}>
           <form className="map-composer-shell" onSubmit={handleGenerate}>
             <div className="map-card-heading">
               <div>
@@ -451,8 +457,8 @@ export function MapAuthoringWorkbench() {
                 <span className={reviewContext.warnings.length > 0 ? "warning-count active" : "warning-count"}>
                   {reviewContext.warnings.length} warnings
                 </span>
-                <button type="button" onClick={openPromotionDialog} disabled={busy !== null || Boolean(promotion)}>
-                  Publish Ground-Truth Map
+                <button type="button" onClick={openPromotionDialog} disabled={busy !== null}>
+                  Publish Map
                 </button>
               </div>
             </div>
@@ -481,12 +487,6 @@ export function MapAuthoringWorkbench() {
                 />
               )}
             </div>
-
-            {promotion && (
-              <p className="map-published-path">
-                Published: {promotion.artifact_paths.ground_truth_map_uri}
-              </p>
-            )}
           </section>
         )}
       </div>
@@ -494,8 +494,8 @@ export function MapAuthoringWorkbench() {
       {promotionDialogOpen && reviewContext && (
         <div className="dialog-backdrop">
           <form className="dialog" onSubmit={handlePromote}>
-            <h2>Publish Ground-Truth Map</h2>
-            <p>This publishes the candidate unchanged as an immutable Ground-Truth Knowledge Map.</p>
+            <h2>Publish Map</h2>
+            <p>This publishes the candidate unchanged as an immutable reviewed map.</p>
             <div className="promotion-summary">
               <Meta label="Candidate run" value={reviewContext.candidate.run_id} />
               <Meta label="User ID" value={reviewContext.userId} />

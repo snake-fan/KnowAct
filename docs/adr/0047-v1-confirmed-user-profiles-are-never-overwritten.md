@@ -1,6 +1,6 @@
 # V1 confirmed user profiles are never overwritten
 
-KnowAct v1 never overwrites an existing confirmed synthetic-user `Profile Context` snapshot and does not expose an `overwrite=true` confirmation option. If persona content changes, the benchmark author publishes it under a new `user_id`, preserving the profile basis referenced by existing ground-truth maps and evaluation episodes.
+KnowAct v1 never overwrites an existing confirmed synthetic-user `Profile Context` snapshot and does not expose an `overwrite=true` confirmation option. If persona content changes, the benchmark author publishes it under a new `user_id`, preserving the profile basis referenced by existing maps and evaluation episodes.
 
 **Considered Options**
 
