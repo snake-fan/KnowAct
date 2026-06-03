@@ -262,6 +262,270 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
             self.assertIn("Put the specific surface form in signal", evidence_prompt)
             self.assertNotIn("edge_train_test_split_prerequisite_for_cross_validation", evidence_prompt)
 
+    def test_authoring_api_promotes_candidate_map_into_reviewed_ground_truth_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            client = _test_client(workspace_root, FixtureCandidateMapModelClient())
+            candidate_response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_promotion_run_001",
+                },
+            )
+            self.assertEqual(200, candidate_response.status_code)
+            candidate_payload = candidate_response.json()
+
+            response = client.post(
+                "/api/authoring/candidate-maps/"
+                "classical_supervised_ml_algorithms/map_promotion_run_001/promotion",
+                json={"map_id": "gt_map_001"},
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            expected_manifest = {
+                "map_id": "gt_map_001",
+                "user_id": "synthetic_user_001",
+                "benchmark_domain": "classical_supervised_ml_algorithms",
+                "graph_version": "v1",
+                "promoted_from_candidate_run": "map_promotion_run_001",
+            }
+            self.assertEqual("classical_supervised_ml_algorithms", payload["benchmark_domain"])
+            self.assertEqual("map_promotion_run_001", payload["run_id"])
+            self.assertEqual(expected_manifest, payload["map_manifest"])
+            ground_truth_map = {
+                **candidate_payload["candidate_map"],
+                "kind": "ground_truth",
+            }
+            self.assertEqual(ground_truth_map, payload["ground_truth_map"])
+            self.assertEqual(
+                [
+                    evidence["id"]
+                    for evidence in candidate_payload["candidate_map"]["evidence"]
+                ],
+                [evidence["id"] for evidence in payload["ground_truth_map"]["evidence"]],
+            )
+
+            artifact_paths = payload["artifact_paths"]
+            self.assertEqual(
+                "benchmark/domains/classical_supervised_ml_algorithms/ground_truth_maps/gt_map_001",
+                artifact_paths["output_dir_uri"],
+            )
+            self.assertEqual(
+                ground_truth_map,
+                _load_json(workspace_root / artifact_paths["ground_truth_map_uri"]),
+            )
+            self.assertEqual(
+                expected_manifest,
+                _load_json(workspace_root / artifact_paths["map_manifest_uri"]),
+            )
+            published_dir = workspace_root / artifact_paths["output_dir_uri"]
+            self.assertEqual(
+                {"ground_truth_map.json", "map_manifest.json"},
+                {path.name for path in published_dir.iterdir()},
+            )
+            self.assertTrue(
+                (
+                    workspace_root
+                    / candidate_payload["artifact_paths"]["consistency_warnings_uri"]
+                ).exists()
+            )
+
+    def test_authoring_api_rejects_map_promotion_conflicts_without_overwrite_escape_hatch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            client = _test_client(workspace_root, FixtureCandidateMapModelClient())
+            create_response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_conflict_run_001",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+            promotion_url = (
+                "/api/authoring/candidate-maps/"
+                "classical_supervised_ml_algorithms/map_conflict_run_001/promotion"
+            )
+            self.assertEqual(200, client.post(promotion_url, json={"map_id": "gt_map_001"}).status_code)
+
+            same_map_id_response = client.post(promotion_url, json={"map_id": "gt_map_001"})
+            unsupported_overwrite_response = client.post(
+                promotion_url,
+                json={"map_id": "gt_map_001", "overwrite": True},
+            )
+            second_map_id_response = client.post(promotion_url, json={"map_id": "gt_map_002"})
+
+            self.assertEqual(409, same_map_id_response.status_code)
+            self.assertEqual(422, unsupported_overwrite_response.status_code)
+            self.assertEqual(409, second_map_id_response.status_code)
+            self.assertFalse(
+                (
+                    workspace_root
+                    / "benchmark"
+                    / "domains"
+                    / "classical_supervised_ml_algorithms"
+                    / "ground_truth_maps"
+                    / "gt_map_002"
+                ).exists()
+            )
+
+    def test_authoring_api_revalidates_candidate_map_before_promotion(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            client = _test_client(workspace_root, FixtureCandidateMapModelClient())
+            create_response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_invalid_promotion_run_001",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+            candidate_path = workspace_root / create_response.json()["artifact_paths"]["candidate_map_uri"]
+            candidate_map = _load_json(candidate_path)
+            candidate_map["states"][0]["evidence_refs"] = candidate_map["states"][0]["evidence_refs"][:1]
+            _write_json(candidate_path, candidate_map)
+
+            response = client.post(
+                "/api/authoring/candidate-maps/"
+                "classical_supervised_ml_algorithms/map_invalid_promotion_run_001/promotion",
+                json={"map_id": "gt_invalid_map_001"},
+            )
+
+            self.assertEqual(422, response.status_code)
+            self.assertIn(
+                "requires at least 2 simulator-only evidence records",
+                response.json()["detail"],
+            )
+            self.assertFalse(
+                (
+                    workspace_root
+                    / "benchmark"
+                    / "domains"
+                    / "classical_supervised_ml_algorithms"
+                    / "ground_truth_maps"
+                    / "gt_invalid_map_001"
+                ).exists()
+            )
+
+    def test_authoring_api_promotes_candidate_map_without_reading_consistency_warnings(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            client = _test_client(workspace_root, EdgeInconsistentCandidateMapModelClient())
+            create_response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_warning_promotion_run_001",
+                },
+            )
+            self.assertEqual(200, create_response.status_code)
+            warnings_path = workspace_root / create_response.json()["artifact_paths"]["consistency_warnings_uri"]
+            warnings_path.write_text("not json", encoding="utf-8")
+
+            response = client.post(
+                "/api/authoring/candidate-maps/"
+                "classical_supervised_ml_algorithms/map_warning_promotion_run_001/promotion",
+                json={"map_id": "gt_warning_map_001"},
+            )
+
+            self.assertEqual(200, response.status_code)
+            published_dir = workspace_root / response.json()["artifact_paths"]["output_dir_uri"]
+            self.assertEqual(
+                {"ground_truth_map.json", "map_manifest.json"},
+                {path.name for path in published_dir.iterdir()},
+            )
+
+    def test_authoring_api_allows_multiple_reviewed_map_samples_for_one_user_basis(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            first_client = _test_client(workspace_root, FixtureCandidateMapModelClient())
+            first_create_response = first_client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_sample_run_001",
+                },
+            )
+            self.assertEqual(200, first_create_response.status_code)
+            first_promotion_response = first_client.post(
+                "/api/authoring/candidate-maps/"
+                "classical_supervised_ml_algorithms/map_sample_run_001/promotion",
+                json={"map_id": "gt_sample_map_001"},
+            )
+            self.assertEqual(200, first_promotion_response.status_code)
+            second_client = _test_client(workspace_root, FixtureCandidateMapModelClient())
+            second_create_response = second_client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_sample_run_002",
+                },
+            )
+            self.assertEqual(200, second_create_response.status_code)
+
+            second_promotion_response = second_client.post(
+                "/api/authoring/candidate-maps/"
+                "classical_supervised_ml_algorithms/map_sample_run_002/promotion",
+                json={"map_id": "gt_sample_map_002"},
+            )
+
+            self.assertEqual(200, second_promotion_response.status_code)
+            first_manifest = first_promotion_response.json()["map_manifest"]
+            second_manifest = second_promotion_response.json()["map_manifest"]
+            self.assertEqual("synthetic_user_001", first_manifest["user_id"])
+            self.assertEqual("synthetic_user_001", second_manifest["user_id"])
+            self.assertEqual("v1", first_manifest["graph_version"])
+            self.assertEqual("v1", second_manifest["graph_version"])
+            self.assertEqual("map_sample_run_001", first_manifest["promoted_from_candidate_run"])
+            self.assertEqual("map_sample_run_002", second_manifest["promoted_from_candidate_run"])
+            self.assertTrue(
+                (
+                    workspace_root
+                    / "benchmark"
+                    / "domains"
+                    / "classical_supervised_ml_algorithms"
+                    / "ground_truth_maps"
+                    / "gt_sample_map_001"
+                    / "ground_truth_map.json"
+                ).exists()
+            )
+            self.assertTrue(
+                (
+                    workspace_root
+                    / "benchmark"
+                    / "domains"
+                    / "classical_supervised_ml_algorithms"
+                    / "ground_truth_maps"
+                    / "gt_sample_map_002"
+                    / "ground_truth_map.json"
+                ).exists()
+            )
+
     def test_authoring_api_generates_evidence_in_contiguous_reviewed_node_batches(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)

@@ -283,7 +283,7 @@ V1 实现已经从 schema 与 validation spine 开始：
 - `backend/knowact/validation/`：用于 graph 引用、map coverage/evidence support 和 episode manifest 约束的跨对象 validator。
 - `backend/knowact/authoring/`：Phase 2 graph authoring workflow spine，包含 node extraction、node rubric authoring、edge proposal、candidate file export 边界，以及分离的 `templates/` 和 `parsers/` 模块来管理 agent prompts 与 raw model outputs。
 - `backend/knowact/llm/`：model-client interface，以及基于 OpenAI 和 DeepSeek SDK 的 clients，用于 text-based authoring steps。
-- `backend/knowact/storage/`：local artifact、material path 与 reviewed graph promotion helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
+- `backend/knowact/storage/`：local artifact、material path 与 reviewed graph/map promotion helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
 - `backend/knowact/api/` 与 `backend/main.py`：FastAPI 入口，以及可从本地教材 PDF 运行真实 graph authoring workflow 的 authoring API。
 - `frontend/`：React/Vite research workbench，包含顶层 Knowledge Graph 与 User Profile 模块。它支持 candidate graph review，以及 Profile Context generation、编辑、保存与不可变 confirmation gate。
 - `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`：用于 schema 与 validator 检查的 5-node development fixture，不是正式的 30-50 node v1 graph。
@@ -356,6 +356,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 - `POST /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}/confirmation`：把一份已校验草稿发布为不可变的 `benchmark/domains/{benchmark_domain}/users/{user_id}/profile_context.json`。Confirmed user id 不允许覆盖，每个 candidate run 最多 confirmation 一次。
 - `POST /api/authoring/map-candidates`：按 identity 加载一个 reviewed graph version 与一个 confirmed Profile Context，运行一次 full-graph knowledge-state outline 调用，将 evidence authoring 按 reviewed-node 连续窗口分批，并写出 `candidate_map.json`、`consistency_warnings.json`、`workflow_log.json`、outline/evidence intermediates 和逐批 step traces。Evidence batch 默认包含 `5` 个 nodes，并接受可选的正整数 `evidence_batch_size` override。可选的 `sampling_temperature` 默认值为 `0.7`，同一个值用于 outline 调用和每个 evidence batch。Candidate-map run id 不允许覆盖已有 run；重试必须使用新的 run id。
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`：返回一份已保存的 Candidate Knowledge Map 及其 artifact references，供检查使用。
+- `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`：用 reviewed graph 与 confirmed Profile Context 重新校验一份已保存的 Candidate Knowledge Map，将 `kind` 转换为 `ground_truth`，并发布不可变的 `ground_truth_maps/{map_id}/ground_truth_map.json` 与 `map_manifest.json`。已有 `map_id` 返回 `409 Conflict`，同一个 candidate run 最多 promotion 一次，generation-time `consistency_warnings.json` 不会复制到 reviewed data。
 
 ```json
 {
@@ -366,7 +367,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 }
 ```
 
-PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `..` 路径穿越。对于 `storage/books/isl_python.pdf`，默认 Markdown 缓存路径是 `storage/books/isl_python.md`；除非 `force_reparse=true`，已有 Markdown 会被复用。LLM 路径使用 Markdown text，不使用 PDF base64 `input_file` 或 OpenAI `file_id`；`client_provider` 当前接受 `openai` 或 `deepseek`，默认值为 `openai`。OSS staging object 只是 MinerU URL parsing 的私有临时传输层；signed URL 不会出现在 API response 或 workflow log 中。Candidate generation 不会自动 promotion；reviewed graph publication 是 workbench 中独立的 Phase 3 confirmation 操作。
+PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `..` 路径穿越。对于 `storage/books/isl_python.pdf`，默认 Markdown 缓存路径是 `storage/books/isl_python.md`；除非 `force_reparse=true`，已有 Markdown 会被复用。LLM 路径使用 Markdown text，不使用 PDF base64 `input_file` 或 OpenAI `file_id`；`client_provider` 当前接受 `openai` 或 `deepseek`，默认值为 `openai`。OSS staging object 只是 MinerU URL parsing 的私有临时传输层；signed URL 不会出现在 API response 或 workflow log 中。Candidate generation 不会自动 promotion；reviewed graph 与 ground-truth map publication 都是独立的显式 promotion 操作。
 
 已实现或计划中的组件包括：
 
@@ -379,6 +380,7 @@ PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `.
 - [x] Phase 3 review-gated authored graph promotion 与 graph manifest generation
 - [x] 基于 LLM 的 Profile Context generation 与不可变 confirmation gate
 - [x] Single-batch Candidate Knowledge Map generation tracer bullet
+- [x] Reviewed Ground-Truth Knowledge Map promotion 与 map manifest generation
 - [ ] Ground-truth map authoring
 - [ ] 人工校验协议
 - [ ] 用户模拟器

@@ -40,10 +40,11 @@ Current opened endpoint:
 - `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`: revalidates one saved candidate graph run, copies its node and edge lists into `graphs/{version}/` as reviewed authored graph artifacts, and generates `graph_manifest.json`. Reviewed graph versions are immutable; corrections publish a new version.
 - `POST /api/authoring/map-candidates`: loads one reviewed graph version and one confirmed Profile Context snapshot by identity and generates one evidence-backed Candidate Knowledge Map. It runs one full-graph outline call, partitions evidence authoring into contiguous reviewed-node windows with optional request-level batch-size control, applies one shared sampling temperature, and writes generation-time edge-consistency warnings. Candidate-map run ids cannot overwrite an existing run directory; retry with a new run id.
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`: returns one saved Candidate Knowledge Map and its debug artifact references for benchmark-author inspection.
+- `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`: revalidates one saved Candidate Knowledge Map with its reviewed graph version and confirmed Profile Context, converts lifecycle `kind` from `candidate` to `ground_truth`, and publishes immutable `ground_truth_map.json` plus minimal `map_manifest.json` under `ground_truth_maps/{map_id}/`. Existing map ids and second promotions of the same candidate run return conflicts; generation-time consistency warnings are ignored.
 
 Guardrails:
 
-- Candidate generation must not automatically promote artifacts into reviewed benchmark data; Phase 3 promotion requires an explicit benchmark-author confirmation action.
+- Candidate generation must not automatically promote artifacts into reviewed benchmark data; graph and map promotion require explicit benchmark-author confirmation actions.
 - The authoring API must stay visibly separate from future evaluation runtime routes.
 - Evaluation runtime endpoints must continue to load only reviewed `Authored Knowledge Graphs` and reviewed `Ground-Truth Knowledge Maps`.
 - PDF material requests must remain constrained to `storage/`, reject path traversal, and treat local books and generated Markdown as authoring inputs rather than reviewed benchmark artifacts.
@@ -285,7 +286,7 @@ Do not include yet:
 Implementation note:
 
 - Structures to implement: map authoring helpers under `backend/knowact/authoring/`, map/evidence loaders under `backend/knowact/storage/`, candidate and confirmed profile-context artifacts, reviewed `ground_truth_maps/`, and validation checks for coverage and hidden evidence visibility.
-- Implemented reviewed-graph slice: `POST /api/authoring/map-candidates` and `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}` cover identity-based reviewed graph/profile loading, one full-graph outline call, contiguous multi-batch evidence authoring, request-level batch-size and sampling-temperature controls, deterministic evidence-backed candidate assembly, blocking validation, fail-fast retained debug artifacts, edge-consistency warnings, and non-overwriting candidate-map run ids. Reviewed-map promotion remains follow-up work.
+- Implemented map-authoring slice: `POST /api/authoring/map-candidates`, `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`, and `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion` cover identity-based reviewed graph/profile loading, one full-graph outline call, contiguous multi-batch evidence authoring, request-level batch-size and sampling-temperature controls, deterministic evidence-backed candidate assembly, blocking validation, fail-fast retained debug artifacts, edge-consistency warnings, non-overwriting candidate-map run ids, and explicit immutable reviewed-map publication.
 - Interfaces to open for the initial functional slice:
   - `GET /api/authoring/benchmark-domains`
   - `POST /api/authoring/profile-context-candidates`

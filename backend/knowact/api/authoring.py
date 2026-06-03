@@ -55,7 +55,7 @@ from backend.knowact.authoring.profile_context_output import (
     write_candidate_profile_context,
     write_candidate_profile_context_run,
 )
-from backend.knowact.authoring.review_promotion import promote_candidate_graph
+from backend.knowact.authoring.review_promotion import promote_candidate_graph, promote_candidate_map
 from backend.knowact.authoring.schemas import (
     CandidateProfileContext,
     ConfirmedProfileContext,
@@ -76,7 +76,7 @@ from backend.knowact.authoring.sources import (
 from backend.knowact.authoring.validation import validate_candidate_edges, validate_complete_candidate_nodes
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 from backend.knowact.core.graph import GraphManifest, KnowledgeEdge, KnowledgeNode
-from backend.knowact.core.map import KnowledgeMap
+from backend.knowact.core.map import GroundTruthMapManifest, KnowledgeMap
 from backend.knowact.llm.client import ModelClientError
 from backend.knowact.logging_config import get_knowact_logger
 from backend.knowact.storage.materials import (
@@ -100,6 +100,7 @@ from backend.knowact.storage.reviewed_graphs import (
     ReviewedGraphNotFoundError,
     ReviewedGraphPromotionConflictError,
 )
+from backend.knowact.storage.reviewed_maps import ReviewedMapPromotionConflictError
 from backend.knowact.storage.profile_contexts import (
     ConfirmedProfileContextArtifactError,
     ConfirmedProfileContextNotFoundError,
@@ -256,6 +257,35 @@ class CandidateMapAuthoringResponse(BaseModel):
     run_id: str
     candidate_map: KnowledgeMap
     artifact_paths: CandidateMapArtifactPaths
+
+
+class CandidateMapPromotionRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    map_id: str
+
+    @field_validator("map_id")
+    @classmethod
+    def _map_id_must_be_safe(cls, value: str) -> str:
+        return _validate_safe_id(value, "map_id")
+
+
+class ReviewedMapArtifactPaths(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    output_dir_uri: str
+    ground_truth_map_uri: str
+    map_manifest_uri: str
+
+
+class CandidateMapPromotionResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    run_id: str
+    ground_truth_map: KnowledgeMap
+    map_manifest: GroundTruthMapManifest
+    artifact_paths: ReviewedMapArtifactPaths
 
 
 class BenchmarkDomainListResponse(BaseModel):
@@ -641,6 +671,49 @@ def build_authoring_router(
             run_id=run_id,
             candidate_map=candidate_map,
             artifact_paths=artifact_paths,
+        )
+
+    @router.post(
+        "/candidate-maps/{benchmark_domain}/{run_id}/promotion",
+        response_model=CandidateMapPromotionResponse,
+        summary="Promote one accepted Candidate Knowledge Map into an immutable ground-truth snapshot.",
+    )
+    def promote_candidate_map_artifacts(
+        benchmark_domain: str,
+        run_id: str,
+        request: CandidateMapPromotionRequest,
+    ) -> CandidateMapPromotionResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        run_id = _validate_safe_id_or_422(run_id, "run_id")
+        try:
+            promotion = promote_candidate_map(
+                workspace_root=root,
+                benchmark_domain=benchmark_domain,
+                run_id=run_id,
+                map_id=request.map_id,
+            )
+        except (CandidateMapNotFoundError, ReviewedGraphNotFoundError, ConfirmedProfileContextNotFoundError) as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ReviewedMapPromotionConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (
+            CandidateMapArtifactError,
+            ReviewedGraphArtifactError,
+            ConfirmedProfileContextArtifactError,
+        ) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return CandidateMapPromotionResponse(
+            benchmark_domain=benchmark_domain,
+            run_id=run_id,
+            ground_truth_map=promotion.ground_truth_map,
+            map_manifest=promotion.manifest,
+            artifact_paths=ReviewedMapArtifactPaths(
+                output_dir_uri=_relative_uri(promotion.output_dir, root),
+                ground_truth_map_uri=_relative_uri(promotion.ground_truth_map_path, root),
+                map_manifest_uri=_relative_uri(promotion.map_manifest_path, root),
+            ),
         )
 
     @router.get(
