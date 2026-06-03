@@ -14,8 +14,14 @@ import {
 } from "../../api/authoring";
 import {
   isGraphLifecycleError,
-  isGraphRuntimeAvailable
+  isGraphRuntimeAvailable,
+  safeGetCurrentNodePositions
 } from "../candidateGraph/CandidateGraphCanvasModel";
+import type { NodePositionMap } from "../candidateGraph/CandidateGraphWorkbenchModel";
+import {
+  buildLayeredGraphNodePositions,
+  wrapGraphNodeLabel
+} from "../candidateGraph/KnowledgeGraphLayout";
 
 type MapReviewCanvasProps = {
   graph: ReviewedGraphPayload;
@@ -26,9 +32,12 @@ type MapReviewCanvasProps = {
 };
 
 const SELECTED_STATE = "selected";
-const NODE_SIZE: [number, number] = [190, 76];
-const COLUMN_GAP = 72;
-const ROW_GAP = 52;
+const NODE_SIZE: [number, number] = [208, 88];
+const LAYER_GAP = 156;
+const ROW_GAP = 56;
+const MIN_NODES_PER_LAYER = 3;
+const TARGET_NODES_PER_LAYER = 5;
+const MAX_NODES_PER_LAYER = 6;
 
 export function MapReviewCanvas({
   graph,
@@ -39,15 +48,27 @@ export function MapReviewCanvas({
 }: MapReviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<G6Graph | null>(null);
+  const graphPayloadRef = useRef(graph);
   const selectedNodeIdRef = useRef(selectedNodeId);
+  const nodePositionsRef = useRef<NodePositionMap>({});
+  const appliedLayoutKeyRef = useRef<string | null>(null);
+
+  const layoutKey = [
+    graph.graph_manifest.version,
+    graph.authored_nodes.map((node) => node.id).join("\u0000"),
+    graph.authored_edges.map((edge) => `${edge.id}:${edge.source}:${edge.target}:${edge.type}`).join("\u0000")
+  ].join("\u0001");
 
   const graphDataKey = [
-    graph.graph_manifest.version,
-    graph.authored_nodes.map((node) => `${node.id}:${node.name}`).join("\u0000"),
-    graph.authored_edges.map((edge) => `${edge.id}:${edge.source}:${edge.target}:${edge.type}`).join("\u0000"),
+    layoutKey,
+    graph.authored_nodes.map((node) => `${node.id}:${node.name}:${node.type}`).join("\u0000"),
     knowledgeMap.states.map((state) => `${state.node_id}:${state.mastery_level}`).join("\u0000"),
     warnings.map((warning) => `${warning.edge_id}:${warning.source_node_id}:${warning.target_node_id}`).join("\u0000")
   ].join("\u0001");
+
+  useEffect(() => {
+    graphPayloadRef.current = graph;
+  }, [graph]);
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
@@ -57,7 +78,16 @@ export function MapReviewCanvas({
     const container = containerRef.current;
     if (!container) return;
 
-    const graphInstance = new G6Graph({
+    let graphInstance: G6Graph | null = null;
+    const captureNodePositions = () => {
+      if (!isGraphRuntimeAvailable(graphInstance)) return;
+      nodePositionsRef.current = {
+        ...nodePositionsRef.current,
+        ...safeGetCurrentNodePositions(graphInstance)
+      };
+    };
+
+    graphInstance = new G6Graph({
       container,
       autoResize: true,
       background: "#eef3f1",
@@ -87,7 +117,7 @@ export function MapReviewCanvas({
             labelLineHeight: 16,
             labelTextAlign: "center",
             labelTextBaseline: "middle",
-            labelMaxWidth: 150,
+            labelMaxWidth: 164,
             labelWordWrap: false,
             icon: false,
             badge: false,
@@ -96,11 +126,11 @@ export function MapReviewCanvas({
         },
         state: {
           [SELECTED_STATE]: {
-            stroke: "#111827",
+            stroke: "#2563eb",
             lineWidth: 5,
             halo: true,
-            haloStroke: "#111827",
-            haloStrokeOpacity: 0.14,
+            haloStroke: "#2563eb",
+            haloStrokeOpacity: 0.18,
             haloLineWidth: 18
           }
         }
@@ -109,20 +139,20 @@ export function MapReviewCanvas({
         type: "polyline",
         style: (datum) => {
           const edgeType = getEdgeType(datum);
+          const visual = getEdgeVisual(edgeType);
           return {
-            stroke: "#7c8d88",
-            strokeOpacity: 0.42,
-            lineWidth: edgeType === "prerequisite_for" ? 1.8 : 1.2,
-            lineDash: edgeType === "contrasts_with" ? [4, 5] : 0,
+            stroke: visual.stroke,
+            lineWidth: 2,
+            lineDash: visual.lineDash,
             endArrow: edgeType !== "contrasts_with",
             endArrowType: "vee",
-            endArrowSize: 7,
+            endArrowSize: 8,
             labelText: edgeType,
-            labelFill: "#5f6d69",
-            labelFontSize: 10,
+            labelFill: "#58645f",
+            labelFontSize: 11,
             labelBackground: true,
             labelBackgroundFill: "#eef3f1",
-            labelBackgroundOpacity: 0.82,
+            labelBackgroundOpacity: 0.92,
             labelBackgroundRadius: 4,
             labelPadding: [2, 5],
             labelOffsetY: -6
@@ -150,6 +180,23 @@ export function MapReviewCanvas({
               onSelectNode(null);
             }
           }
+        },
+        {
+          type: "drag-element",
+          key: "map-drag-element",
+          animation: false,
+          hideEdge: "none",
+          onFinish: (ids: unknown[]) => {
+            captureNodePositions();
+            const id = ids.length > 0 ? String(ids[0]) : "";
+            if (id && graphPayloadRef.current.authored_nodes.some((node) => node.id === id)) {
+              onSelectNode(id);
+            }
+          },
+          cursor: {
+            grab: "grab",
+            grabbing: "grabbing"
+          }
         }
       ],
       plugins: [
@@ -166,7 +213,7 @@ export function MapReviewCanvas({
     });
 
     graphRef.current = graphInstance;
-    const resizeObserver = new ResizeObserver(() => graphInstance.resize());
+    const resizeObserver = new ResizeObserver(() => graphInstance?.resize());
     resizeObserver.observe(container);
 
     return () => {
@@ -184,8 +231,26 @@ export function MapReviewCanvas({
     const graphInstance = graphRef.current;
     if (!isGraphRuntimeAvailable(graphInstance)) return;
 
+    const shouldRelayout = appliedLayoutKeyRef.current !== layoutKey;
+    appliedLayoutKeyRef.current = layoutKey;
+    if (shouldRelayout) {
+      nodePositionsRef.current = {};
+    } else {
+      nodePositionsRef.current = {
+        ...nodePositionsRef.current,
+        ...safeGetCurrentNodePositions(graphInstance)
+      };
+    }
+
     try {
-      graphInstance.setData(toG6Data(graph, knowledgeMap, warnings));
+      graphInstance.setData(
+        toG6Data(
+          graph,
+          knowledgeMap,
+          warnings,
+          shouldRelayout ? undefined : nodePositionsRef.current
+        )
+      );
     } catch (error) {
       if (!isGraphRuntimeAvailable(graphInstance) || isGraphLifecycleError(error)) return;
       throw error;
@@ -194,7 +259,7 @@ export function MapReviewCanvas({
     let cancelled = false;
     let draw: Promise<unknown>;
     try {
-      draw = graphInstance.render();
+      draw = shouldRelayout ? graphInstance.render() : graphInstance.draw();
     } catch (error) {
       if (!isGraphRuntimeAvailable(graphInstance) || isGraphLifecycleError(error)) return;
       throw error;
@@ -212,7 +277,7 @@ export function MapReviewCanvas({
     return () => {
       cancelled = true;
     };
-  }, [graph, graphDataKey, knowledgeMap, warnings]);
+  }, [graph, graphDataKey, knowledgeMap, layoutKey, warnings]);
 
   useEffect(() => {
     const graphInstance = graphRef.current;
@@ -233,14 +298,22 @@ export function MapReviewCanvas({
 function toG6Data(
   graph: ReviewedGraphPayload,
   knowledgeMap: KnowledgeMap,
-  warnings: MapEdgeConsistencyWarning[]
+  warnings: MapEdgeConsistencyWarning[],
+  positionOverrides?: NodePositionMap
 ) {
   const stateByNodeId = new Map(knowledgeMap.states.map((state) => [state.node_id, state]));
   const warningNodeIds = new Set(
     warnings.flatMap((warning) => [warning.source_node_id, warning.target_node_id])
   );
   const nodeIds = new Set(graph.authored_nodes.map((node) => node.id));
-  const positions = buildNodePositions(graph.authored_nodes);
+  const positions = buildLayeredGraphNodePositions(graph.authored_nodes, graph.authored_edges, {
+    nodeSize: NODE_SIZE,
+    layerGap: LAYER_GAP,
+    rowGap: ROW_GAP,
+    minNodesPerLayer: MIN_NODES_PER_LAYER,
+    targetNodesPerLayer: TARGET_NODES_PER_LAYER,
+    maxNodesPerLayer: MAX_NODES_PER_LAYER
+  });
 
   return {
     nodes: graph.authored_nodes.map((node): G6NodeData => {
@@ -248,7 +321,7 @@ function toG6Data(
       return {
         id: node.id,
         style: {
-          ...positions[node.id],
+          ...(positionOverrides?.[node.id] ?? positions[node.id]),
           size: NODE_SIZE
         },
         data: {
@@ -271,27 +344,6 @@ function toG6Data(
   };
 }
 
-function buildNodePositions(nodes: ReviewedGraphPayload["authored_nodes"]) {
-  const columnCount = Math.max(3, Math.ceil(Math.sqrt(nodes.length * 1.45)));
-  const columnWidth = NODE_SIZE[0] + COLUMN_GAP;
-  const rowHeight = NODE_SIZE[1] + ROW_GAP;
-  const rowCount = Math.ceil(nodes.length / columnCount);
-  const totalWidth = (columnCount - 1) * columnWidth;
-  const totalHeight = Math.max(0, (rowCount - 1) * rowHeight);
-  const positions: Record<string, { x: number; y: number }> = {};
-
-  nodes.forEach((node, index) => {
-    const column = index % columnCount;
-    const row = Math.floor(index / columnCount);
-    positions[node.id] = {
-      x: column * columnWidth - totalWidth / 2,
-      y: row * rowHeight - totalHeight / 2
-    };
-  });
-
-  return positions;
-}
-
 function applySelectedState(
   graphInstance: G6Graph,
   graph: ReviewedGraphPayload,
@@ -311,7 +363,7 @@ function getEventTargetId(event: IPointerEvent) {
 
 function getNodeLabel(datum: G6NodeData) {
   const name = stringDataValue(datum, "name") || String(datum.id);
-  return wrapLabel(name, 21, 3);
+  return wrapGraphNodeLabel(name, 22, 3);
 }
 
 function getMasteryLevel(datum: G6NodeData): MasteryLevel {
@@ -333,6 +385,20 @@ function getEdgeType(datum: G6EdgeData): KnowledgeEdge["type"] {
     return edgeType;
   }
   return "supports";
+}
+
+function getEdgeVisual(edgeType: KnowledgeEdge["type"]) {
+  switch (edgeType) {
+    case "part_of":
+      return { stroke: "#64748b", lineDash: [7, 4] };
+    case "prerequisite_for":
+      return { stroke: "#2f6f9f", lineDash: 0 };
+    case "contrasts_with":
+      return { stroke: "#9f4f68", lineDash: [3, 5] };
+    case "supports":
+    default:
+      return { stroke: "#1f6f66", lineDash: 0 };
+  }
 }
 
 function masteryColor(level: MasteryLevel) {
@@ -359,31 +425,4 @@ function labelColor(level: MasteryLevel) {
 function stringDataValue(datum: G6NodeData | G6EdgeData, key: string) {
   const value = datum.data?.[key];
   return typeof value === "string" ? value : "";
-}
-
-function wrapLabel(value: string, maxLineLength: number, maxLines: number) {
-  const words = value.split(/[\s_-]+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= maxLineLength || !current) {
-      current = candidate;
-      continue;
-    }
-    lines.push(current);
-    current = word;
-    if (lines.length === maxLines - 1) break;
-  }
-
-  if (current && lines.length < maxLines) {
-    lines.push(current);
-  }
-
-  if (lines.length === maxLines && words.join(" ").length > lines.join(" ").length) {
-    lines[maxLines - 1] = `${lines[maxLines - 1].slice(0, Math.max(0, maxLineLength - 1))}...`;
-  }
-
-  return lines.join("\n");
 }
