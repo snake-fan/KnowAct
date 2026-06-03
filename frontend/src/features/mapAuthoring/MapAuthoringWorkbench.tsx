@@ -5,9 +5,6 @@ import {
   CandidateMapRunSummary,
   ConfirmedProfileContext,
   ConfirmedProfileContextSummary,
-  EvidenceRecord,
-  KnowledgeMap,
-  KnowledgeNode,
   MapEdgeConsistencyWarning,
   ReviewedGraphPayload,
   ReviewedGraphVersionSummary,
@@ -22,7 +19,13 @@ import {
   readConfirmedProfileContext,
   readReviewedGraph
 } from "../../api/authoring";
-import { MapReviewCanvas } from "./MapReviewCanvas";
+import { MapPreviewCanvas } from "./MapPreviewCanvas";
+import {
+  MapLegend,
+  MapMeta,
+  MapNodeInspectionCard,
+  MapPreviewList
+} from "./MapPreviewDetails";
 
 type ClientProvider = "openai" | "deepseek";
 
@@ -89,29 +92,6 @@ export function MapAuthoringWorkbench() {
   const selectedNode = useMemo(() => {
     if (!reviewContext || !selectedNodeId) return null;
     return reviewContext.graph.authored_nodes.find((node) => node.id === selectedNodeId) ?? null;
-  }, [reviewContext, selectedNodeId]);
-
-  const selectedState = useMemo(() => {
-    if (!reviewContext || !selectedNodeId) return null;
-    return reviewContext.candidate.candidate_map.states.find((state) => state.node_id === selectedNodeId) ?? null;
-  }, [reviewContext, selectedNodeId]);
-
-  const selectedEvidence = useMemo(() => {
-    if (!selectedState || !reviewContext) return [];
-    const evidenceById = new Map(reviewContext.candidate.candidate_map.evidence.map((record) => [record.id, record]));
-    return selectedState.evidence_refs.map((evidenceRef) => ({
-      evidenceRef,
-      record: evidenceById.get(evidenceRef) ?? null
-    }));
-  }, [reviewContext, selectedState]);
-
-  const selectedWarnings = useMemo(() => {
-    if (!selectedNodeId || !reviewContext) return [];
-    return reviewContext.warnings.filter(
-      (warning) =>
-        warning.source_node_id === selectedNodeId ||
-        warning.target_node_id === selectedNodeId
-    );
   }, [reviewContext, selectedNodeId]);
 
   async function refreshBenchmarkDomains() {
@@ -463,26 +443,22 @@ export function MapAuthoringWorkbench() {
               </div>
             </div>
 
-            <div className="map-legend" aria-label="Mastery color scale">
-              {(["L0", "L1", "L2", "L3", "L4", "L5"] as const).map((level) => (
-                <span key={level} className={`mastery-chip mastery-${level.toLowerCase()}`}>{level}</span>
-              ))}
-            </div>
+            <MapLegend />
 
             <div className="map-review-canvas-shell">
-              <MapReviewCanvas
+              <MapPreviewCanvas
                 graph={reviewContext.graph}
                 knowledgeMap={reviewContext.candidate.candidate_map}
                 warnings={reviewContext.warnings}
                 selectedNodeId={selectedNodeId}
                 onSelectNode={setSelectedNodeId}
+                ariaLabel="Candidate knowledge map review graph"
               />
-              {selectedNode && selectedState && (
-                <NodeInspectionCard
+              {selectedNode && (
+                <MapNodeInspectionCard
                   node={selectedNode}
                   knowledgeMap={reviewContext.candidate.candidate_map}
-                  evidence={selectedEvidence}
-                  warnings={selectedWarnings}
+                  warnings={reviewContext.warnings}
                   onClose={() => setSelectedNodeId(null)}
                 />
               )}
@@ -497,10 +473,10 @@ export function MapAuthoringWorkbench() {
             <h2>Publish Map</h2>
             <p>This publishes the candidate unchanged as an immutable reviewed map.</p>
             <div className="promotion-summary">
-              <Meta label="Candidate run" value={reviewContext.candidate.run_id} />
-              <Meta label="User ID" value={reviewContext.userId} />
-              <Meta label="Graph version" value={reviewContext.graphVersion} />
-              <Meta label="Warnings" value={String(reviewContext.warnings.length)} />
+              <MapMeta label="Candidate run" value={reviewContext.candidate.run_id} />
+              <MapMeta label="User ID" value={reviewContext.userId} />
+              <MapMeta label="Graph version" value={reviewContext.graphVersion} />
+              <MapMeta label="Warnings" value={String(reviewContext.warnings.length)} />
             </div>
             <label>
               Map ID
@@ -542,10 +518,10 @@ function ProfilePreview({
       {profile ? (
         <div className="profile-preview-body">
           <p>{profile.summary}</p>
-          <PreviewList title="Background" items={profile.background} />
-          <PreviewList title="Prior Experience" items={profile.prior_experience} />
-          <PreviewList title="Goals" items={profile.goals} />
-          <PreviewList title="Preferences" items={profile.preferences} />
+          <MapPreviewList title="Background" items={profile.background} />
+          <MapPreviewList title="Prior Experience" items={profile.prior_experience} />
+          <MapPreviewList title="Goals" items={profile.goals} />
+          <MapPreviewList title="Preferences" items={profile.preferences} />
         </div>
       ) : (
         <p className="empty">Select a confirmed profile to preview it.</p>
@@ -569,136 +545,14 @@ function GraphPreview({
       </div>
       {graph ? (
         <div className="graph-preview-stats">
-          <Meta label="Graph ID" value={graph.graph_manifest.graph_id} />
-          <Meta label="Nodes" value={String(graph.authored_nodes.length)} />
-          <Meta label="Edges" value={String(graph.authored_edges.length)} />
-          <Meta label="Candidate Run" value={graph.graph_manifest.promoted_from_candidate_run} />
+          <MapMeta label="Graph ID" value={graph.graph_manifest.graph_id} />
+          <MapMeta label="Nodes" value={String(graph.authored_nodes.length)} />
+          <MapMeta label="Edges" value={String(graph.authored_edges.length)} />
+          <MapMeta label="Candidate Run" value={graph.graph_manifest.promoted_from_candidate_run} />
         </div>
       ) : (
         <p className="empty">Select a reviewed graph to preview its snapshot.</p>
       )}
     </section>
-  );
-}
-
-function PreviewList({ title, items }: { title: string; items: string[] }) {
-  if (items.length === 0) return null;
-  return (
-    <div className="preview-list">
-      <strong>{title}</strong>
-      <ul>
-        {items.map((item, index) => (
-          <li key={`${title}-${index}`}>{item}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function NodeInspectionCard({
-  node,
-  knowledgeMap,
-  evidence,
-  warnings,
-  onClose
-}: {
-  node: KnowledgeNode;
-  knowledgeMap: KnowledgeMap;
-  evidence: Array<{ evidenceRef: string; record: EvidenceRecord | null }>;
-  warnings: MapEdgeConsistencyWarning[];
-  onClose: () => void;
-}) {
-  const state = knowledgeMap.states.find((candidate) => candidate.node_id === node.id);
-  if (!state) return null;
-
-  return (
-    <aside className="node-popover" aria-label={`Knowledge map details for ${node.name}`}>
-      <div className="node-popover-header">
-        <div>
-          <p className="eyebrow">Knowledge Node</p>
-          <h3>{node.name}</h3>
-        </div>
-        <button type="button" className="remove-item-button" aria-label="Close node details" onClick={onClose}>
-          &#215;
-        </button>
-      </div>
-
-      <section>
-        <h4>Graph Node</h4>
-        <Meta label="ID" value={node.id} />
-        <Meta label="Type" value={node.type} />
-        {node.definition && <p>{node.definition}</p>}
-        {node.diagnostic_goal && <p>{node.diagnostic_goal}</p>}
-        <PreviewList
-          title="Source Locators"
-          items={node.source_locators.map((locator) =>
-            `${locator.source_id}: ${locator.locator}${locator.note ? ` - ${locator.note}` : ""}`
-          )}
-        />
-        <details>
-          <summary>Rubrics and diagnostic signals</summary>
-          <PreviewList title="Diagnostic Signals" items={node.diagnostic_signals} />
-          <div className="rubric-list">
-            {Object.entries(node.levels).map(([level, description]) => (
-              <Meta key={level} label={level} value={description} />
-            ))}
-          </div>
-        </details>
-      </section>
-
-      <section>
-        <h4>User Knowledge State</h4>
-        <Meta label="Mastery Level" value={state.mastery_level} />
-        <PreviewList title="Misconceptions" items={state.misconceptions} />
-        <PreviewList title="Unknowns" items={state.unknowns} />
-      </section>
-
-      <section>
-        <h4>Evidence Records</h4>
-        {evidence.length === 0 ? (
-          <p className="empty">No evidence refs.</p>
-        ) : (
-          <div className="evidence-list">
-            {evidence.map(({ evidenceRef, record }) => (
-              <article key={evidenceRef} className={record ? "evidence-card" : "evidence-card missing"}>
-                <strong>{evidenceRef}</strong>
-                {record ? (
-                  <>
-                    <span>{record.evidence_kind} / {record.evidence_type} / {record.visibility}</span>
-                    <p>{record.signal}</p>
-                  </>
-                ) : (
-                  <p>Missing referenced Evidence Record.</p>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {warnings.length > 0 && (
-        <section>
-          <h4>Consistency Warnings</h4>
-          <div className="evidence-list">
-            {warnings.map((warning) => (
-              <article key={warning.edge_id} className="evidence-card warning">
-                <strong>{warning.edge_id}</strong>
-                <span>{warning.source_node_id} {warning.source_mastery_level} {" -> "} {warning.target_node_id} {warning.target_mastery_level}</span>
-                <p>{warning.rule}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
-    </aside>
-  );
-}
-
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="profile-meta map-meta">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }

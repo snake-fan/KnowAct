@@ -110,8 +110,13 @@ from backend.knowact.storage.reviewed_graphs import (
     load_reviewed_graph,
 )
 from backend.knowact.storage.reviewed_maps import (
+    MAP_FILENAME,
+    MAP_MANIFEST_FILENAME,
+    ReviewedMapArtifactError,
+    ReviewedMapNotFoundError,
     ReviewedMapPromotionConflictError,
     find_reviewed_map_id_for_candidate_run,
+    load_reviewed_map,
 )
 from backend.knowact.storage.profile_contexts import (
     CONFIRMED_PROFILE_CONTEXT_FILENAME,
@@ -297,6 +302,32 @@ class CandidateMapPromotionResponse(BaseModel):
 
     benchmark_domain: str
     run_id: str
+    map: KnowledgeMap
+    map_manifest: MapManifest
+    artifact_paths: ReviewedMapArtifactPaths
+
+
+class ReviewedMapSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    map_id: str
+    user_id: str | None = None
+    graph_version: str | None = None
+    state_count: int | None = None
+    evidence_count: int | None = None
+
+
+class ReviewedMapListResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    maps: tuple[ReviewedMapSummary, ...]
+
+
+class ReviewedMapArtifactsResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
     map: KnowledgeMap
     map_manifest: MapManifest
     artifact_paths: ReviewedMapArtifactPaths
@@ -655,6 +686,72 @@ def build_authoring_router(
                 output_dir_uri=_relative_uri(output_dir, root),
                 profile_context_uri=_relative_uri(
                     output_dir / CONFIRMED_PROFILE_CONTEXT_FILENAME,
+                    root,
+                ),
+            ),
+        )
+
+    @router.get(
+        "/maps/{benchmark_domain}",
+        response_model=ReviewedMapListResponse,
+        summary="List reviewed Knowledge Map snapshots for a benchmark domain.",
+    )
+    def list_reviewed_maps(
+        benchmark_domain: str,
+    ) -> ReviewedMapListResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        maps_dir = root / "benchmark" / "domains" / benchmark_domain / "maps"
+        summaries: list[ReviewedMapSummary] = []
+        if maps_dir.exists() and maps_dir.is_dir():
+            for entry in sorted(maps_dir.iterdir()):
+                if not entry.is_dir():
+                    continue
+                try:
+                    map_id = _validate_safe_id(entry.name, "map_id")
+                except ValueError:
+                    continue
+                summaries.append(
+                    _reviewed_map_summary(
+                        workspace_root=root,
+                        benchmark_domain=benchmark_domain,
+                        map_id=map_id,
+                    )
+                )
+        return ReviewedMapListResponse(
+            benchmark_domain=benchmark_domain,
+            maps=tuple(summaries),
+        )
+
+    @router.get(
+        "/maps/{benchmark_domain}/{map_id}",
+        response_model=ReviewedMapArtifactsResponse,
+        summary="Read one reviewed Knowledge Map snapshot.",
+    )
+    def read_reviewed_map(
+        benchmark_domain: str,
+        map_id: str,
+    ) -> ReviewedMapArtifactsResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        map_id = _validate_safe_id_or_422(map_id, "map_id")
+        try:
+            artifacts = load_reviewed_map(
+                workspace_root=root,
+                benchmark_domain=benchmark_domain,
+                map_id=map_id,
+            )
+        except ReviewedMapNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ReviewedMapArtifactError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return ReviewedMapArtifactsResponse(
+            benchmark_domain=benchmark_domain,
+            map=artifacts.knowledge_map,
+            map_manifest=artifacts.manifest,
+            artifact_paths=ReviewedMapArtifactPaths(
+                output_dir_uri=_relative_uri(artifacts.map_dir, root),
+                map_uri=_relative_uri(artifacts.map_dir / MAP_FILENAME, root),
+                map_manifest_uri=_relative_uri(
+                    artifacts.map_dir / MAP_MANIFEST_FILENAME,
                     root,
                 ),
             ),
@@ -1363,6 +1460,29 @@ def _reviewed_graph_summary(
         graph_id=artifacts.manifest.graph_id,
         node_count=len(artifacts.graph.nodes),
         edge_count=len(artifacts.graph.edges),
+    )
+
+
+def _reviewed_map_summary(
+    *,
+    workspace_root: Path,
+    benchmark_domain: str,
+    map_id: str,
+) -> ReviewedMapSummary:
+    try:
+        artifacts = load_reviewed_map(
+            workspace_root=workspace_root,
+            benchmark_domain=benchmark_domain,
+            map_id=map_id,
+        )
+    except (ReviewedMapNotFoundError, ReviewedMapArtifactError):
+        return ReviewedMapSummary(map_id=map_id)
+    return ReviewedMapSummary(
+        map_id=map_id,
+        user_id=artifacts.manifest.user_id,
+        graph_version=artifacts.manifest.graph_version,
+        state_count=len(artifacts.knowledge_map.states),
+        evidence_count=len(artifacts.knowledge_map.evidence),
     )
 
 

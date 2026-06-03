@@ -41,6 +41,7 @@ Current opened endpoint:
 - `POST /api/authoring/map-candidates`: loads one reviewed graph version and one confirmed Profile Context snapshot by identity and generates one evidence-backed Candidate Knowledge Map. It runs one full-graph outline call, partitions evidence authoring into contiguous reviewed-node windows with optional request-level batch-size control, applies one shared sampling temperature, and writes generation-time edge-consistency warnings. Candidate-map run ids cannot overwrite an existing run directory; retry with a new run id.
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`: returns one saved Candidate Knowledge Map and its debug artifact references for benchmark-author inspection.
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`: revalidates one saved Candidate Knowledge Map with its reviewed graph version and confirmed Profile Context, converts lifecycle `kind` from `candidate` to `ground_truth`, and publishes immutable `map.json` plus minimal `map_manifest.json` under `maps/{map_id}/`. Existing map ids return conflicts; generation-time consistency warnings are ignored, and successful promotion removes the originating run from `candidate_maps/`.
+- `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`: list and read reviewed Knowledge Map snapshots for read-only workbench preview. These endpoints do not create simulator episodes or expose simulator runtime behavior.
 
 Guardrails:
 
@@ -286,7 +287,7 @@ Do not include yet:
 Implementation note:
 
 - Structures to implement: map authoring helpers under `backend/knowact/authoring/`, map/evidence loaders under `backend/knowact/storage/`, candidate and confirmed profile-context artifacts, reviewed `maps/`, and validation checks for coverage and hidden evidence visibility.
-- Implemented map-authoring slice: `POST /api/authoring/map-candidates`, `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`, and `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion` cover identity-based reviewed graph/profile loading, one full-graph outline call, contiguous multi-batch evidence authoring, request-level batch-size and sampling-temperature controls, deterministic evidence-backed candidate assembly, blocking validation, fail-fast retained debug artifacts, edge-consistency warnings, non-overwriting candidate-map run ids, and explicit immutable reviewed-map publication.
+- Implemented map-authoring slice: `POST /api/authoring/map-candidates`, `GET /api/authoring/candidate-maps/{benchmark_domain}`, `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`, `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`, `GET /api/authoring/maps/{benchmark_domain}`, and `GET /api/authoring/maps/{benchmark_domain}/{map_id}` cover identity-based reviewed graph/profile loading, one full-graph outline call, contiguous multi-batch evidence authoring, request-level batch-size and sampling-temperature controls, deterministic evidence-backed candidate assembly, blocking validation, fail-fast retained debug artifacts, edge-consistency warnings, non-overwriting candidate-map run ids, explicit immutable reviewed-map publication, and read-only reviewed-map inspection for workbench previews.
 - Interfaces to open for the initial functional slice:
   - `GET /api/authoring/benchmark-domains`
   - `POST /api/authoring/profile-context-candidates`
@@ -294,8 +295,11 @@ Implementation note:
   - `PUT /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`
   - `POST /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}/confirmation`
   - `POST /api/authoring/map-candidates`
+  - `GET /api/authoring/candidate-maps/{benchmark_domain}`
   - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`
   - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`
+  - `GET /api/authoring/maps/{benchmark_domain}`
+  - `GET /api/authoring/maps/{benchmark_domain}/{map_id}`
 - Do not add candidate-profile or candidate-map browsing list endpoints in the initial Phase 4 slice. `GET /api/authoring/benchmark-domains` is a narrow read-only discovery exception for workbench selectors: it lists existing safe domain ids without creating or mutating benchmark data. Add wider browsing surfaces after the functional workflow is exercised end to end.
 - Do not add a one-shot orchestration endpoint in the initial Phase 4 slice. Callers explicitly sequence the narrow endpoints so profile-context editing, confirmation, candidate-map inspection, and promotion remain visible gates.
 - Authoring API boundary: profile-context candidates may be edited before confirmation; candidate maps may be inspected and either promoted unchanged or rejected, but not edited through a map `PUT` endpoint.

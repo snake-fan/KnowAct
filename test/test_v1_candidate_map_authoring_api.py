@@ -509,6 +509,32 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
                 "map_promotion_run_001",
                 [run["run_id"] for run in list_response.json()["runs"]],
             )
+            reviewed_list_response = client.get(
+                "/api/authoring/maps/classical_supervised_ml_algorithms"
+            )
+            self.assertEqual(200, reviewed_list_response.status_code)
+            self.assertEqual(
+                [
+                    {
+                        "map_id": "gt_map_001",
+                        "user_id": "synthetic_user_001",
+                        "graph_version": "v1",
+                        "state_count": 2,
+                        "evidence_count": 3,
+                    }
+                ],
+                reviewed_list_response.json()["maps"],
+            )
+
+            reviewed_read_response = client.get(
+                "/api/authoring/maps/classical_supervised_ml_algorithms/gt_map_001"
+            )
+            self.assertEqual(200, reviewed_read_response.status_code)
+            reviewed_read_payload = reviewed_read_response.json()
+            self.assertEqual("classical_supervised_ml_algorithms", reviewed_read_payload["benchmark_domain"])
+            self.assertEqual(expected_manifest, reviewed_read_payload["map_manifest"])
+            self.assertEqual(reviewed_map, reviewed_read_payload["map"])
+            self.assertEqual(artifact_paths, reviewed_read_payload["artifact_paths"])
 
     def test_authoring_api_rejects_map_promotion_conflicts_without_overwrite_escape_hatch(self):
         with tempfile.TemporaryDirectory() as temp_dir:

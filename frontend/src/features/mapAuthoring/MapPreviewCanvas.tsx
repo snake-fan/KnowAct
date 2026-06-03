@@ -23,12 +23,13 @@ import {
   wrapGraphNodeLabel
 } from "../candidateGraph/KnowledgeGraphLayout";
 
-type MapReviewCanvasProps = {
+type MapPreviewCanvasProps = {
   graph: ReviewedGraphPayload;
   knowledgeMap: KnowledgeMap;
-  warnings: MapEdgeConsistencyWarning[];
+  warnings?: MapEdgeConsistencyWarning[];
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string | null) => void;
+  ariaLabel?: string;
 };
 
 const SELECTED_STATE = "selected";
@@ -39,13 +40,14 @@ const MIN_NODES_PER_LAYER = 3;
 const TARGET_NODES_PER_LAYER = 5;
 const MAX_NODES_PER_LAYER = 6;
 
-export function MapReviewCanvas({
+export function MapPreviewCanvas({
   graph,
   knowledgeMap,
-  warnings,
+  warnings = [],
   selectedNodeId,
-  onSelectNode
-}: MapReviewCanvasProps) {
+  onSelectNode,
+  ariaLabel = "Knowledge map preview graph"
+}: MapPreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<G6Graph | null>(null);
   const graphPayloadRef = useRef(graph);
@@ -290,7 +292,7 @@ export function MapReviewCanvas({
       className="map-review-canvas"
       ref={containerRef}
       role="img"
-      aria-label="Candidate knowledge map review graph"
+      aria-label={ariaLabel}
     />
   );
 }

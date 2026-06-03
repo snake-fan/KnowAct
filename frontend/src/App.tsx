@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { CandidateGraphWorkbench } from "./features/candidateGraph/CandidateGraphWorkbench";
 import { MapAuthoringWorkbench } from "./features/mapAuthoring/MapAuthoringWorkbench";
+import { SimulatorWorkbench } from "./features/simulator/SimulatorWorkbench";
 import { UserProfileWorkbench } from "./features/userProfile/UserProfileWorkbench";
 
-type WorkbenchModule = "knowledge-graph" | "user-profile" | "user-map";
+type WorkbenchModule = "knowledge-graph" | "user-profile" | "user-map" | "simulator";
 
 export function App() {
   const [activeModule, setActiveModule] = useState<WorkbenchModule>("knowledge-graph");
@@ -54,6 +55,18 @@ export function App() {
               <small>Generate, review, publish</small>
             </span>
           </button>
+          <p>Runtime</p>
+          <button
+            type="button"
+            className={activeModule === "simulator" ? "module-nav-item active" : "module-nav-item"}
+            onClick={() => setActiveModule("simulator")}
+          >
+            <span className="module-nav-icon" aria-hidden="true">&#9655;</span>
+            <span>
+              <strong>Simulator</strong>
+              <small>Reviewed map preview</small>
+            </span>
+          </button>
         </nav>
 
         <div className="sidebar-footer">
@@ -71,6 +84,9 @@ export function App() {
         </div>
         <div className={activeModule === "user-map" ? "module-pane active" : "module-pane"}>
           <MapAuthoringWorkbench />
+        </div>
+        <div className={activeModule === "simulator" ? "module-pane active" : "module-pane"}>
+          <SimulatorWorkbench />
         </div>
       </div>
     </div>

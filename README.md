@@ -338,7 +338,7 @@ Run the Candidate Graph Review Workbench model checks with:
 npm --prefix frontend run test:candidate-graph-workbench
 ```
 
-The frontend currently exposes authoring modules for Knowledge Graph review, Profile Context confirmation, and User Map generation/review/promotion.
+The frontend currently exposes authoring modules for Knowledge Graph review, Profile Context confirmation, and User Map generation/review/promotion, plus a Simulator entry that previews reviewed maps without starting simulator episodes.
 
 If the backend is running on a non-default port, set `VITE_API_PROXY_TARGET`, for example:
 
@@ -363,6 +363,7 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`, which returns one saved Candidate Knowledge Map and its artifact references for inspection.
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`, which returns generation-time edge-consistency warnings for candidate-map review.
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`, which revalidates one saved Candidate Knowledge Map with its reviewed graph and confirmed Profile Context, converts `kind` to `ground_truth`, and publishes immutable `maps/{map_id}/map.json` plus `map_manifest.json`. Existing `map_id` values return `409 Conflict`, generation-time `consistency_warnings.json` is not copied into reviewed data, and a successfully published run is removed from `candidate_maps/`.
+- `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`, which list and read reviewed Knowledge Map snapshots for read-only workbench previews. These are inspection endpoints, not simulator runtime endpoints.
 
 ```json
 {
@@ -384,6 +385,7 @@ Implemented / planned components include:
 - [x] FastAPI authoring API for real source-backed graph candidate runs
 - [x] Candidate Graph Review Workbench frontend
 - [x] User Map Authoring Workbench frontend
+- [x] Simulator reviewed-map preview entry
 - [x] Phase 3 review-gated authored graph promotion with generated manifests
 - [x] LLM-based Profile Context generation and immutable confirmation gate
 - [x] Single-batch Candidate Knowledge Map generation tracer bullet

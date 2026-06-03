@@ -19,6 +19,14 @@ class ReviewedMapPromotionConflictError(FileExistsError):
     """Raised when promotion would overwrite an immutable reviewed map id."""
 
 
+class ReviewedMapNotFoundError(FileNotFoundError):
+    """Raised when a reviewed map snapshot cannot be found."""
+
+
+class ReviewedMapArtifactError(ValueError):
+    """Raised when a reviewed map snapshot has malformed artifacts."""
+
+
 @dataclass(frozen=True)
 class ReviewedMapPromotion:
     manifest: MapManifest
@@ -26,6 +34,53 @@ class ReviewedMapPromotion:
     output_dir: Path
     map_manifest_path: Path
     map_path: Path
+
+
+@dataclass(frozen=True)
+class ReviewedMapArtifacts:
+    manifest: MapManifest
+    knowledge_map: KnowledgeMap
+    map_dir: Path
+
+
+def load_reviewed_map(
+    *,
+    workspace_root: Path,
+    benchmark_domain: str,
+    map_id: str,
+) -> ReviewedMapArtifacts:
+    benchmark_domain = _validate_safe_id(benchmark_domain, "benchmark_domain")
+    map_id = _validate_safe_id(map_id, "map_id")
+    map_dir = workspace_root / "benchmark" / "domains" / benchmark_domain / "maps" / map_id
+    if not map_dir.exists() or not map_dir.is_dir():
+        raise ReviewedMapNotFoundError(f"Reviewed map {map_id} does not exist")
+
+    manifest_path = map_dir / MAP_MANIFEST_FILENAME
+    map_path = map_dir / MAP_FILENAME
+    if not manifest_path.exists() or not map_path.exists():
+        raise ReviewedMapNotFoundError(f"Reviewed map {map_id} is missing map artifacts")
+
+    try:
+        with manifest_path.open(encoding="utf-8") as handle:
+            manifest = MapManifest.model_validate(json.load(handle))
+        with map_path.open(encoding="utf-8") as handle:
+            knowledge_map = KnowledgeMap.model_validate(json.load(handle))
+    except (OSError, ValueError, ValidationError, json.JSONDecodeError) as exc:
+        raise ReviewedMapArtifactError(str(exc)) from exc
+
+    if manifest.map_id != map_id:
+        raise ReviewedMapArtifactError(
+            f"Reviewed map directory {map_id} contains manifest for {manifest.map_id}"
+        )
+    if manifest.benchmark_domain != benchmark_domain:
+        raise ReviewedMapArtifactError(
+            f"Reviewed map {map_id} belongs to benchmark domain {manifest.benchmark_domain}"
+        )
+    return ReviewedMapArtifacts(
+        manifest=manifest,
+        knowledge_map=knowledge_map,
+        map_dir=map_dir,
+    )
 
 
 def publish_reviewed_map(
