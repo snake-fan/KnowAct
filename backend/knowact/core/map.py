@@ -64,3 +64,26 @@ class KnowledgeMap(BaseModel):
     @property
     def state_by_node_id(self) -> dict[str, UserKnowledgeState]:
         return {state.node_id: state for state in self.states}
+
+
+class GroundTruthMapManifest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    map_id: str
+    user_id: str
+    benchmark_domain: str
+    graph_version: str
+    promoted_from_candidate_run: str
+
+    @field_validator(
+        "map_id",
+        "user_id",
+        "benchmark_domain",
+        "graph_version",
+        "promoted_from_candidate_run",
+    )
+    @classmethod
+    def _must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value

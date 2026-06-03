@@ -26,10 +26,14 @@ from backend.knowact.authoring.map_authoring import (
     CandidateMapAuthoringWorkflow,
 )
 from backend.knowact.authoring.map_authoring_output import (
+    CANDIDATE_MAP_FILENAME,
+    CONSISTENCY_WARNINGS_FILENAME,
+    CandidateMapAuthoringRunLog,
     CandidateMapArtifactError,
     CandidateMapArtifactPaths,
     CandidateMapNotFoundError,
     CandidateMapRunConflictError,
+    WORKFLOW_LOG_FILENAME as CANDIDATE_MAP_WORKFLOW_LOG_FILENAME,
     read_candidate_map_run,
 )
 from backend.knowact.authoring.output import (
@@ -55,12 +59,13 @@ from backend.knowact.authoring.profile_context_output import (
     write_candidate_profile_context,
     write_candidate_profile_context_run,
 )
-from backend.knowact.authoring.review_promotion import promote_candidate_graph
+from backend.knowact.authoring.review_promotion import promote_candidate_graph, promote_candidate_map
 from backend.knowact.authoring.schemas import (
     CandidateProfileContext,
     ConfirmedProfileContext,
     GeneratedProfileContext,
     GraphAuthoringWorkflowResult,
+    MapEdgeConsistencyWarningList,
     ProfileContextAuthoringInput,
     SourceGroundedNodeSkeleton,
     SourceMaterial,
@@ -76,7 +81,7 @@ from backend.knowact.authoring.sources import (
 from backend.knowact.authoring.validation import validate_candidate_edges, validate_complete_candidate_nodes
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 from backend.knowact.core.graph import GraphManifest, KnowledgeEdge, KnowledgeNode
-from backend.knowact.core.map import KnowledgeMap
+from backend.knowact.core.map import GroundTruthMapManifest, KnowledgeMap
 from backend.knowact.llm.client import ModelClientError
 from backend.knowact.logging_config import get_knowact_logger
 from backend.knowact.storage.materials import (
@@ -94,15 +99,22 @@ from backend.knowact.storage.source_material_catalog import (
     save_pdf_source_material,
 )
 from backend.knowact.storage.reviewed_graphs import (
+    AUTHORED_EDGES_FILENAME,
+    AUTHORED_NODES_FILENAME,
     CandidateGraphArtifactError,
     CandidateGraphNotFoundError,
+    GRAPH_MANIFEST_FILENAME,
     ReviewedGraphArtifactError,
     ReviewedGraphNotFoundError,
     ReviewedGraphPromotionConflictError,
+    load_reviewed_graph,
 )
+from backend.knowact.storage.reviewed_maps import ReviewedMapPromotionConflictError
 from backend.knowact.storage.profile_contexts import (
+    CONFIRMED_PROFILE_CONTEXT_FILENAME,
     ConfirmedProfileContextArtifactError,
     ConfirmedProfileContextNotFoundError,
+    load_confirmed_profile_context,
 )
 from backend.knowact.validation.exceptions import KnowActValidationError
 
@@ -258,6 +270,112 @@ class CandidateMapAuthoringResponse(BaseModel):
     artifact_paths: CandidateMapArtifactPaths
 
 
+class CandidateMapPromotionRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    map_id: str
+
+    @field_validator("map_id")
+    @classmethod
+    def _map_id_must_be_safe(cls, value: str) -> str:
+        return _validate_safe_id(value, "map_id")
+
+
+class ReviewedMapArtifactPaths(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    output_dir_uri: str
+    ground_truth_map_uri: str
+    map_manifest_uri: str
+
+
+class CandidateMapPromotionResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    run_id: str
+    ground_truth_map: KnowledgeMap
+    map_manifest: GroundTruthMapManifest
+    artifact_paths: ReviewedMapArtifactPaths
+
+
+class ReviewedGraphVersionSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    version: str
+    graph_id: str | None = None
+    node_count: int | None = None
+    edge_count: int | None = None
+
+
+class ReviewedGraphVersionListResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    graphs: tuple[ReviewedGraphVersionSummary, ...]
+
+
+class ReviewedGraphArtifactPaths(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    output_dir_uri: str
+    graph_manifest_uri: str
+    authored_nodes_uri: str
+    authored_edges_uri: str
+
+
+class ReviewedGraphArtifactsResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    graph_manifest: GraphManifest
+    authored_nodes: tuple[KnowledgeNode, ...]
+    authored_edges: tuple[KnowledgeEdge, ...]
+    artifact_paths: ReviewedGraphArtifactPaths
+
+
+class ConfirmedProfileContextSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    user_id: str
+    summary: str | None = None
+
+
+class ConfirmedProfileContextListResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    users: tuple[ConfirmedProfileContextSummary, ...]
+
+
+class ConfirmedProfileContextResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    user_id: str
+    profile_context: ConfirmedProfileContext
+    artifact_paths: ConfirmedProfileContextArtifactPaths
+
+
+class CandidateMapRunSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    run_id: str
+    status: str
+    graph_version: str | None = None
+    user_id: str | None = None
+    has_candidate_map: bool
+    warning_count: int | None = None
+    error: str | None = None
+
+
+class CandidateMapRunListResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    benchmark_domain: str
+    runs: tuple[CandidateMapRunSummary, ...]
+
+
 class BenchmarkDomainListResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -346,15 +464,6 @@ class CandidateGraphPromotionRequest(BaseModel):
         return _validate_safe_id(value, "version")
 
 
-class ReviewedGraphArtifactPaths(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    output_dir_uri: str
-    graph_manifest_uri: str
-    authored_nodes_uri: str
-    authored_edges_uri: str
-
-
 class CandidateGraphPromotionResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -391,6 +500,161 @@ def build_authoring_router(
                 for entry in sorted(domains_dir.iterdir())
                 if entry.is_dir() and _SAFE_ID_PATTERN.fullmatch(entry.name)
             )
+        )
+
+    @router.get(
+        "/graphs/{benchmark_domain}",
+        response_model=ReviewedGraphVersionListResponse,
+        summary="List reviewed graph versions for a benchmark domain.",
+    )
+    def list_reviewed_graph_versions(
+        benchmark_domain: str,
+    ) -> ReviewedGraphVersionListResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        graphs_dir = root / "benchmark" / "domains" / benchmark_domain / "graphs"
+        summaries: list[ReviewedGraphVersionSummary] = []
+        if graphs_dir.exists() and graphs_dir.is_dir():
+            for entry in sorted(graphs_dir.iterdir(), reverse=True):
+                if not entry.is_dir():
+                    continue
+                try:
+                    version = _validate_safe_id(entry.name, "version")
+                except ValueError:
+                    continue
+                summaries.append(
+                    _reviewed_graph_summary(
+                        workspace_root=root,
+                        benchmark_domain=benchmark_domain,
+                        version=version,
+                    )
+                )
+        return ReviewedGraphVersionListResponse(
+            benchmark_domain=benchmark_domain,
+            graphs=tuple(summaries),
+        )
+
+    @router.get(
+        "/graphs/{benchmark_domain}/{version}",
+        response_model=ReviewedGraphArtifactsResponse,
+        summary="Read one reviewed authored graph version.",
+    )
+    def read_reviewed_graph_version(
+        benchmark_domain: str,
+        version: str,
+    ) -> ReviewedGraphArtifactsResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        version = _validate_safe_id_or_422(version, "version")
+        try:
+            artifacts = load_reviewed_graph(
+                workspace_root=root,
+                benchmark_domain=benchmark_domain,
+                version=version,
+            )
+        except ReviewedGraphNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ReviewedGraphArtifactError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return ReviewedGraphArtifactsResponse(
+            benchmark_domain=benchmark_domain,
+            graph_manifest=artifacts.manifest,
+            authored_nodes=artifacts.graph.nodes,
+            authored_edges=artifacts.graph.edges,
+            artifact_paths=ReviewedGraphArtifactPaths(
+                output_dir_uri=_relative_uri(artifacts.graph_dir, root),
+                graph_manifest_uri=_relative_uri(
+                    artifacts.graph_dir / GRAPH_MANIFEST_FILENAME,
+                    root,
+                ),
+                authored_nodes_uri=_relative_uri(
+                    artifacts.graph_dir / AUTHORED_NODES_FILENAME,
+                    root,
+                ),
+                authored_edges_uri=_relative_uri(
+                    artifacts.graph_dir / AUTHORED_EDGES_FILENAME,
+                    root,
+                ),
+            ),
+        )
+
+    @router.get(
+        "/users/{benchmark_domain}",
+        response_model=ConfirmedProfileContextListResponse,
+        summary="List confirmed Profile Context snapshots for a benchmark domain.",
+    )
+    def list_confirmed_profile_contexts(
+        benchmark_domain: str,
+    ) -> ConfirmedProfileContextListResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        users_dir = root / "benchmark" / "domains" / benchmark_domain / "users"
+        summaries: list[ConfirmedProfileContextSummary] = []
+        if users_dir.exists() and users_dir.is_dir():
+            for entry in sorted(users_dir.iterdir()):
+                if not entry.is_dir():
+                    continue
+                try:
+                    user_id = _validate_safe_id(entry.name, "user_id")
+                    profile_context = load_confirmed_profile_context(
+                        workspace_root=root,
+                        benchmark_domain=benchmark_domain,
+                        user_id=user_id,
+                    )
+                except (
+                    ValueError,
+                    ConfirmedProfileContextNotFoundError,
+                    ConfirmedProfileContextArtifactError,
+                ):
+                    continue
+                summaries.append(
+                    ConfirmedProfileContextSummary(
+                        user_id=user_id,
+                        summary=profile_context.summary,
+                    )
+                )
+        return ConfirmedProfileContextListResponse(
+            benchmark_domain=benchmark_domain,
+            users=tuple(summaries),
+        )
+
+    @router.get(
+        "/users/{benchmark_domain}/{user_id}",
+        response_model=ConfirmedProfileContextResponse,
+        summary="Read one confirmed Profile Context snapshot.",
+    )
+    def read_confirmed_profile_context(
+        benchmark_domain: str,
+        user_id: str,
+    ) -> ConfirmedProfileContextResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        user_id = _validate_safe_id_or_422(user_id, "user_id")
+        try:
+            profile_context = load_confirmed_profile_context(
+                workspace_root=root,
+                benchmark_domain=benchmark_domain,
+                user_id=user_id,
+            )
+        except ConfirmedProfileContextNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ConfirmedProfileContextArtifactError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        output_dir = (
+            root
+            / "benchmark"
+            / "domains"
+            / benchmark_domain
+            / "users"
+            / user_id
+        )
+        return ConfirmedProfileContextResponse(
+            benchmark_domain=benchmark_domain,
+            user_id=user_id,
+            profile_context=profile_context,
+            artifact_paths=ConfirmedProfileContextArtifactPaths(
+                output_dir_uri=_relative_uri(output_dir, root),
+                profile_context_uri=_relative_uri(
+                    output_dir / CONFIRMED_PROFILE_CONTEXT_FILENAME,
+                    root,
+                ),
+            ),
         )
 
     @router.post(
@@ -571,6 +835,36 @@ def build_authoring_router(
         except MaterialFileError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    @router.get(
+        "/candidate-maps/{benchmark_domain}",
+        response_model=CandidateMapRunListResponse,
+        summary="List candidate map runs for a benchmark domain.",
+    )
+    def list_candidate_map_runs(
+        benchmark_domain: str,
+    ) -> CandidateMapRunListResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        runs_dir = root / "benchmark" / "domains" / benchmark_domain / "candidate_maps"
+        summaries: list[CandidateMapRunSummary] = []
+        if runs_dir.exists() and runs_dir.is_dir():
+            for entry in sorted(runs_dir.iterdir(), reverse=True):
+                if not entry.is_dir():
+                    continue
+                try:
+                    run_id = _validate_safe_id(entry.name, "run_id")
+                except ValueError:
+                    continue
+                summaries.append(
+                    _candidate_map_run_summary(
+                        run_dir=entry,
+                        run_id=run_id,
+                    )
+                )
+        return CandidateMapRunListResponse(
+            benchmark_domain=benchmark_domain,
+            runs=tuple(summaries),
+        )
+
     @router.post(
         "/map-candidates",
         response_model=CandidateMapAuthoringResponse,
@@ -641,6 +935,71 @@ def build_authoring_router(
             run_id=run_id,
             candidate_map=candidate_map,
             artifact_paths=artifact_paths,
+        )
+
+    @router.get(
+        "/candidate-maps/{benchmark_domain}/{run_id}/warnings",
+        response_model=MapEdgeConsistencyWarningList,
+        summary="Read generation-time consistency warnings for one candidate map run.",
+    )
+    def read_candidate_map_warnings(
+        benchmark_domain: str,
+        run_id: str,
+    ) -> MapEdgeConsistencyWarningList:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        run_id = _validate_safe_id_or_422(run_id, "run_id")
+        output_dir = root / "benchmark" / "domains" / benchmark_domain / "candidate_maps" / run_id
+        if not output_dir.exists() or not output_dir.is_dir():
+            raise HTTPException(status_code=404, detail=f"Candidate map run {run_id} does not exist")
+        warnings_path = output_dir / CONSISTENCY_WARNINGS_FILENAME
+        if not warnings_path.exists():
+            return MapEdgeConsistencyWarningList(warnings=())
+        try:
+            return MapEdgeConsistencyWarningList.model_validate(_read_json_payload(warnings_path))
+        except (OSError, ValueError, ValidationError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @router.post(
+        "/candidate-maps/{benchmark_domain}/{run_id}/promotion",
+        response_model=CandidateMapPromotionResponse,
+        summary="Promote one accepted Candidate Knowledge Map into an immutable ground-truth snapshot.",
+    )
+    def promote_candidate_map_artifacts(
+        benchmark_domain: str,
+        run_id: str,
+        request: CandidateMapPromotionRequest,
+    ) -> CandidateMapPromotionResponse:
+        benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
+        run_id = _validate_safe_id_or_422(run_id, "run_id")
+        try:
+            promotion = promote_candidate_map(
+                workspace_root=root,
+                benchmark_domain=benchmark_domain,
+                run_id=run_id,
+                map_id=request.map_id,
+            )
+        except (CandidateMapNotFoundError, ReviewedGraphNotFoundError, ConfirmedProfileContextNotFoundError) as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ReviewedMapPromotionConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (
+            CandidateMapArtifactError,
+            ReviewedGraphArtifactError,
+            ConfirmedProfileContextArtifactError,
+        ) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return CandidateMapPromotionResponse(
+            benchmark_domain=benchmark_domain,
+            run_id=run_id,
+            ground_truth_map=promotion.ground_truth_map,
+            map_manifest=promotion.manifest,
+            artifact_paths=ReviewedMapArtifactPaths(
+                output_dir_uri=_relative_uri(promotion.output_dir, root),
+                ground_truth_map_uri=_relative_uri(promotion.ground_truth_map_path, root),
+                map_manifest_uri=_relative_uri(promotion.map_manifest_path, root),
+            ),
         )
 
     @router.get(
@@ -973,6 +1332,73 @@ def build_authoring_router(
     return router
 
 
+def _reviewed_graph_summary(
+    *,
+    workspace_root: Path,
+    benchmark_domain: str,
+    version: str,
+) -> ReviewedGraphVersionSummary:
+    try:
+        artifacts = load_reviewed_graph(
+            workspace_root=workspace_root,
+            benchmark_domain=benchmark_domain,
+            version=version,
+        )
+    except (ReviewedGraphNotFoundError, ReviewedGraphArtifactError):
+        return ReviewedGraphVersionSummary(version=version)
+    return ReviewedGraphVersionSummary(
+        version=version,
+        graph_id=artifacts.manifest.graph_id,
+        node_count=len(artifacts.graph.nodes),
+        edge_count=len(artifacts.graph.edges),
+    )
+
+
+def _candidate_map_run_summary(
+    *,
+    run_dir: Path,
+    run_id: str,
+) -> CandidateMapRunSummary:
+    has_candidate_map = (run_dir / CANDIDATE_MAP_FILENAME).exists()
+    run_log = _read_candidate_map_workflow_log(run_dir / CANDIDATE_MAP_WORKFLOW_LOG_FILENAME)
+    if run_log is None:
+        return CandidateMapRunSummary(
+            run_id=run_id,
+            status="unknown" if has_candidate_map else "missing_log",
+            has_candidate_map=has_candidate_map,
+            warning_count=_candidate_map_warning_count(run_dir / CONSISTENCY_WARNINGS_FILENAME),
+        )
+    return CandidateMapRunSummary(
+        run_id=run_id,
+        status=run_log.status,
+        graph_version=run_log.graph_version,
+        user_id=run_log.user_id,
+        has_candidate_map=has_candidate_map,
+        warning_count=_candidate_map_warning_count(run_dir / CONSISTENCY_WARNINGS_FILENAME),
+        error=run_log.error,
+    )
+
+
+def _read_candidate_map_workflow_log(
+    workflow_log_path: Path,
+) -> CandidateMapAuthoringRunLog | None:
+    if not workflow_log_path.exists():
+        return None
+    try:
+        return CandidateMapAuthoringRunLog.model_validate(_read_json_payload(workflow_log_path))
+    except (OSError, ValueError, ValidationError, json.JSONDecodeError):
+        return None
+
+
+def _candidate_map_warning_count(warnings_path: Path) -> int | None:
+    if not warnings_path.exists():
+        return 0
+    try:
+        return len(MapEdgeConsistencyWarningList.model_validate(_read_json_payload(warnings_path)).warnings)
+    except (OSError, ValueError, ValidationError, json.JSONDecodeError):
+        return None
+
+
 def _build_graph_authoring_workflow(
     factory: GraphAuthoringWorkflowFactory,
     *,
@@ -1151,8 +1577,12 @@ def _validate_safe_id_or_422(value: str, field_name: str) -> str:
 
 
 def _read_json_list(path: Path) -> list[object]:
-    with path.open(encoding="utf-8") as handle:
-        payload = json.load(handle)
+    payload = _read_json_payload(path)
     if not isinstance(payload, list):
         raise ValueError(f"{path.name} must contain a JSON list")
     return payload
+
+
+def _read_json_payload(path: Path) -> object:
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)

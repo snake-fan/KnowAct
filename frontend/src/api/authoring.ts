@@ -80,6 +80,21 @@ export type CandidateGraphPromotionResponse = {
   artifact_paths: ReviewedGraphArtifactPaths;
 };
 
+export type ReviewedGraphVersionSummary = {
+  version: string;
+  graph_id?: string | null;
+  node_count?: number | null;
+  edge_count?: number | null;
+};
+
+export type ReviewedGraphPayload = {
+  benchmark_domain: string;
+  graph_manifest: GraphManifest;
+  authored_nodes: KnowledgeNode[];
+  authored_edges: KnowledgeEdge[];
+  artifact_paths: ReviewedGraphArtifactPaths;
+};
+
 export type GraphCandidateResponse = {
   workflow: string;
   material: {
@@ -151,6 +166,114 @@ export type ProfileContextConfirmationResponse = {
   artifact_paths: ConfirmedProfileContextArtifactPaths;
 };
 
+export type ConfirmedProfileContextSummary = {
+  user_id: string;
+  summary?: string | null;
+};
+
+export type MasteryLevel = "L0" | "L1" | "L2" | "L3" | "L4" | "L5";
+
+export type EvidenceRecord = {
+  id: string;
+  node_id: string;
+  evidence_type: "ground_truth_profile" | "interaction_observation";
+  evidence_kind:
+    | "prior_answer"
+    | "worked_example"
+    | "self_report"
+    | "misconception_trace"
+    | "background_fact";
+  visibility: "simulator_only" | "tested_agent";
+  signal: string;
+  turn_id?: string | null;
+};
+
+export type UserKnowledgeState = {
+  node_id: string;
+  mastery_level: MasteryLevel;
+  evidence_refs: string[];
+  misconceptions: string[];
+  unknowns: string[];
+};
+
+export type KnowledgeMap = {
+  user_id: string;
+  kind: "candidate" | "ground_truth" | "reconstructed";
+  states: UserKnowledgeState[];
+  evidence: EvidenceRecord[];
+};
+
+export type CandidateMapEvidenceBatchArtifactPaths = {
+  batch_name: string;
+  model_raw_output_uri: string;
+  parser_output_uri: string;
+};
+
+export type CandidateMapArtifactPaths = {
+  output_dir_uri: string;
+  candidate_map_uri: string;
+  consistency_warnings_uri: string;
+  workflow_log_uri: string;
+  state_outline_uri: string;
+  ground_truth_evidence_uri: string;
+  outline_model_raw_output_uri: string;
+  outline_parser_output_uri: string;
+  evidence_model_raw_output_uri: string;
+  evidence_parser_output_uri: string;
+  evidence_batch_artifacts: CandidateMapEvidenceBatchArtifactPaths[];
+};
+
+export type CandidateMapResponse = {
+  run_id: string;
+  candidate_map: KnowledgeMap;
+  artifact_paths: CandidateMapArtifactPaths;
+};
+
+export type CandidateMapRunSummary = {
+  run_id: string;
+  status: string;
+  graph_version?: string | null;
+  user_id?: string | null;
+  has_candidate_map: boolean;
+  warning_count?: number | null;
+  error?: string | null;
+};
+
+export type MapEdgeConsistencyWarning = {
+  edge_id: string;
+  source_node_id: string;
+  source_mastery_level: MasteryLevel;
+  target_node_id: string;
+  target_mastery_level: MasteryLevel;
+  rule: "prerequisite_target_mastery_exceeds_source_by_at_least_two_levels";
+};
+
+export type MapEdgeConsistencyWarningListResponse = {
+  warnings: MapEdgeConsistencyWarning[];
+};
+
+export type GroundTruthMapManifest = {
+  map_id: string;
+  user_id: string;
+  benchmark_domain: string;
+  graph_version: string;
+  promoted_from_candidate_run: string;
+};
+
+export type ReviewedMapArtifactPaths = {
+  output_dir_uri: string;
+  ground_truth_map_uri: string;
+  map_manifest_uri: string;
+};
+
+export type CandidateMapPromotionResponse = {
+  benchmark_domain: string;
+  run_id: string;
+  ground_truth_map: KnowledgeMap;
+  map_manifest: GroundTruthMapManifest;
+  artifact_paths: ReviewedMapArtifactPaths;
+};
+
 export class ApiRequestError extends Error {
   readonly status: number;
 
@@ -169,6 +292,48 @@ export async function listBenchmarkDomains(): Promise<string[]> {
 export async function listSourceMaterials(): Promise<SourceMaterialRecord[]> {
   const payload = await requestJson<{ source_materials: SourceMaterialRecord[] }>("/api/authoring/source-materials");
   return payload.source_materials;
+}
+
+export async function listReviewedGraphs(benchmarkDomain: string): Promise<ReviewedGraphVersionSummary[]> {
+  const payload = await requestJson<{ benchmark_domain: string; graphs: ReviewedGraphVersionSummary[] }>(
+    `/api/authoring/graphs/${encodeURIComponent(benchmarkDomain)}`
+  );
+  return payload.graphs;
+}
+
+export async function readReviewedGraph(
+  benchmarkDomain: string,
+  graphVersion: string
+): Promise<ReviewedGraphPayload> {
+  return requestJson<ReviewedGraphPayload>(
+    `/api/authoring/graphs/${encodeURIComponent(benchmarkDomain)}/${encodeURIComponent(graphVersion)}`
+  );
+}
+
+export async function listConfirmedProfileContexts(
+  benchmarkDomain: string
+): Promise<ConfirmedProfileContextSummary[]> {
+  const payload = await requestJson<{ benchmark_domain: string; users: ConfirmedProfileContextSummary[] }>(
+    `/api/authoring/users/${encodeURIComponent(benchmarkDomain)}`
+  );
+  return payload.users;
+}
+
+export async function readConfirmedProfileContext(
+  benchmarkDomain: string,
+  userId: string
+): Promise<ProfileContextConfirmationResponse> {
+  const payload = await requestJson<{
+    benchmark_domain: string;
+    user_id: string;
+    profile_context: ConfirmedProfileContext;
+    artifact_paths: ConfirmedProfileContextArtifactPaths;
+  }>(`/api/authoring/users/${encodeURIComponent(benchmarkDomain)}/${encodeURIComponent(userId)}`);
+  return {
+    run_id: "",
+    profile_context: payload.profile_context,
+    artifact_paths: payload.artifact_paths
+  };
 }
 
 export async function uploadSourceMaterial(input: {
@@ -314,6 +479,73 @@ export async function confirmProfileContextCandidate(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: userId })
+    }
+  );
+}
+
+export async function generateCandidateMap(input: {
+  benchmarkDomain: string;
+  graphVersion: string;
+  userId: string;
+  runId?: string;
+  clientProvider: "openai" | "deepseek";
+  evidenceBatchSize?: number;
+  samplingTemperature?: number;
+}): Promise<CandidateMapResponse> {
+  return requestJson<CandidateMapResponse>("/api/authoring/map-candidates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      benchmark_domain: input.benchmarkDomain,
+      graph_version: input.graphVersion,
+      user_id: input.userId,
+      run_id: input.runId?.trim() || null,
+      client_provider: input.clientProvider,
+      evidence_batch_size: input.evidenceBatchSize ?? 5,
+      sampling_temperature: input.samplingTemperature ?? 0.7
+    })
+  });
+}
+
+export async function listCandidateMapRuns(
+  benchmarkDomain: string
+): Promise<CandidateMapRunSummary[]> {
+  const payload = await requestJson<{ benchmark_domain: string; runs: CandidateMapRunSummary[] }>(
+    `/api/authoring/candidate-maps/${encodeURIComponent(benchmarkDomain)}`
+  );
+  return payload.runs;
+}
+
+export async function readCandidateMap(
+  benchmarkDomain: string,
+  runId: string
+): Promise<CandidateMapResponse> {
+  return requestJson<CandidateMapResponse>(
+    `/api/authoring/candidate-maps/${encodeURIComponent(benchmarkDomain)}/${encodeURIComponent(runId)}`
+  );
+}
+
+export async function readCandidateMapWarnings(
+  benchmarkDomain: string,
+  runId: string
+): Promise<MapEdgeConsistencyWarning[]> {
+  const payload = await requestJson<MapEdgeConsistencyWarningListResponse>(
+    `/api/authoring/candidate-maps/${encodeURIComponent(benchmarkDomain)}/${encodeURIComponent(runId)}/warnings`
+  );
+  return payload.warnings;
+}
+
+export async function promoteCandidateMap(input: {
+  benchmarkDomain: string;
+  runId: string;
+  mapId: string;
+}): Promise<CandidateMapPromotionResponse> {
+  return requestJson<CandidateMapPromotionResponse>(
+    `/api/authoring/candidate-maps/${encodeURIComponent(input.benchmarkDomain)}/${encodeURIComponent(input.runId)}/promotion`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ map_id: input.mapId })
     }
   );
 }

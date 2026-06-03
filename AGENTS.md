@@ -28,7 +28,7 @@
 
 新增或调整源码结构、模块边界、runtime wiring、schema、validation、authoring、simulator、agent、scoring、reports 或 frontend workbench 前，agent 必须先阅读 `docs/V1ProjectArchitecture.md` 和 `docs/V1ProjectBreakdown.md`。架构实现应跟随 `docs/V1ProjectArchitecture.md` 的推荐模块边界和数据流；开发顺序应参考 `docs/V1ProjectBreakdown.md` 的阶段拆解。不要在未对齐这两份文档的情况下随意新增平行目录、替代概念或临时架构。若这两份文档与已接受 ADR 或 `CONTEXT.md` 冲突，以 ADR 和 `CONTEXT.md` 为准，并在最终回复中说明冲突点。
 
-- `frontend/`：React 前端，用于 benchmark 配置、交互界面、实验结果查看和知识地图可视化。
+- `frontend/`：React 前端，用于 benchmark 配置、交互界面、实验结果查看和知识地图可视化；当前包含 Knowledge Graph、User Profile 和 User Map 三个 authoring workbench modules。
 - `backend/`：FastAPI 后端，用于 profile generation、user simulator、agent loop、evaluation API 和实验任务编排。
 - `backend/knowact/api/`：FastAPI routers；当前包含 `/api/authoring` surface，用于从本地教材 PDF 运行真实 graph authoring workflow、生成 reviewable candidate graph artifacts、通过显式 review confirmation 将校验后的 candidate snapshot promote 为 reviewed authored graph version，并从 reviewed graph 与 confirmed Profile Context snapshot 生成可检查的 single-batch Candidate Knowledge Map。
 - `backend/knowact/core/` 和 `backend/knowact/validation/`：当前 V1 已开始实现的 schema 与 validation spine。

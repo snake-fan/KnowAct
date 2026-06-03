@@ -283,7 +283,7 @@ V1 实现已经从 schema 与 validation spine 开始：
 - `backend/knowact/validation/`：用于 graph 引用、map coverage/evidence support 和 episode manifest 约束的跨对象 validator。
 - `backend/knowact/authoring/`：Phase 2 graph authoring workflow spine，包含 node extraction、node rubric authoring、edge proposal、candidate file export 边界，以及分离的 `templates/` 和 `parsers/` 模块来管理 agent prompts 与 raw model outputs。
 - `backend/knowact/llm/`：model-client interface，以及基于 OpenAI 和 DeepSeek SDK 的 clients，用于 text-based authoring steps。
-- `backend/knowact/storage/`：local artifact、material path 与 reviewed graph promotion helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
+- `backend/knowact/storage/`：local artifact、material path 与 reviewed graph/map promotion helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
 - `backend/knowact/api/` 与 `backend/main.py`：FastAPI 入口，以及可从本地教材 PDF 运行真实 graph authoring workflow 的 authoring API。
 - `frontend/`：React/Vite research workbench，包含顶层 Knowledge Graph 与 User Profile 模块。它支持 candidate graph review，以及 Profile Context generation、编辑、保存与不可变 confirmation gate。
 - `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`：用于 schema 与 validator 检查的 5-node development fixture，不是正式的 30-50 node v1 graph。
@@ -338,6 +338,8 @@ npm --prefix frontend run dev
 npm --prefix frontend run test:candidate-graph-workbench
 ```
 
+当前前端提供 Knowledge Graph review、Profile Context confirmation 和 User Map generation/review/promotion 三个 authoring modules。
+
 如果后端运行在非默认端口，可以设置 `VITE_API_PROXY_TARGET`，例如：
 
 ```bash
@@ -348,14 +350,19 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 
 - `POST /api/authoring/source-materials` 和 `GET /api/authoring/source-materials`：把 PDF source material 上传到 `storage/source_materials/{source_id}/original.pdf`，写出 `metadata.json`，并为 workbench 列出已登记 source materials。
 - `GET /api/authoring/benchmark-domains`：为 workbench selector 列出现有 benchmark-domain 目录，不创建或修改 benchmark data。
+- `GET /api/authoring/graphs/{benchmark_domain}` 和 `GET /api/authoring/graphs/{benchmark_domain}/{version}`：列出和读取 reviewed authored graph snapshots，用于 map-authoring selector 与 visualization。
 - `POST /api/authoring/graph-candidates`：按 `storage/` 下的相对路径读取一个 PDF，解析或复用同目录同 stem 的 Parsed Source Markdown，必要时调用 MinerU 创建或重新生成 Markdown，再只把 Markdown 文本发送给 node extraction step，返回 source-grounded skeletons、candidate nodes、candidate edges、Markdown cache metadata 和 compact run log summary，并默认写出 `candidate_nodes.json`、`candidate_edges.json`、通过 validation 的 `intermediate/` artifacts 以及 sidecar `workflow_log.json`。workflow log 记录 step 状态，并链接到 `agent_traces/{step}/model_raw_output.txt`、`agent_traces/{step}/parser_output.json` 和适用时的 batch trace artifacts 以便 debug，但仍不写入完整 prompt/source-material text。MinerU standard mode 会先把本地 PDF 发布为私有阿里云 OSS staging object 的短期 signed URL，再把这个 URL 提交给 MinerU；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会拆成 chunks 并按页码顺序拼接 Markdown。其中只有 node 和 edge 文件是 candidate graph review artifacts。示例请求：
 - `GET /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}` 和 `PUT /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}`：读取和 validate-save candidate graph review artifacts。保存端点只有在 schema 与 graph validation 通过后，才会覆盖 `candidate_nodes.json` 和 `candidate_edges.json`。
 - `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`：重新校验已保存的 candidate artifacts，将它们复制到 `benchmark/domains/{benchmark_domain}/graphs/{version}/` 下并命名为 `authored_nodes.json` 与 `authored_edges.json`，同时生成 `graph_manifest.json`。Reviewed graph version 不可变：已有 version 返回 `409 Conflict`，修订必须发布新的 version。
+- `GET /api/authoring/users/{benchmark_domain}` 和 `GET /api/authoring/users/{benchmark_domain}/{user_id}`：列出和读取 confirmed Profile Context snapshots，用于 map-authoring selector 与只读 preview。
 - `POST /api/authoring/profile-context-candidates`：生成一份可 review 的 synthetic-user Profile Context 草稿，并写出最小 candidate run artifacts。
 - `GET /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}` 和 `PUT /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`：读取和 validate-save 当前 Profile Context 草稿。保存端点只编辑 persona 字段；run identity 与 benchmark domain 保持固定。
 - `POST /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}/confirmation`：把一份已校验草稿发布为不可变的 `benchmark/domains/{benchmark_domain}/users/{user_id}/profile_context.json`。Confirmed user id 不允许覆盖，每个 candidate run 最多 confirmation 一次。
 - `POST /api/authoring/map-candidates`：按 identity 加载一个 reviewed graph version 与一个 confirmed Profile Context，运行一次 full-graph knowledge-state outline 调用，将 evidence authoring 按 reviewed-node 连续窗口分批，并写出 `candidate_map.json`、`consistency_warnings.json`、`workflow_log.json`、outline/evidence intermediates 和逐批 step traces。Evidence batch 默认包含 `5` 个 nodes，并接受可选的正整数 `evidence_batch_size` override。可选的 `sampling_temperature` 默认值为 `0.7`，同一个值用于 outline 调用和每个 evidence batch。Candidate-map run id 不允许覆盖已有 run；重试必须使用新的 run id。
+- `GET /api/authoring/candidate-maps/{benchmark_domain}`：列出 candidate-map runs，包括保留 workflow log 但没有写出可 promotion `candidate_map.json` 的 failed runs。
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`：返回一份已保存的 Candidate Knowledge Map 及其 artifact references，供检查使用。
+- `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`：返回 candidate-map review 用的 generation-time edge-consistency warnings。
+- `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`：用 reviewed graph 与 confirmed Profile Context 重新校验一份已保存的 Candidate Knowledge Map，将 `kind` 转换为 `ground_truth`，并发布不可变的 `ground_truth_maps/{map_id}/ground_truth_map.json` 与 `map_manifest.json`。已有 `map_id` 返回 `409 Conflict`，同一个 candidate run 最多 promotion 一次，generation-time `consistency_warnings.json` 不会复制到 reviewed data。
 
 ```json
 {
@@ -366,7 +373,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 }
 ```
 
-PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `..` 路径穿越。对于 `storage/books/isl_python.pdf`，默认 Markdown 缓存路径是 `storage/books/isl_python.md`；除非 `force_reparse=true`，已有 Markdown 会被复用。LLM 路径使用 Markdown text，不使用 PDF base64 `input_file` 或 OpenAI `file_id`；`client_provider` 当前接受 `openai` 或 `deepseek`，默认值为 `openai`。OSS staging object 只是 MinerU URL parsing 的私有临时传输层；signed URL 不会出现在 API response 或 workflow log 中。Candidate generation 不会自动 promotion；reviewed graph publication 是 workbench 中独立的 Phase 3 confirmation 操作。
+PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `..` 路径穿越。对于 `storage/books/isl_python.pdf`，默认 Markdown 缓存路径是 `storage/books/isl_python.md`；除非 `force_reparse=true`，已有 Markdown 会被复用。LLM 路径使用 Markdown text，不使用 PDF base64 `input_file` 或 OpenAI `file_id`；`client_provider` 当前接受 `openai` 或 `deepseek`，默认值为 `openai`。OSS staging object 只是 MinerU URL parsing 的私有临时传输层；signed URL 不会出现在 API response 或 workflow log 中。Candidate generation 不会自动 promotion；reviewed graph 与 ground-truth map publication 都是独立的显式 promotion 操作。
 
 已实现或计划中的组件包括：
 
@@ -376,9 +383,11 @@ PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `.
 - [x] OpenAI 与 DeepSeek SDK client boundary for LLM-backed steps
 - [x] FastAPI authoring API，用于真实 source-backed graph candidate runs
 - [x] Candidate Graph Review Workbench 前端
+- [x] User Map Authoring Workbench 前端
 - [x] Phase 3 review-gated authored graph promotion 与 graph manifest generation
 - [x] 基于 LLM 的 Profile Context generation 与不可变 confirmation gate
 - [x] Single-batch Candidate Knowledge Map generation tracer bullet
+- [x] Reviewed Ground-Truth Knowledge Map promotion 与 map manifest generation
 - [ ] Ground-truth map authoring
 - [ ] 人工校验协议
 - [ ] 用户模拟器

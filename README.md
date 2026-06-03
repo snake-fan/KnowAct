@@ -283,7 +283,7 @@ The V1 implementation has started with the schema and validation spine:
 - `backend/knowact/validation/`: cross-object validators for graph references, map coverage/evidence support, and episode manifest constraints.
 - `backend/knowact/authoring/`: the Phase 2 graph authoring workflow spine, with node extraction, node rubric authoring, edge proposal, candidate file export boundaries, and separate `templates/` and `parsers/` modules for agent prompts and raw model outputs.
 - `backend/knowact/llm/`: a model-client interface plus OpenAI and DeepSeek SDK-backed clients for text-based authoring steps.
-- `backend/knowact/storage/`: local artifact, material path, and reviewed-graph promotion helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
+- `backend/knowact/storage/`: local artifact, material path, and reviewed graph/map promotion helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
 - `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
 - `frontend/`: a React/Vite research workbench with top-level Knowledge Graph and User Profile modules. It supports candidate graph review and the Profile Context generation, editing, save, and immutable-confirmation gate.
 - `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`: a 5-node development fixture for schema and validator checks, not the formal 30-50 node v1 graph.
@@ -338,6 +338,8 @@ Run the Candidate Graph Review Workbench model checks with:
 npm --prefix frontend run test:candidate-graph-workbench
 ```
 
+The frontend currently exposes authoring modules for Knowledge Graph review, Profile Context confirmation, and User Map generation/review/promotion.
+
 If the backend is running on a non-default port, set `VITE_API_PROXY_TARGET`, for example:
 
 ```bash
@@ -348,14 +350,19 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 
 - `POST /api/authoring/source-materials` and `GET /api/authoring/source-materials`, which upload PDF source materials into `storage/source_materials/{source_id}/original.pdf`, write `metadata.json`, and list registered source materials for the workbench.
 - `GET /api/authoring/benchmark-domains`, which lists existing benchmark-domain directories for workbench selectors without creating or mutating benchmark data.
+- `GET /api/authoring/graphs/{benchmark_domain}` and `GET /api/authoring/graphs/{benchmark_domain}/{version}`, which list and read reviewed authored graph snapshots for map-authoring selectors and visualization.
 - `POST /api/authoring/graph-candidates`, which reads one PDF by relative path under `storage/`, resolves same-directory same-stem Parsed Source Markdown, calls MinerU to create or regenerate that Markdown when needed, sends the Markdown text only to the node extraction step, returns source-grounded skeletons, candidate nodes, candidate edges, Markdown cache metadata, and a compact run log summary, and writes `candidate_nodes.json`, `candidate_edges.json`, validation-passed `intermediate/` artifacts, and sidecar `workflow_log.json` by default. The workflow log records step status and links to `agent_traces/{step}/model_raw_output.txt`, `agent_traces/{step}/parser_output.json`, and batch trace artifacts where applicable, while still avoiding full prompt/source-material text. MinerU standard mode publishes the local PDF through a private Aliyun OSS staging object and short-lived signed URL before submitting the URL to MinerU; PDFs above `KNOWACT_MINERU_MAX_PAGES_PER_TASK` are split into chunks and their Markdown results are joined in page order. Only the node and edge files are candidate graph review artifacts. Example request:
 - `GET /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}` and `PUT /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}`, which read and validate-save candidate graph review artifacts. The save endpoint overwrites `candidate_nodes.json` and `candidate_edges.json` only after schema and graph validation pass.
 - `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`, which revalidates saved candidate artifacts, copies them into `benchmark/domains/{benchmark_domain}/graphs/{version}/` as `authored_nodes.json` and `authored_edges.json`, and generates `graph_manifest.json`. Reviewed graph versions are immutable: an existing version returns `409 Conflict`, and corrections must publish a new version.
+- `GET /api/authoring/users/{benchmark_domain}` and `GET /api/authoring/users/{benchmark_domain}/{user_id}`, which list and read confirmed Profile Context snapshots for map-authoring selectors and read-only preview.
 - `POST /api/authoring/profile-context-candidates`, which generates one reviewable synthetic-user Profile Context draft and writes the minimal candidate run artifacts.
 - `GET /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}` and `PUT /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`, which read and validate-save the current Profile Context draft. The save endpoint edits persona fields only; run identity and benchmark domain remain fixed.
 - `POST /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}/confirmation`, which publishes one validated draft as immutable `benchmark/domains/{benchmark_domain}/users/{user_id}/profile_context.json`. Confirmed user ids cannot be overwritten, and each candidate run can be confirmed at most once.
 - `POST /api/authoring/map-candidates`, which loads one reviewed graph version and one confirmed Profile Context by identity, runs one full-graph knowledge-state outline call, partitions evidence authoring into contiguous reviewed-node windows, and writes `candidate_map.json`, `consistency_warnings.json`, `workflow_log.json`, outline/evidence intermediates, and per-batch step traces. Evidence batches default to `5` nodes and accept an optional positive `evidence_batch_size` override. One optional `sampling_temperature` value, defaulting to `0.7`, applies to the outline call and every evidence batch. Candidate-map run ids cannot overwrite existing runs; retry with a new run id.
+- `GET /api/authoring/candidate-maps/{benchmark_domain}`, which lists candidate-map runs, including failed runs that retained workflow logs but did not write a promotable `candidate_map.json`.
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`, which returns one saved Candidate Knowledge Map and its artifact references for inspection.
+- `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`, which returns generation-time edge-consistency warnings for candidate-map review.
+- `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`, which revalidates one saved Candidate Knowledge Map with its reviewed graph and confirmed Profile Context, converts `kind` to `ground_truth`, and publishes immutable `ground_truth_maps/{map_id}/ground_truth_map.json` plus `map_manifest.json`. Existing `map_id` values return `409 Conflict`, a candidate run can be promoted only once, and generation-time `consistency_warnings.json` is not copied into reviewed data.
 
 ```json
 {
@@ -366,7 +373,7 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 }
 ```
 
-PDF source material requests are constrained to `storage/` and reject absolute paths or `..` traversal. For `storage/books/isl_python.pdf`, the default Markdown cache path is `storage/books/isl_python.md`; existing Markdown is reused unless `force_reparse=true`. The LLM path uses Markdown text, not PDF base64 `input_file` or OpenAI `file_id`, and `client_provider` currently accepts `openai` or `deepseek` with `openai` as the default. OSS staging objects are temporary, private-bucket transport for MinerU URL parsing; signed URLs are not returned in API responses or workflow logs. Candidate generation never auto-promotes its outputs; reviewed graph publication is a separate Phase 3 confirmation action in the workbench.
+PDF source material requests are constrained to `storage/` and reject absolute paths or `..` traversal. For `storage/books/isl_python.pdf`, the default Markdown cache path is `storage/books/isl_python.md`; existing Markdown is reused unless `force_reparse=true`. The LLM path uses Markdown text, not PDF base64 `input_file` or OpenAI `file_id`, and `client_provider` currently accepts `openai` or `deepseek` with `openai` as the default. OSS staging objects are temporary, private-bucket transport for MinerU URL parsing; signed URLs are not returned in API responses or workflow logs. Candidate generation never auto-promotes its outputs; reviewed graph and ground-truth map publication are separate explicit promotion actions.
 
 Implemented / planned components include:
 
@@ -376,9 +383,11 @@ Implemented / planned components include:
 - [x] OpenAI and DeepSeek SDK client boundaries for LLM-backed steps
 - [x] FastAPI authoring API for real source-backed graph candidate runs
 - [x] Candidate Graph Review Workbench frontend
+- [x] User Map Authoring Workbench frontend
 - [x] Phase 3 review-gated authored graph promotion with generated manifests
 - [x] LLM-based Profile Context generation and immutable confirmation gate
 - [x] Single-batch Candidate Knowledge Map generation tracer bullet
+- [x] Reviewed Ground-Truth Knowledge Map promotion with map manifests
 - [ ] Ground-truth map authoring
 - [ ] Human verification protocol
 - [ ] User simulator
