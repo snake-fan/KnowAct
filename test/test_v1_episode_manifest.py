@@ -16,8 +16,8 @@ class V1EpisodeManifestTest(unittest.TestCase):
                 review_status="reviewed",
             ),
             hidden_map=ArtifactRef(
-                id="dev_ground_truth_map_001",
-                uri="benchmark/fixtures/dev_graph/ground_truth_map.json",
+                id="dev_map_001",
+                uri="benchmark/fixtures/dev_graph/map.json",
                 review_status="reviewed",
             ),
             max_turns=3,

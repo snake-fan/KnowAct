@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import re
+import shutil
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -240,6 +241,28 @@ def read_candidate_map_run(
         workspace_root=workspace_root,
         output_dir=output_dir,
     )
+
+
+def discard_candidate_map_run(
+    *,
+    workspace_root: Path,
+    benchmark_domain: str,
+    run_id: str,
+) -> Path:
+    benchmark_domain = _validate_safe_id(benchmark_domain, "benchmark_domain")
+    run_id = _validate_safe_id(run_id, "run_id")
+    output_dir = (
+        workspace_root
+        / "benchmark"
+        / "domains"
+        / benchmark_domain
+        / "candidate_maps"
+        / run_id
+    )
+    if not output_dir.exists() or not output_dir.is_dir():
+        raise CandidateMapNotFoundError(f"Candidate map run {run_id} does not exist")
+    shutil.rmtree(output_dir)
+    return output_dir
 
 
 def _artifact_paths(*, workspace_root: Path, output_dir: Path) -> CandidateMapArtifactPaths:

@@ -1,6 +1,6 @@
 # V1 confirmed profile contexts are immutable snapshots
 
-KnowAct v1 publishes each benchmark-author confirmed `Profile Context` as an immutable artifact snapshot for one synthetic benchmark user, identified by `user_id`. Candidate-map generation reads a saved confirmed snapshot by user id; changing a confirmed context requires publishing a new user id rather than silently overwriting the existing artifact, so ground-truth maps and evaluation episodes retain a reproducible persona basis without introducing a duplicate profile-context identity.
+KnowAct v1 publishes each benchmark-author confirmed `Profile Context` as an immutable artifact snapshot for one synthetic benchmark user, identified by `user_id`. Candidate-map generation reads a saved confirmed snapshot by user id; changing a confirmed context requires publishing a new user id rather than silently overwriting the existing artifact, so maps and evaluation episodes retain a reproducible persona basis without introducing a duplicate profile-context identity.
 
 **Considered Options**
 

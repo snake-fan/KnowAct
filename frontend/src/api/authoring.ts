@@ -252,7 +252,7 @@ export type MapEdgeConsistencyWarningListResponse = {
   warnings: MapEdgeConsistencyWarning[];
 };
 
-export type GroundTruthMapManifest = {
+export type MapManifest = {
   map_id: string;
   user_id: string;
   benchmark_domain: string;
@@ -262,15 +262,30 @@ export type GroundTruthMapManifest = {
 
 export type ReviewedMapArtifactPaths = {
   output_dir_uri: string;
-  ground_truth_map_uri: string;
+  map_uri: string;
   map_manifest_uri: string;
 };
 
 export type CandidateMapPromotionResponse = {
   benchmark_domain: string;
   run_id: string;
-  ground_truth_map: KnowledgeMap;
-  map_manifest: GroundTruthMapManifest;
+  map: KnowledgeMap;
+  map_manifest: MapManifest;
+  artifact_paths: ReviewedMapArtifactPaths;
+};
+
+export type ReviewedMapSummary = {
+  map_id: string;
+  user_id?: string | null;
+  graph_version?: string | null;
+  state_count?: number | null;
+  evidence_count?: number | null;
+};
+
+export type ReviewedMapPayload = {
+  benchmark_domain: string;
+  map: KnowledgeMap;
+  map_manifest: MapManifest;
   artifact_paths: ReviewedMapArtifactPaths;
 };
 
@@ -334,6 +349,24 @@ export async function readConfirmedProfileContext(
     profile_context: payload.profile_context,
     artifact_paths: payload.artifact_paths
   };
+}
+
+export async function listReviewedMaps(
+  benchmarkDomain: string
+): Promise<ReviewedMapSummary[]> {
+  const payload = await requestJson<{ benchmark_domain: string; maps: ReviewedMapSummary[] }>(
+    `/api/authoring/maps/${encodeURIComponent(benchmarkDomain)}`
+  );
+  return payload.maps;
+}
+
+export async function readReviewedMap(
+  benchmarkDomain: string,
+  mapId: string
+): Promise<ReviewedMapPayload> {
+  return requestJson<ReviewedMapPayload>(
+    `/api/authoring/maps/${encodeURIComponent(benchmarkDomain)}/${encodeURIComponent(mapId)}`
+  );
 }
 
 export async function uploadSourceMaterial(input: {

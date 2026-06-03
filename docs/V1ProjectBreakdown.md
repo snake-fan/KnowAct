@@ -6,9 +6,9 @@ This document turns the current `CONTEXT.md` glossary and v1 ADRs into an execut
 
 ## V1 Anchor Decisions
 
-KnowAct v1 is an active knowledge-state diagnosis benchmark. The tested agent asks diagnostic questions to infer a fixed hidden `Ground-Truth Knowledge Map` over a visible `Authored Knowledge Graph`; it does not teach, tutor, or update the user's hidden state during an episode.
+KnowAct v1 is an active knowledge-state diagnosis benchmark. The tested agent asks diagnostic questions to infer a fixed hidden reviewed `Knowledge Map` over a visible `Authored Knowledge Graph`; it does not teach, tutor, or update the user's hidden state during an episode.
 
-The first benchmark domain is `classical_supervised_ml_algorithms`, grounded primarily in *An Introduction to Statistical Learning with Applications in Python*. The formal v1 graph targets 30-50 reviewed `Knowledge Nodes`, with reviewed `Knowledge Edges`, reviewed `Ground-Truth Knowledge Maps`, explicit `Evaluation Episode Manifests`, and one fixed scoring profile: `squared_mastery_distance_v1`.
+The first benchmark domain is `classical_supervised_ml_algorithms`, grounded primarily in *An Introduction to Statistical Learning with Applications in Python*. The formal v1 graph targets 30-50 reviewed `Knowledge Nodes`, with reviewed `Knowledge Edges`, reviewed `Knowledge Maps`, explicit `Evaluation Episode Manifests`, and one fixed scoring profile: `squared_mastery_distance_v1`.
 
 The implementation should prioritize a narrow vertical slice first, but any small graph used before the 30-50 node graph must be treated as a development fixture, not as the formal v1 benchmark graph.
 
@@ -40,13 +40,14 @@ Current opened endpoint:
 - `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`: revalidates one saved candidate graph run, copies its node and edge lists into `graphs/{version}/` as reviewed authored graph artifacts, and generates `graph_manifest.json`. Reviewed graph versions are immutable; corrections publish a new version.
 - `POST /api/authoring/map-candidates`: loads one reviewed graph version and one confirmed Profile Context snapshot by identity and generates one evidence-backed Candidate Knowledge Map. It runs one full-graph outline call, partitions evidence authoring into contiguous reviewed-node windows with optional request-level batch-size control, applies one shared sampling temperature, and writes generation-time edge-consistency warnings. Candidate-map run ids cannot overwrite an existing run directory; retry with a new run id.
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`: returns one saved Candidate Knowledge Map and its debug artifact references for benchmark-author inspection.
-- `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`: revalidates one saved Candidate Knowledge Map with its reviewed graph version and confirmed Profile Context, converts lifecycle `kind` from `candidate` to `ground_truth`, and publishes immutable `ground_truth_map.json` plus minimal `map_manifest.json` under `ground_truth_maps/{map_id}/`. Existing map ids and second promotions of the same candidate run return conflicts; generation-time consistency warnings are ignored.
+- `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`: revalidates one saved Candidate Knowledge Map with its reviewed graph version and confirmed Profile Context, converts lifecycle `kind` from `candidate` to `ground_truth`, and publishes immutable `map.json` plus minimal `map_manifest.json` under `maps/{map_id}/`. Existing map ids return conflicts; generation-time consistency warnings are ignored, and successful promotion removes the originating run from `candidate_maps/`.
+- `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`: list and read reviewed Knowledge Map snapshots for read-only workbench preview. These endpoints do not create simulator episodes or expose simulator runtime behavior.
 
 Guardrails:
 
 - Candidate generation must not automatically promote artifacts into reviewed benchmark data; graph and map promotion require explicit benchmark-author confirmation actions.
 - The authoring API must stay visibly separate from future evaluation runtime routes.
-- Evaluation runtime endpoints must continue to load only reviewed `Authored Knowledge Graphs` and reviewed `Ground-Truth Knowledge Maps`.
+- Evaluation runtime endpoints must continue to load only reviewed `Authored Knowledge Graphs` and reviewed `Knowledge Maps`.
 - PDF material requests must remain constrained to `storage/`, reject path traversal, and treat local books and generated Markdown as authoring inputs rather than reviewed benchmark artifacts.
 - OSS staging URLs are temporary source-preparation transport for MinerU and must not be returned in API responses, written into workflow logs, or treated as reviewed benchmark data.
 
@@ -56,7 +57,7 @@ Goal: keep implementation aligned with the domain language already established i
 
 Milestone M0:
 
-- `Knowledge Graph`, `Knowledge Map`, `Ground-Truth Knowledge Map`, `Reconstructed Knowledge Map`, `Evidence Record`, `Evaluation Episode`, and `Scoring Profile` have stable meanings.
+- `Knowledge Graph`, `Knowledge Map`, `Reconstructed Knowledge Map`, `Evidence Record`, `Evaluation Episode`, and `Scoring Profile` have stable meanings.
 - The v1 scope is explicitly active diagnosis with a static user knowledge state.
 - The formal v1 domain, source basis, graph size target, visibility boundary, turn definition, and scoring profile are already captured in ADRs.
 
@@ -165,13 +166,13 @@ Implementation note:
 - Opened review-gated interface: `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`. Read-only inspection of reviewed graphs remains a future stable API addition.
 - Authoring API boundary: the Phase 2 candidate endpoint may create candidate files for review, but it must not create reviewed `authored_nodes.json` or `authored_edges.json`.
 
-## Phase 4: Ground-Truth Map Authoring
+## Phase 4: Map Authoring
 
 Goal: create reviewed hidden user knowledge maps that can drive simulation and scoring.
 
 Resolved initial workflow boundary:
 
-- One ground-truth map authoring run produces exactly one `Candidate Knowledge Map` for one synthetic benchmark user over one reviewed `Authored Knowledge Graph` version.
+- One map authoring run produces exactly one `Candidate Knowledge Map` for one synthetic benchmark user over one reviewed `Authored Knowledge Graph` version.
 - The workflow starts from a benchmark-author supplied rough user description and expands it into a reviewable `Profile Context`.
 - The benchmark author may edit the generated `Profile Context`.
 - `Profile Context Validation` is a separate structural-validation step. `Profile Context Confirmation` is the separate explicit benchmark-author acceptance of one validated context snapshot.
@@ -197,17 +198,17 @@ Resolved initial workflow boundary:
 - A confirmed `Profile Context` binds `benchmark_domain` but does not bind `graph_version`. The same synthetic user profile may be reused when generating maps against later reviewed graph versions within the same domain.
 - Candidate profile-context runs are saved under `benchmark/domains/{benchmark_domain}/candidate_profile_contexts/{run_id}/`.
 - Each candidate profile-context run contains `candidate_profile_context.json`, a minimal `workflow_log.json`, and `agent_traces/model_raw_output.txt` plus `agent_traces/parser_output.json`. Do not add an `intermediate/` directory or a redundant single-step trace subdirectory.
-- Candidate-map runs are saved under `benchmark/domains/{benchmark_domain}/candidate_maps/{run_id}/` with `candidate_map.json`, `consistency_warnings.json`, `workflow_log.json`, optional `intermediate/`, and optional `agent_traces/`.
+- Candidate-map runs are saved under `benchmark/domains/{benchmark_domain}/candidate_maps/{run_id}/` with `candidate_map.json`, `consistency_warnings.json`, `workflow_log.json`, optional `intermediate/`, and optional `agent_traces/` while they await review.
 - Candidate-map `intermediate/` stores `state_outline.json` and `ground_truth_evidence.json`.
 - Candidate-map `agent_traces/` stores `knowledge_state_outline/model_raw_output.txt`, `knowledge_state_outline/parser_output.json`, and per-batch `ground_truth_evidence/{batch_name}/model_raw_output.txt` plus `parser_output.json`.
 - Candidate-map runs do not copy confirmed profile-context or reviewed-graph payloads. Their `workflow_log.json` records `user_id`, `benchmark_domain`, and `graph_version` references.
 - A candidate map is a discardable synthetic sample. Benchmark-author review accepts it unchanged for promotion or rejects it. Poor state or evidence quality should be fixed by improving profile input or workflow behavior and generating a new candidate run, not by manually patching one map.
 - One confirmed `user_id` may produce multiple candidate-map runs for retry and debugging.
-- One `(user_id, graph_version)` pair may produce and promote multiple independent `Ground-Truth Knowledge Maps`, each with a distinct `map_id`. The benchmark author selects which promoted map sample an episode uses.
+- One `(user_id, graph_version)` pair may produce and promote multiple independent reviewed `Knowledge Map` snapshots, each with a distinct `map_id`. The benchmark author selects which promoted map sample an episode uses.
 - Promotion accepts multiple reviewed map samples for the same `(user_id, graph_version)` pair as long as every published sample uses a new domain-unique `map_id`.
-- Explicit benchmark-author promotion assigns a domain-unique `map_id` and publishes an immutable reviewed snapshot under `benchmark/domains/{benchmark_domain}/ground_truth_maps/{map_id}/` with `ground_truth_map.json` and `map_manifest.json`.
+- Explicit benchmark-author promotion assigns a domain-unique `map_id` and publishes an immutable reviewed snapshot under `benchmark/domains/{benchmark_domain}/maps/{map_id}/` with `map.json` and `map_manifest.json`.
 - Reviewed-map promotion never overwrites an existing `map_id` and does not expose `overwrite=true`. Replacing a reviewed synthetic sample requires a new `map_id`; old snapshots remain available for episode reproducibility.
-- One successful candidate-map run may be promoted at most once. Publishing another reviewed sample requires a new candidate-map generation run so distinct `map_id` values do not alias identical run output.
+- Successful promotion removes the originating candidate-map run from `candidate_maps/`. Publishing another reviewed sample requires a new candidate-map generation run so distinct `map_id` values do not alias identical run output.
 - `map_manifest.json` binds `map_id`, `user_id`, `benchmark_domain`, `graph_version`, and `promoted_from_candidate_run`.
 - `user_id` identifies the confirmed synthetic-user profile basis; `map_id` identifies one promoted synthetic knowledge-map sample generated from that basis.
 - Keep `map_manifest.json` minimal in the initial slice. Do not add timestamps, model configuration, or copied warning payloads; candidate-map run artifacts retain debugging metadata.
@@ -236,7 +237,7 @@ Resolved initial workflow boundary:
 - Prompt evidence authoring to avoid exact duplicate `(evidence_kind, signal)` pairs within one node. Validation rejects exact duplicates rather than counting them toward mastery-sensitive minimums. Do not add semantic-similarity merging.
 - Keep evidence-kind validation lightweight in the initial slice. `background_fact` remains a valid workflow-authored evidence kind under the same minimum rules; do not add kind-specific exclusion or uniqueness constraints until generated artifacts show a concrete quality problem.
 - Workflow code deterministically merges generated evidence references into node-level states; model output must not maintain cross-object `evidence_refs`.
-- Workflow output writes `candidate_map.json` with `kind = candidate`. Only promotion code may deterministically replace it with `kind = ground_truth` when writing `ground_truth_map.json`; model output must not set lifecycle kind.
+- Workflow output writes `candidate_map.json` with `kind = candidate`. Only promotion code may deterministically replace it with `kind = ground_truth` when writing `map.json`; model output must not set lifecycle kind.
 - Write a successful `candidate_map.json` only after blocking candidate-map validation passes. Reject missing, duplicate, or unknown node states; invalid mastery; missing or cross-node evidence refs; evidence counts below mastery-sensitive minimums; workflow evidence that is not `simulator_only`; `kind != candidate`; and `user_id` mismatch.
 - On blocking-validation failure, mark the run failed and retain traces plus intermediate artifacts, but do not write a promotable `candidate_map.json`. Edge-consistency findings remain non-blocking warnings.
 - Reviewed `Knowledge Edges` are soft diagnostic signals for candidate-map consistency. Deterministic edge-aware checks receive the drafted state outline and reviewed edges, then emit review warnings for suspicious state combinations; they must not automatically rewrite or reject uneven maps.
@@ -248,11 +249,11 @@ Resolved initial workflow boundary:
 Milestone M4:
 
 - Candidate maps are generated over the reviewed `Authored Knowledge Graph`.
-- Each `Ground-Truth Knowledge Map` covers every node in the episode graph.
+- Each reviewed `Knowledge Map` covers every node in the episode graph.
 - Each `User Knowledge State` has one or more hidden `Ground-Truth Evidence` records.
 - Phase 4 synthetic map authoring requires a confirmed `Profile Context`; the general runtime schema may still keep profile context optional for future manually imported or historical maps. Profile context is not part of primary scoring.
 - Generated `Profile Context` is reviewable and explicitly confirmed before it guides candidate-map generation.
-- Benchmark-author accept-or-reject review promotes acceptable candidate maps unchanged into reviewed ground-truth maps.
+- Benchmark-author accept-or-reject review promotes acceptable candidate maps unchanged into reviewed maps.
 
 Validation should catch:
 
@@ -285,8 +286,8 @@ Do not include yet:
 
 Implementation note:
 
-- Structures to implement: map authoring helpers under `backend/knowact/authoring/`, map/evidence loaders under `backend/knowact/storage/`, candidate and confirmed profile-context artifacts, reviewed `ground_truth_maps/`, and validation checks for coverage and hidden evidence visibility.
-- Implemented map-authoring slice: `POST /api/authoring/map-candidates`, `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`, and `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion` cover identity-based reviewed graph/profile loading, one full-graph outline call, contiguous multi-batch evidence authoring, request-level batch-size and sampling-temperature controls, deterministic evidence-backed candidate assembly, blocking validation, fail-fast retained debug artifacts, edge-consistency warnings, non-overwriting candidate-map run ids, and explicit immutable reviewed-map publication.
+- Structures to implement: map authoring helpers under `backend/knowact/authoring/`, map/evidence loaders under `backend/knowact/storage/`, candidate and confirmed profile-context artifacts, reviewed `maps/`, and validation checks for coverage and hidden evidence visibility.
+- Implemented map-authoring slice: `POST /api/authoring/map-candidates`, `GET /api/authoring/candidate-maps/{benchmark_domain}`, `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`, `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`, `GET /api/authoring/maps/{benchmark_domain}`, and `GET /api/authoring/maps/{benchmark_domain}/{map_id}` cover identity-based reviewed graph/profile loading, one full-graph outline call, contiguous multi-batch evidence authoring, request-level batch-size and sampling-temperature controls, deterministic evidence-backed candidate assembly, blocking validation, fail-fast retained debug artifacts, edge-consistency warnings, non-overwriting candidate-map run ids, explicit immutable reviewed-map publication, and read-only reviewed-map inspection for workbench previews.
 - Interfaces to open for the initial functional slice:
   - `GET /api/authoring/benchmark-domains`
   - `POST /api/authoring/profile-context-candidates`
@@ -294,8 +295,11 @@ Implementation note:
   - `PUT /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}`
   - `POST /api/authoring/candidate-profile-contexts/{benchmark_domain}/{run_id}/confirmation`
   - `POST /api/authoring/map-candidates`
+  - `GET /api/authoring/candidate-maps/{benchmark_domain}`
   - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`
   - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`
+  - `GET /api/authoring/maps/{benchmark_domain}`
+  - `GET /api/authoring/maps/{benchmark_domain}/{map_id}`
 - Do not add candidate-profile or candidate-map browsing list endpoints in the initial Phase 4 slice. `GET /api/authoring/benchmark-domains` is a narrow read-only discovery exception for workbench selectors: it lists existing safe domain ids without creating or mutating benchmark data. Add wider browsing surfaces after the functional workflow is exercised end to end.
 - Do not add a one-shot orchestration endpoint in the initial Phase 4 slice. Callers explicitly sequence the narrow endpoints so profile-context editing, confirmation, candidate-map inspection, and promotion remain visible gates.
 - Authoring API boundary: profile-context candidates may be edited before confirmation; candidate maps may be inspected and either promoted unchanged or rejected, but not edited through a map `PUT` endpoint.
@@ -315,7 +319,7 @@ Milestone M5:
 Recommended development fixture:
 
 - One small development episode can be used to test runtime wiring.
-- Formal v1 episodes must use reviewed graph and reviewed ground-truth maps.
+- Formal v1 episodes must use reviewed graph and reviewed maps.
 
 Implementation note:
 
@@ -332,7 +336,7 @@ Milestone M6:
 - The simulator is conditioned on hidden map state, hidden evidence, and optional profile context.
 - It answers only the primary diagnostic question for each turn.
 - It can express grounded ambiguity: uncertainty, partial correctness, self-correction, not knowing, or misconceptions.
-- It does not reveal mastery labels, hidden evidence ids, or the full ground-truth map.
+- It does not reveal mastery labels, hidden evidence ids, or the full hidden map.
 - Simulator transcripts are recorded as visible `Interaction Observations` for the tested agent.
 
 Validation focus:
@@ -378,7 +382,7 @@ Goal: compute reproducible structured comparison results.
 
 Milestone M8:
 
-- Scoring compares the final reconstructed map against the hidden ground-truth map over every node in the episode graph.
+- Scoring compares the final reconstructed map against the hidden reviewed map over every node in the episode graph.
 - `mastery_level` values map L0-L5 to 0-5 and use squared distance.
 - Missing predictions receive distance penalty 36 and are reported separately.
 - Unsupported inference does not override mastery distance, but is reported as a separate rate.
@@ -405,7 +409,7 @@ Goal: produce the first interpretable research result from the full reviewed v1 
 
 Milestone M9:
 
-- At least one reviewed v1 graph, multiple reviewed ground-truth maps, and their episode manifests run end to end.
+- At least one reviewed v1 graph, multiple reviewed maps, and their episode manifests run end to end.
 - Fixed-question, random-question, and simple LLM baselines are evaluated on the same episodes.
 - Reports identify where agents fail: question selection, evidence collection, final reconstruction, or unsupported inference.
 - A first experiment report states what v1 does and does not claim.
@@ -478,7 +482,7 @@ M0 Domain decisions
   -> M1 Schemas and validators
     -> M2 Graph authoring workflow
       -> M3 Reviewed authored graph
-        -> M4 Reviewed ground-truth maps
+        -> M4 Reviewed maps
           -> M5 Episode manifests and runtime contract
             -> M6 User simulator
             -> M7 Tested agent interface and baselines

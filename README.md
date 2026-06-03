@@ -83,7 +83,7 @@ V1 starts with a single benchmark domain, `classical_supervised_ml_algorithms`, 
 
 3. **User Simulation**
 
-   An LLM-based user simulator is conditioned on the hidden knowledge map and evidence, then answers diagnostic questions naturally without revealing mastery labels, hidden evidence ids, or the full ground-truth map. It may be uncertain, partially correct, or reveal misconceptions, but its answers should remain consistent with the hidden map and evidence.
+   An LLM-based user simulator is conditioned on the hidden knowledge map and evidence, then answers diagnostic questions naturally without revealing mastery labels, hidden evidence ids, or the full map. It may be uncertain, partially correct, or reveal misconceptions, but its answers should remain consistent with the hidden map and evidence.
 
 4. **Agent Interaction**
 
@@ -167,7 +167,7 @@ KnowAct v1 keeps evaluation focused on automatic comparison between the hidden g
 
 ### 1. Profile Reconstruction Accuracy
 
-The agent's reconstructed map is compared with the ground-truth map over structured user-state fields. The primary v1 result is `episode_mastery_distance`: the mean squared distance between inferred and hidden `mastery_level` values across all nodes in the episode's authored knowledge graph. Lower is better.
+The agent's reconstructed map is compared with the hidden map over structured user-state fields. The primary v1 result is `episode_mastery_distance`: the mean squared distance between inferred and hidden `mastery_level` values across all nodes in the episode's authored knowledge graph. Lower is better.
 
 Possible supporting metrics include:
 
@@ -338,7 +338,7 @@ Run the Candidate Graph Review Workbench model checks with:
 npm --prefix frontend run test:candidate-graph-workbench
 ```
 
-The frontend currently exposes authoring modules for Knowledge Graph review, Profile Context confirmation, and User Map generation/review/promotion.
+The frontend currently exposes authoring modules for Knowledge Graph review, Profile Context confirmation, and User Map generation/review/promotion, plus a Simulator entry that previews reviewed maps without starting simulator episodes.
 
 If the backend is running on a non-default port, set `VITE_API_PROXY_TARGET`, for example:
 
@@ -362,7 +362,8 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 - `GET /api/authoring/candidate-maps/{benchmark_domain}`, which lists candidate-map runs, including failed runs that retained workflow logs but did not write a promotable `candidate_map.json`.
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`, which returns one saved Candidate Knowledge Map and its artifact references for inspection.
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`, which returns generation-time edge-consistency warnings for candidate-map review.
-- `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`, which revalidates one saved Candidate Knowledge Map with its reviewed graph and confirmed Profile Context, converts `kind` to `ground_truth`, and publishes immutable `ground_truth_maps/{map_id}/ground_truth_map.json` plus `map_manifest.json`. Existing `map_id` values return `409 Conflict`, a candidate run can be promoted only once, and generation-time `consistency_warnings.json` is not copied into reviewed data.
+- `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`, which revalidates one saved Candidate Knowledge Map with its reviewed graph and confirmed Profile Context, converts `kind` to `ground_truth`, and publishes immutable `maps/{map_id}/map.json` plus `map_manifest.json`. Existing `map_id` values return `409 Conflict`, generation-time `consistency_warnings.json` is not copied into reviewed data, and a successfully published run is removed from `candidate_maps/`.
+- `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`, which list and read reviewed Knowledge Map snapshots for read-only workbench previews. These are inspection endpoints, not simulator runtime endpoints.
 
 ```json
 {
@@ -373,7 +374,7 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 }
 ```
 
-PDF source material requests are constrained to `storage/` and reject absolute paths or `..` traversal. For `storage/books/isl_python.pdf`, the default Markdown cache path is `storage/books/isl_python.md`; existing Markdown is reused unless `force_reparse=true`. The LLM path uses Markdown text, not PDF base64 `input_file` or OpenAI `file_id`, and `client_provider` currently accepts `openai` or `deepseek` with `openai` as the default. OSS staging objects are temporary, private-bucket transport for MinerU URL parsing; signed URLs are not returned in API responses or workflow logs. Candidate generation never auto-promotes its outputs; reviewed graph and ground-truth map publication are separate explicit promotion actions.
+PDF source material requests are constrained to `storage/` and reject absolute paths or `..` traversal. For `storage/books/isl_python.pdf`, the default Markdown cache path is `storage/books/isl_python.md`; existing Markdown is reused unless `force_reparse=true`. The LLM path uses Markdown text, not PDF base64 `input_file` or OpenAI `file_id`, and `client_provider` currently accepts `openai` or `deepseek` with `openai` as the default. OSS staging objects are temporary, private-bucket transport for MinerU URL parsing; signed URLs are not returned in API responses or workflow logs. Candidate generation never auto-promotes its outputs; reviewed graph and map publication are separate explicit promotion actions.
 
 Implemented / planned components include:
 
@@ -384,10 +385,11 @@ Implemented / planned components include:
 - [x] FastAPI authoring API for real source-backed graph candidate runs
 - [x] Candidate Graph Review Workbench frontend
 - [x] User Map Authoring Workbench frontend
+- [x] Simulator reviewed-map preview entry
 - [x] Phase 3 review-gated authored graph promotion with generated manifests
 - [x] LLM-based Profile Context generation and immutable confirmation gate
 - [x] Single-batch Candidate Knowledge Map generation tracer bullet
-- [x] Reviewed Ground-Truth Knowledge Map promotion with map manifests
+- [x] Reviewed map promotion with map manifests
 - [ ] Ground-truth map authoring
 - [ ] Human verification protocol
 - [ ] User simulator

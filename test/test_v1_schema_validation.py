@@ -27,7 +27,7 @@ class V1SchemaValidationTest(unittest.TestCase):
                 unknowns=[],
             )
 
-    def test_reviewed_graph_and_ground_truth_map_validate_through_public_api(self):
+    def test_reviewed_graph_and_reviewed_map_validate_through_public_api(self):
         graph = KnowledgeGraph(
             nodes=[
                 KnowledgeNode(
@@ -68,7 +68,7 @@ class V1SchemaValidationTest(unittest.TestCase):
             ],
         )
 
-        ground_truth_map = KnowledgeMap(
+        reviewed_map = KnowledgeMap(
             user_id="dev_user_001",
             kind="ground_truth",
             states=[
@@ -108,17 +108,17 @@ class V1SchemaValidationTest(unittest.TestCase):
         )
 
         validate_knowledge_graph(graph)
-        validate_knowledge_map(ground_truth_map, graph)
+        validate_knowledge_map(reviewed_map, graph)
         self.assertEqual(
             ("Treats residual noise as proof that the model is unusable.",),
-            ground_truth_map.states[0].misconceptions,
+            reviewed_map.states[0].misconceptions,
         )
         self.assertEqual(
             ("Whether the user can explain confidence intervals.",),
-            ground_truth_map.states[0].unknowns,
+            reviewed_map.states[0].unknowns,
         )
-        self.assertEqual((), ground_truth_map.states[1].misconceptions)
-        self.assertEqual((), ground_truth_map.states[1].unknowns)
+        self.assertEqual((), reviewed_map.states[1].misconceptions)
+        self.assertEqual((), reviewed_map.states[1].unknowns)
 
     def test_reconstructed_map_must_cite_tested_agent_visible_evidence(self):
         graph = KnowledgeGraph(
@@ -194,7 +194,7 @@ class V1SchemaValidationTest(unittest.TestCase):
 
         validate_knowledge_map(reconstructed_map, graph)
 
-    def test_ground_truth_map_rejects_tested_agent_visible_evidence(self):
+    def test_reviewed_map_rejects_tested_agent_visible_evidence(self):
         graph = KnowledgeGraph(
             nodes=[
                 KnowledgeNode(
@@ -204,7 +204,7 @@ class V1SchemaValidationTest(unittest.TestCase):
                 )
             ]
         )
-        ground_truth_map = KnowledgeMap(
+        reviewed_map = KnowledgeMap(
             user_id="dev_user_001",
             kind="ground_truth",
             states=[
@@ -229,7 +229,7 @@ class V1SchemaValidationTest(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(KnowActValidationError, "simulator_only visibility"):
-            validate_knowledge_map(ground_truth_map, graph)
+            validate_knowledge_map(reviewed_map, graph)
 
     def test_state_must_not_reference_evidence_for_another_node(self):
         graph = KnowledgeGraph(

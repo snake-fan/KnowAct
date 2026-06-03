@@ -796,7 +796,8 @@ label {
   overflow-wrap: anywhere;
 }
 
-.map-workbench {
+.map-workbench,
+.simulator-workbench {
   height: 100vh;
   display: flex;
   min-height: 0;
@@ -818,6 +819,17 @@ label {
   gap: 22px;
   padding: 28px clamp(18px, 4vw, 54px);
   align-items: start;
+}
+
+.simulator-preview-stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 22px;
+  overflow: hidden;
+  background: #eaf0ee;
+  padding: 24px clamp(18px, 4vw, 40px);
 }
 
 .map-composer-shell {
@@ -981,6 +993,21 @@ label {
   padding: 16px;
 }
 
+.simulator-map-list-panel {
+  height: 100%;
+  max-height: none;
+  box-shadow: none;
+}
+
+.simulator-map-list-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #394743;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .map-run-list {
   display: flex;
   flex-direction: column;
@@ -1003,6 +1030,61 @@ label {
   display: flex;
   flex-direction: column;
   background: #eaf0ee;
+}
+
+.simulator-preview-panel {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #d4dedb;
+  border-radius: 8px;
+  background: #eaf0ee;
+}
+
+.simulator-preview-panel .map-review-canvas-shell {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.simulator-preview-panel .map-preview-canvas-frame {
+  height: 100%;
+  min-height: 0;
+}
+
+.simulator-preview-panel .map-review-canvas {
+  min-height: 0;
+}
+
+.simulator-map-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  border-bottom: 1px solid #d4dedb;
+  background: #e2e8e5;
+}
+
+.simulator-empty-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid #d4dedb;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: clamp(24px, 6vw, 72px);
+}
+
+.simulator-empty-panel h2 {
+  margin-top: 6px;
+  color: #21312e;
+  font-size: 26px;
+}
+
+.simulator-empty-panel p:not(.eyebrow) {
+  margin-top: 8px;
+  max-width: 520px;
+  color: #65716e;
+  line-height: 1.5;
 }
 
 .map-review-header {
@@ -1091,10 +1173,17 @@ label {
 }
 
 .map-review-canvas-shell {
-  position: relative;
   flex: 1 1 auto;
   min-height: calc(100vh - 300px);
+  display: flex;
   overflow: hidden;
+}
+
+.map-preview-canvas-frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: inherit;
 }
 
 .map-review-canvas {
@@ -1242,6 +1331,17 @@ label {
     max-height: none;
   }
 
+  .simulator-preview-stage {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .simulator-map-list-panel,
+  .simulator-preview-panel,
+  .simulator-empty-panel {
+    min-height: 420px;
+  }
+
   .map-filter-row {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
@@ -1325,8 +1425,13 @@ label {
   .map-filter-row,
   .map-advanced-grid,
   .graph-preview-stats,
-  .promotion-summary {
+  .promotion-summary,
+  .simulator-map-summary {
     grid-template-columns: 1fr;
+  }
+
+  .simulator-preview-stage {
+    padding: 18px 14px;
   }
 
   .map-card-heading,
