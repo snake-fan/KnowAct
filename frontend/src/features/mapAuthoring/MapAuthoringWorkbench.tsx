@@ -446,22 +446,24 @@ export function MapAuthoringWorkbench() {
             <MapLegend />
 
             <div className="map-review-canvas-shell">
-              <MapPreviewCanvas
-                graph={reviewContext.graph}
-                knowledgeMap={reviewContext.candidate.candidate_map}
-                warnings={reviewContext.warnings}
-                selectedNodeId={selectedNodeId}
-                onSelectNode={setSelectedNodeId}
-                ariaLabel="Candidate knowledge map review graph"
-              />
-              {selectedNode && (
-                <MapNodeInspectionCard
-                  node={selectedNode}
+              <div className="map-preview-canvas-frame">
+                <MapPreviewCanvas
+                  graph={reviewContext.graph}
                   knowledgeMap={reviewContext.candidate.candidate_map}
                   warnings={reviewContext.warnings}
-                  onClose={() => setSelectedNodeId(null)}
+                  selectedNodeId={selectedNodeId}
+                  onSelectNode={setSelectedNodeId}
+                  ariaLabel="Candidate knowledge map review graph"
                 />
-              )}
+                {selectedNode && (
+                  <MapNodeInspectionCard
+                    node={selectedNode}
+                    knowledgeMap={reviewContext.candidate.candidate_map}
+                    warnings={reviewContext.warnings}
+                    onClose={() => setSelectedNodeId(null)}
+                  />
+                )}
+              </div>
             </div>
           </section>
         )}

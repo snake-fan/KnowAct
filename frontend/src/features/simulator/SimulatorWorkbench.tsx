@@ -193,20 +193,22 @@ export function SimulatorWorkbench() {
             <MapLegend />
 
             <div className="map-review-canvas-shell">
-              <MapPreviewCanvas
-                graph={previewContext.graph}
-                knowledgeMap={previewContext.reviewedMap.map}
-                selectedNodeId={selectedNodeId}
-                onSelectNode={setSelectedNodeId}
-                ariaLabel="Reviewed knowledge map simulator preview graph"
-              />
-              {selectedNode && (
-                <MapNodeInspectionCard
-                  node={selectedNode}
+              <div className="map-preview-canvas-frame">
+                <MapPreviewCanvas
+                  graph={previewContext.graph}
                   knowledgeMap={previewContext.reviewedMap.map}
-                  onClose={() => setSelectedNodeId(null)}
+                  selectedNodeId={selectedNodeId}
+                  onSelectNode={setSelectedNodeId}
+                  ariaLabel="Reviewed knowledge map simulator preview graph"
                 />
-              )}
+                {selectedNode && (
+                  <MapNodeInspectionCard
+                    node={selectedNode}
+                    knowledgeMap={previewContext.reviewedMap.map}
+                    onClose={() => setSelectedNodeId(null)}
+                  />
+                )}
+              </div>
             </div>
           </section>
         ) : (

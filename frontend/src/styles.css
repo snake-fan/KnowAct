@@ -1033,11 +1033,26 @@ label {
 }
 
 .simulator-preview-panel {
+  height: 100%;
   min-height: 0;
   overflow: hidden;
   border: 1px solid #d4dedb;
   border-radius: 8px;
   background: #eaf0ee;
+}
+
+.simulator-preview-panel .map-review-canvas-shell {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.simulator-preview-panel .map-preview-canvas-frame {
+  height: 100%;
+  min-height: 0;
+}
+
+.simulator-preview-panel .map-review-canvas {
+  min-height: 0;
 }
 
 .simulator-map-summary {
@@ -1158,10 +1173,17 @@ label {
 }
 
 .map-review-canvas-shell {
-  position: relative;
   flex: 1 1 auto;
   min-height: calc(100vh - 300px);
+  display: flex;
   overflow: hidden;
+}
+
+.map-preview-canvas-frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: inherit;
 }
 
 .map-review-canvas {
