@@ -85,7 +85,7 @@ The hidden **Knowledge Map** used as the benchmark reference for a simulated or 
 _Avoid_: user graph, true graph, ground-truth graph
 
 **Candidate Knowledge Map**:
-A generated user-specific **Knowledge Map** sample produced during authoring before benchmark-author review.
+A generated user-specific **Knowledge Map** sample produced during authoring before benchmark-author review, from one **Confirmed Profile Context Snapshot** and one reviewed graph version in the same **Benchmark Domain**.
 _Avoid_: ground-truth map, final profile, evaluation reference
 
 **Profile Context**:
@@ -101,7 +101,7 @@ The explicit benchmark-author acceptance of a validated **Profile Context** snap
 _Avoid_: schema validation, automatic acceptance, synthetic-user approval
 
 **Confirmed Profile Context Snapshot**:
-An immutable benchmark-author confirmed **Profile Context** artifact for one synthetic benchmark user, identified by `user_id` and bound to one benchmark domain without being bound to one graph version.
+An immutable benchmark-author confirmed **Profile Context** artifact for one synthetic benchmark user, identified by `user_id` and bound to one benchmark domain without being bound to one graph version, so it may be reused across reviewed graph versions in that domain.
 _Avoid_: editable candidate profile, inline request payload, silently overwritten persona
 
 **Map Manifest**:
@@ -109,8 +109,8 @@ A metadata file that names a reviewed **Ground-Truth Knowledge Map** snapshot an
 _Avoid_: inline map storage, scoring override, candidate-map content
 
 **Reviewed Map Promotion**:
-The explicit benchmark-author confirmation that publishes a validated **Candidate Knowledge Map** snapshot as an immutable **Ground-Truth Knowledge Map**.
-_Avoid_: candidate save, automatic map promotion, evaluation runtime
+The explicit benchmark-author confirmation that publishes a validated **Candidate Knowledge Map** snapshot as an immutable **Ground-Truth Knowledge Map**; this is the v1 publication step for accepted candidate maps.
+_Avoid_: candidate save, automatic map promotion, evaluation runtime, archive-only state
 
 **Candidate Map Review**:
 The benchmark-author accept-or-reject inspection of a generated **Candidate Knowledge Map** before any **Reviewed Map Promotion**.

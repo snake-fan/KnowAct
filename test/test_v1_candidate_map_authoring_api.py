@@ -262,6 +262,128 @@ class V1CandidateMapAuthoringApiTest(unittest.TestCase):
             self.assertIn("Put the specific surface form in signal", evidence_prompt)
             self.assertNotIn("edge_train_test_split_prerequisite_for_cross_validation", evidence_prompt)
 
+    def test_authoring_api_lists_review_inputs_and_candidate_map_warnings(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            _write_failed_candidate_map_run(workspace_root)
+            fake_model_client = EdgeInconsistentCandidateMapModelClient()
+            client = _test_client(workspace_root, fake_model_client)
+
+            create_response = client.post(
+                "/api/authoring/map-candidates",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "run_id": "map_run_with_warning",
+                    "client_provider": "openai",
+                },
+            )
+
+            self.assertEqual(200, create_response.status_code)
+
+            graphs_response = client.get(
+                "/api/authoring/graphs/classical_supervised_ml_algorithms"
+            )
+            self.assertEqual(200, graphs_response.status_code)
+            self.assertEqual(
+                [
+                    {
+                        "version": "v1",
+                        "graph_id": "kg_classical_supervised_ml_algorithms_v1",
+                        "node_count": 2,
+                        "edge_count": 1,
+                    }
+                ],
+                graphs_response.json()["graphs"],
+            )
+
+            graph_response = client.get(
+                "/api/authoring/graphs/classical_supervised_ml_algorithms/v1"
+            )
+            self.assertEqual(200, graph_response.status_code)
+            graph_payload = graph_response.json()
+            self.assertEqual("v1", graph_payload["graph_manifest"]["version"])
+            self.assertEqual(2, len(graph_payload["authored_nodes"]))
+            self.assertEqual(1, len(graph_payload["authored_edges"]))
+
+            users_response = client.get(
+                "/api/authoring/users/classical_supervised_ml_algorithms"
+            )
+            self.assertEqual(200, users_response.status_code)
+            self.assertEqual(
+                [
+                    {
+                        "user_id": "synthetic_user_001",
+                        "summary": "A practical beginner with limited statistical foundations.",
+                    }
+                ],
+                users_response.json()["users"],
+            )
+
+            profile_response = client.get(
+                "/api/authoring/users/classical_supervised_ml_algorithms/synthetic_user_001"
+            )
+            self.assertEqual(200, profile_response.status_code)
+            self.assertEqual(
+                "synthetic_user_001",
+                profile_response.json()["profile_context"]["user_id"],
+            )
+
+            maps_response = client.get(
+                "/api/authoring/candidate-maps/classical_supervised_ml_algorithms"
+            )
+            self.assertEqual(200, maps_response.status_code)
+            map_summaries = {
+                summary["run_id"]: summary
+                for summary in maps_response.json()["runs"]
+            }
+            self.assertEqual(
+                {
+                    "run_id": "map_run_with_warning",
+                    "status": "succeeded",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "has_candidate_map": True,
+                    "warning_count": 1,
+                    "error": None,
+                },
+                map_summaries["map_run_with_warning"],
+            )
+            self.assertEqual(
+                {
+                    "run_id": "failed_map_run",
+                    "status": "failed",
+                    "graph_version": "v1",
+                    "user_id": "synthetic_user_001",
+                    "has_candidate_map": False,
+                    "warning_count": 0,
+                    "error": "second batch failed",
+                },
+                map_summaries["failed_map_run"],
+            )
+
+            warnings_response = client.get(
+                "/api/authoring/candidate-maps/"
+                "classical_supervised_ml_algorithms/map_run_with_warning/warnings"
+            )
+            self.assertEqual(200, warnings_response.status_code)
+            self.assertEqual(
+                [
+                    {
+                        "edge_id": "edge_train_test_split_prerequisite_for_cross_validation",
+                        "source_node_id": "train_test_split",
+                        "source_mastery_level": "L1",
+                        "target_node_id": "cross_validation",
+                        "target_mastery_level": "L3",
+                        "rule": "prerequisite_target_mastery_exceeds_source_by_at_least_two_levels",
+                    }
+                ],
+                warnings_response.json()["warnings"],
+            )
+
     def test_authoring_api_promotes_candidate_map_into_reviewed_ground_truth_snapshot(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -1248,6 +1370,57 @@ def _write_confirmed_profile_context(workspace_root: Path) -> None:
             "prior_experience": ["Can run basic estimator workflows."],
             "goals": ["Understand model evaluation."],
             "preferences": ["Prefers concrete examples."],
+        },
+    )
+
+
+def _write_failed_candidate_map_run(workspace_root: Path) -> None:
+    run_dir = (
+        workspace_root
+        / "benchmark"
+        / "domains"
+        / "classical_supervised_ml_algorithms"
+        / "candidate_maps"
+        / "failed_map_run"
+    )
+    run_dir.mkdir(parents=True)
+    artifact_root = (
+        "benchmark/domains/classical_supervised_ml_algorithms/"
+        "candidate_maps/failed_map_run"
+    )
+    _write_json(
+        run_dir / "workflow_log.json",
+        {
+            "run_id": "failed_map_run",
+            "workflow_name": "Candidate Knowledge Map Authoring Workflow",
+            "status": "failed",
+            "benchmark_domain": "classical_supervised_ml_algorithms",
+            "graph_version": "v1",
+            "user_id": "synthetic_user_001",
+            "evidence_batch_size": 5,
+            "sampling_temperature": 0.7,
+            "error": "second batch failed",
+            "artifact_paths": {
+                "output_dir_uri": artifact_root,
+                "candidate_map_uri": f"{artifact_root}/candidate_map.json",
+                "consistency_warnings_uri": f"{artifact_root}/consistency_warnings.json",
+                "workflow_log_uri": f"{artifact_root}/workflow_log.json",
+                "state_outline_uri": f"{artifact_root}/intermediate/state_outline.json",
+                "ground_truth_evidence_uri": f"{artifact_root}/intermediate/ground_truth_evidence.json",
+                "outline_model_raw_output_uri": (
+                    f"{artifact_root}/agent_traces/knowledge_state_outline/model_raw_output.txt"
+                ),
+                "outline_parser_output_uri": (
+                    f"{artifact_root}/agent_traces/knowledge_state_outline/parser_output.json"
+                ),
+                "evidence_model_raw_output_uri": (
+                    f"{artifact_root}/agent_traces/ground_truth_evidence/batch_001/model_raw_output.txt"
+                ),
+                "evidence_parser_output_uri": (
+                    f"{artifact_root}/agent_traces/ground_truth_evidence/batch_001/parser_output.json"
+                ),
+                "evidence_batch_artifacts": [],
+            },
         },
     )
 

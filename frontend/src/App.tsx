@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { CandidateGraphWorkbench } from "./features/candidateGraph/CandidateGraphWorkbench";
+import { MapAuthoringWorkbench } from "./features/mapAuthoring/MapAuthoringWorkbench";
 import { UserProfileWorkbench } from "./features/userProfile/UserProfileWorkbench";
 
-type WorkbenchModule = "knowledge-graph" | "user-profile";
+type WorkbenchModule = "knowledge-graph" | "user-profile" | "user-map";
 
 export function App() {
   const [activeModule, setActiveModule] = useState<WorkbenchModule>("knowledge-graph");
@@ -42,6 +43,17 @@ export function App() {
               <small>Context draft, confirmation</small>
             </span>
           </button>
+          <button
+            type="button"
+            className={activeModule === "user-map" ? "module-nav-item active" : "module-nav-item"}
+            onClick={() => setActiveModule("user-map")}
+          >
+            <span className="module-nav-icon" aria-hidden="true">&#9638;</span>
+            <span>
+              <strong>User Map</strong>
+              <small>Generate, review, publish</small>
+            </span>
+          </button>
         </nav>
 
         <div className="sidebar-footer">
@@ -56,6 +68,9 @@ export function App() {
         </div>
         <div className={activeModule === "user-profile" ? "module-pane active" : "module-pane"}>
           <UserProfileWorkbench />
+        </div>
+        <div className={activeModule === "user-map" ? "module-pane active" : "module-pane"}>
+          <MapAuthoringWorkbench />
         </div>
       </div>
     </div>
