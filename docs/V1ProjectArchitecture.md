@@ -200,7 +200,7 @@ core
 - One confirmed `user_id` may produce multiple candidate-map runs for retry and debugging. One `(user_id, graph_version)` pair may also promote multiple independent ground-truth-map samples with distinct `map_id` values; episode manifests select the map sample they use.
 - Reviewed-map promotion allows multiple accepted samples for one `(user_id, graph_version)` pair as long as every published sample uses a new domain-unique `map_id`.
 - `map_manifest.json` binds `map_id`, `user_id`, `benchmark_domain`, `graph_version`, and `promoted_from_candidate_run`. Promotion revalidates graph coverage, one current state per node, evidence refs, mastery-sensitive simulator-support minimums, confirmed user-profile existence, and reviewed graph-version existence. It does not read or recompute edge-consistency warnings.
-- `consistency_warnings.json` is a generation-time review hint that stays in the originating candidate-map run only. Reviewed-map snapshots do not copy warnings, and Phase 5 runtime loaders do not read them.
+- `consistency_warnings.json` is a generation-time review hint that stays in the originating candidate-map run only. Reviewed-map snapshots do not copy warnings, and Phase 6 runtime loaders do not read them.
 - `user_id` identifies the confirmed synthetic-user profile basis; `map_id` identifies one promoted synthetic knowledge-map sample generated from that basis.
 - Keep `map_manifest.json` minimal in the initial slice: do not add timestamps, model configuration, or copied warning payloads. Candidate-map run artifacts retain debugging metadata.
 - Candidate-map generation has two agent steps. `Knowledge-State Outline Agent Step` drafts full-graph node-level `mastery_level`, `misconceptions`, and `unknowns` from confirmed `Profile Context` and reviewed nodes with rubrics; it does not receive reviewed edges. `Ground-Truth Evidence Authoring Agent Step` then drafts hidden evidence from that outline, confirmed `Profile Context`, and reviewed node rubrics; it may batch nodes internally.
@@ -218,7 +218,7 @@ core
 - `POST /api/authoring/map-candidates` also accepts optional request-level `sampling_temperature`, defaulting to `0.7`, for synthetic-map sampling. It applies to map generation only; graph authoring and profile-context authoring keep their existing model configuration. Record effective temperature in the map workflow log. Do not add seed support initially. Provider adapters must reject unsupported temperature requests explicitly rather than silently ignore them.
 - One map-generation run uses the same effective sampling temperature for its outline step and every evidence-authoring batch. Do not expose separate outline and evidence temperature controls initially.
 - Initial evidence batching is fail-fast without partial resume. Any failed batch marks the candidate-map run failed; traces remain for debugging and retry creates a new run id. Defer resume semantics until model-call cost justifies immutable-outline replay design.
-- Workflow-authored ground-truth evidence uses `simulator_only`. Every reviewed ground-truth node state must cite at least one `simulator_only` evidence record so Phase 6 simulation has an actionable basis.
+- Workflow-authored ground-truth evidence uses `simulator_only`. Every reviewed ground-truth node state must cite at least one `simulator_only` evidence record so Phase 5 simulation has an actionable basis.
 - Evidence authoring uses a mastery-sensitive minimum-count policy: L0-L1 states receive at least one `simulator_only` record, L2-L3 states receive at least two records, and L4-L5 states receive at least one record. Prompt guidance suggests suitable evidence kinds and capability/boundary coverage, but validation does not require mastery-specific kinds.
 - Ground-truth-evidence model output contains `node_id`, `evidence_kind`, and `signal` only. Workflow code assigns deterministic `ev_{run_id}_{node_id}_{ordinal}` ids and fixed `evidence_type = ground_truth_profile`, `visibility = simulator_only`, and `turn_id = null`. Promotion preserves these run-scoped evidence ids unchanged.
 - Prompt evidence authoring to avoid exact duplicate `(evidence_kind, signal)` pairs within one node. Validation rejects exact duplicates rather than counting them toward mastery-sensitive minimums. Do not add semantic-similarity merging.
@@ -287,6 +287,8 @@ core
 - simulator 可以看到 hidden reviewed map。
 - simulator 不把 mastery labels、hidden evidence ids、full state table 暴露给 tested agent。
 - simulator answer 进入 transcript 后成为 tested-agent-visible `Interaction Observation`。
+- simulator 可以在 formal episode manifest 存在前，通过 development-only preview flow 直接绑定 reviewed graph、reviewed map 和 optional confirmed profile context 来进行人工对话测试。
+- simulator preview 不是 benchmark run，也不产生 scoring report；它用于检查回答自然度、泄漏风险和 hidden-map 一致性。
 
 ### `agents/`
 
@@ -529,8 +531,8 @@ UI 边界：
 | M2 graph authoring | `authoring/`, `llm/`, `storage/` | 产出 candidate node/edge JSON lists |
 | M3 graph review promotion | `storage/`, `validation/`, optional review UI | reviewed graph 才能进入 runtime |
 | M4 maps | `authoring/`, `core/`, `validation/`, `storage/` | map coverage 和 evidence visibility 是重点 |
-| M5 episode contract | `core/episode.py`, `runtime/episode_loader.py`, `validation/` | manifest 绑定 graph/map/rules/scoring |
-| M6 simulator | `simulator/`, `llm/`, `runtime/visibility.py` | leakage guard 是关键风险 |
+| M5 simulator | `simulator/`, `llm/`, `storage/`, `validation/` | reviewed-map grounded preview 和 leakage guard 是关键风险 |
+| M6 episode contract | `core/episode.py`, `runtime/episode_loader.py`, `runtime/visibility.py`, `validation/` | manifest 绑定 graph/map/simulator/rules/scoring |
 | M7 baselines | `agents/`, `runtime/turn_loop.py` | fixed/random/simple LLM 共用协议 |
 | M8 scoring reports | `scoring/`, `reports/`, `storage/` | 不调用 LLM，不读取 persona 作主分数 |
 | M9 end-to-end v1 | `runtime/`, `agents/`, `simulator/`, `scoring/` | 第一份可解释 experiment report |

@@ -962,7 +962,7 @@ Reviewed-map promotion 不允许覆盖已有 `map_id`，也不提供 `overwrite=
 
 Promotion 重新校验 graph coverage、每个 node 最多一个 current state、evidence refs、mastery-sensitive simulator-support minimums、confirmed profile-context existence 与 reviewed graph-version existence。`Map Edge-Consistency Warnings` 只是 generation-time review hints；promotion 不读取、不校验、不重算，也不复制 warnings。
 
-`consistency_warnings.json` 只在 promotion 前保留在 originating candidate-map run，不复制进 reviewed map directory。成功 promotion 后，originating candidate-map run 会从 `candidate_maps/` 移除。Phase 5 runtime loader 也不读取 warnings。
+`consistency_warnings.json` 只在 promotion 前保留在 originating candidate-map run，不复制进 reviewed map directory。成功 promotion 后，originating candidate-map run 会从 `candidate_maps/` 移除。Phase 6 runtime loader 也不读取 warnings。
 
 Candidate-map run 不复制 confirmed profile-context 或 reviewed-graph payload。`workflow_log.json` 只记录 `user_id`、`benchmark_domain` 与 `graph_version` 引用。`intermediate/` 保存 `state_outline.json` 与 `ground_truth_evidence.json`；`agent_traces/` 按真实 agent steps 分层，evidence authoring trace 再按 batch 分层。
 

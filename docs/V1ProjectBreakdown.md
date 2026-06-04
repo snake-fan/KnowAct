@@ -20,9 +20,9 @@ The implementation should prioritize a narrow vertical slice first, but any smal
 | 1. Schema and validation spine | M1: core structured objects validate | JSON fixtures for graph, maps, evidence, manifests, and scoring config pass schema checks |
 | 2. Graph authoring workflow | M2: source-grounded candidate graph workflow runs | Workflow produces `candidate_nodes.json` and `candidate_edges.json` from authoritative source material |
 | 3. Authored graph review and promotion | M3: reviewed v1 graph exists | Reviewed `authored_nodes.json`, `authored_edges.json`, and `graph_manifest.json` are available |
-| 4. Ground-truth map authoring | M4: reviewed hidden maps exist | Each map covers every node in the episode graph and cites hidden evidence |
-| 5. Episode runtime contract | M5: evaluation episode manifests validate | Manifests bind graph, hidden map, profile context, turn budget, interaction rule, and scoring profile |
-| 6. User simulator | M6: simulator can answer bounded diagnostic turns | Simulator answers naturally without leaking mastery labels, hidden evidence ids, or full maps |
+| 4. Ground-truth map authoring | M4: reviewed hidden maps exist | Each map covers every node in its reviewed graph version and cites hidden evidence |
+| 5. User simulator | M5: simulator can answer reviewed-map-grounded diagnostic turns | Simulator answers naturally from a reviewed map without leaking mastery labels, hidden evidence ids, or full maps |
+| 6. Episode runtime contract | M6: evaluation episode manifests validate | Manifests bind graph, hidden map, simulator, profile context, turn budget, interaction rule, and scoring profile |
 | 7. Tested agent interface and baselines | M7: baseline agents complete episodes | Fixed-question, random-question, and simple LLM agents submit final reconstructed maps |
 | 8. Scoring and reports | M8: structured reports are reproducible | Reports include episode mastery distance, missing prediction rate, and unsupported inference rate |
 | 9. End-to-end v1 benchmark run | M9: first v1 experiment report | Reviewed episodes run across v1 baselines with interpretable results and failure notes |
@@ -249,7 +249,7 @@ Resolved initial workflow boundary:
 Milestone M4:
 
 - Candidate maps are generated over the reviewed `Authored Knowledge Graph`.
-- Each reviewed `Knowledge Map` covers every node in the episode graph.
+- Each reviewed `Knowledge Map` covers every node in its reviewed `Authored Knowledge Graph` version.
 - Each `User Knowledge State` has one or more hidden `Ground-Truth Evidence` records.
 - Phase 4 synthetic map authoring requires a confirmed `Profile Context`; the general runtime schema may still keep profile context optional for future manually imported or historical maps. Profile context is not part of primary scoring.
 - Generated `Profile Context` is reviewable and explicitly confirmed before it guides candidate-map generation.
@@ -305,39 +305,17 @@ Implementation note:
 - Authoring API boundary: profile-context candidates may be edited before confirmation; candidate maps may be inspected and either promoted unchanged or rejected, but not edited through a map `PUT` endpoint.
 - `POST /api/authoring/profile-context-candidates` accepts required `benchmark_domain` and `rough_description`, optional limited `domain_summary`, optional `run_id`, and request-level `client_provider`. `domain_summary` may be supplied inline in the initial slice but must not contain node or rubric details; a later domain manifest may replace this temporary input.
 
-## Phase 5: Episode Runtime Contract
+## Phase 5: User Simulator
 
-Goal: make each evaluation run reproducible and explicit.
+Goal: answer diagnostic questions naturally while staying faithful to a reviewed hidden map before formal experiment episodes are configured.
 
 Milestone M5:
 
-- Each `Evaluation Episode Manifest` binds the episode graph, hidden map, optional profile context, `max_turns`, interaction rule, and `squared_mastery_distance_v1`.
-- The manifest validator rejects custom scoring overrides.
-- Runtime loading enforces the visibility boundary: the tested agent sees the authored graph and visible interaction history, but not hidden map data or simulator-only evidence.
-- One `Interaction Turn` means one primary `Diagnostic Question` followed by one simulator answer.
-
-Recommended development fixture:
-
-- One small development episode can be used to test runtime wiring.
-- Formal v1 episodes must use reviewed graph and reviewed maps.
-
-Implementation note:
-
-- Structures to implement: `backend/knowact/runtime/episode_loader.py`, `runtime/visibility.py`, storage repositories for manifests/graphs/maps, and manifest validation tests.
-- Interfaces to open: stable read-only endpoints for `GET /episodes` and `GET /episodes/{episode_id}` once repositories exist; run-trigger endpoints should wait until simulator, agent, and scoring wiring can preserve the visibility boundary.
-- Development API boundary: runtime smoke endpoints may use development fixtures, but formal runtime paths must reject candidate graph/map artifacts.
-
-## Phase 6: User Simulator
-
-Goal: answer diagnostic questions naturally while staying faithful to the hidden map.
-
-Milestone M6:
-
-- The simulator is conditioned on hidden map state, hidden evidence, and optional profile context.
-- It answers only the primary diagnostic question for each turn.
+- The simulator can be launched against a reviewed `Knowledge Map`, its reviewed `Authored Knowledge Graph`, hidden evidence, and optional confirmed profile context without requiring an `Evaluation Episode Manifest`.
+- It answers only the primary diagnostic question for each turn-like exchange.
 - It can express grounded ambiguity: uncertainty, partial correctness, self-correction, not knowing, or misconceptions.
 - It does not reveal mastery labels, hidden evidence ids, or the full hidden map.
-- Simulator transcripts are recorded as visible `Interaction Observations` for the tested agent.
+- Simulator preview transcripts are recorded as visible `Interaction Observations` for benchmark-author inspection, but they are not formal evaluation episodes.
 
 Validation focus:
 
@@ -345,11 +323,38 @@ Validation focus:
 - Consistency checks against hidden mastery levels and evidence.
 - Regression fixtures for ambiguous but grounded answers.
 
+Recommended development fixture:
+
+- One reviewed development graph/map pair can be used to test simulator behavior interactively.
+- Formal simulator previews must use reviewed graph and reviewed maps, not candidate artifacts.
+
 Implementation note:
 
 - Structures to implement: `backend/knowact/simulator/context_builder.py`, `prompting.py`, `policy.py`, `service.py`, and `checks.py`, with LLM calls behind `backend/knowact/llm/`.
-- Interfaces to open: no standalone public simulator oracle endpoint for formal evaluation. A development-only endpoint may be added later for single-turn simulator checks after leakage guards exist.
-- Stable API exposure should happen through episode run endpoints, where simulator answers become visible `Interaction Observations` rather than hidden state dumps.
+- Interfaces to open: a development-only conversational simulator preview endpoint may be added after leakage guards exist. It should select reviewed artifacts by `benchmark_domain` and `map_id`, accept one primary diagnostic question per call or session turn, and return only the simulator answer plus visible observation metadata.
+- Stable formal API exposure should still happen later through episode run endpoints, where simulator answers become visible `Interaction Observations` inside an evaluation run rather than hidden state dumps.
+
+## Phase 6: Episode Runtime Contract
+
+Goal: make each evaluation run reproducible and explicit after simulator behavior has been exercised against reviewed maps.
+
+Milestone M6:
+
+- Each `Evaluation Episode Manifest` binds the episode graph, hidden map, simulator configuration, optional profile context, `max_turns`, interaction rule, and `squared_mastery_distance_v1`.
+- The manifest validator rejects custom scoring overrides.
+- Runtime loading enforces the visibility boundary: the simulator sees hidden map data and simulator-only evidence, while the tested agent sees the authored graph and visible interaction history only.
+- One `Interaction Turn` means one primary `Diagnostic Question` followed by one simulator answer.
+
+Recommended development fixture:
+
+- One small development episode can be used to test manifest loading, artifact binding, and visibility-context construction.
+- Formal v1 episodes must use reviewed graph and reviewed maps.
+
+Implementation note:
+
+- Structures to implement: `backend/knowact/runtime/episode_loader.py`, `runtime/visibility.py`, storage repositories for manifests/graphs/maps, and manifest validation tests.
+- Interfaces to open: stable read-only endpoints for `GET /episodes` and `GET /episodes/{episode_id}` once repositories exist; run-trigger endpoints should wait until simulator, agent, and scoring wiring can preserve the visibility boundary.
+- Development API boundary: episode-loading or visibility smoke endpoints may use development fixtures, but formal runtime paths must reject candidate graph/map artifacts.
 
 ## Phase 7: Tested Agent Interface and Baselines
 
@@ -483,13 +488,13 @@ M0 Domain decisions
     -> M2 Graph authoring workflow
       -> M3 Reviewed authored graph
         -> M4 Reviewed maps
-          -> M5 Episode manifests and runtime contract
-            -> M6 User simulator
-            -> M7 Tested agent interface and baselines
-              -> M8 Scoring and reports
-                -> M9 End-to-end v1 benchmark report
-                  -> M10 Research workbench expansion
-                  -> M11 Post-v1 research expansion
+          -> M5 User simulator
+            -> M6 Episode manifests and runtime contract
+              -> M7 Tested agent interface and baselines
+                -> M8 Scoring and reports
+                  -> M9 End-to-end v1 benchmark report
+                    -> M10 Research workbench expansion
+                    -> M11 Post-v1 research expansion
 ```
 
 ## Review Points
