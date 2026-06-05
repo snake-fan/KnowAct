@@ -15,7 +15,7 @@ It is not a state-query API, a scoring component, or a tested-agent question-sel
 - The simulator answers one **Diagnostic Question** per turn, including one **Integrated Diagnostic Question** when the question is genuinely a single multi-node probe.
 - **Question Grounding** is a replaceable contract over the visible graph and dialogue context; it does not use hidden map state or select questions for the tested agent.
 - Hidden map state and evidence enter only after grounding, and only for directly grounded nodes.
-- Answer content is first represented as a **Simulator Answer Intent**, then rendered through a de-identified **Simulator Expression Context**.
+- **Answer Policy** first decides answer content and produces a **Simulator Answer Intent**. The **Expression Context Builder** then converts that intent into a de-identified **Simulator Expression Context** before generation.
 - **Profile Context** can only shape expression style and must preserve the content determined by the intent.
 - LLM generation and LLM-backed validation are allowed, but both must sit behind interfaces and respect de-identified context boundaries.
 - Unsafe or unvalidated answers fail closed into a **Simulator Safe Fallback**.
@@ -39,13 +39,11 @@ Simulator Context Builder
 Answer Policy
         |
         v
-Simulator Answer Intent
+Expression Context Builder
         |
         v
-Simulator Expression Context
-        |
-        v
-LLM Generator / Rule-Based Generator
+Answer Generator
+  (LLM-backed or rule-based)
         |
         v
 Content-Preserving Style Pass
@@ -57,7 +55,33 @@ Simulator Answer Validation
 Simulator Answer
 ```
 
-The implementation may collapse or split these steps, but it should preserve their information boundaries.
+This diagram shows workflow components only. Intermediate artifacts such as **Simulator Answer Intent** and **Simulator Expression Context** are module outputs, not separate workflow steps.
+
+The implementation may collapse or split these components, but it should preserve their information boundaries.
+
+Component contracts:
+
+- **Question Grounding**
+  - Input: **Diagnostic Question**, visible **Authored Knowledge Graph**, and **Visible Dialogue Context**.
+  - Output: grounding result with grounded node ids, integrated-question flag, multiple-question flag, label-seeking flag, and no-grounding status.
+- **Simulator Context Builder**
+  - Input: grounding result, visible graph data for grounded nodes, hidden reviewed map data for directly grounded nodes, grounded **Ground-Truth Evidence**, and needed visible dialogue.
+  - Output: simulator-only context for the grounded turn.
+- **Answer Policy**
+  - Input: simulator-only context, grounding result, and the current diagnostic question.
+  - Output: **Simulator Answer Intent**, the structured content stance for the answer.
+- **Expression Context Builder**
+  - Input: **Simulator Answer Intent**, de-identified evidence signals derived from grounded evidence, and visible dialogue needed for continuity.
+  - Output: de-identified **Simulator Expression Context** for generation and validation.
+- **Answer Generator**
+  - Input: **Simulator Expression Context**.
+  - Output: candidate natural-language answer.
+- **Content-Preserving Style Pass**
+  - Input: candidate answer, **Simulator Answer Intent** or expression context, and optional confirmed **Profile Context** for style only.
+  - Output: styled candidate answer with the same content.
+- **Simulator Answer Validation**
+  - Input: styled candidate answer, de-identified expression context, intent-coverage expectations, grounding metadata, and leakage rules.
+  - Output: pass/fail validation result with blocking reasons and fallback guidance.
 
 ## Question Grounding
 
@@ -107,6 +131,16 @@ No-grounding answers and multiple-question clarifications are still visible simu
 
 The answer policy reads grounded hidden state and evidence, then derives one **Simulator Answer Intent**.
 
+Input:
+
+- simulator-only context for the grounded turn
+- grounding result and diagnostic-question flags
+- current diagnostic question text
+
+Output:
+
+- one **Simulator Answer Intent**
+
 The simulator assumes reviewed map state and grounded evidence have already passed upstream map-authoring validation and benchmark-author review. It should not reconcile contradictions between a reviewed **User Knowledge State** and its **Ground-Truth Evidence** at answer time; that is a map-authoring quality issue, not a simulator policy responsibility.
 
 The intent is the knowledge-content stance for this answer. It may represent:
@@ -125,9 +159,19 @@ The intent may retain grounded evidence refs internally for audit and debug trac
 
 For an **Integrated Diagnostic Question**, the policy should produce one integrated intent. It may preserve per-node stance internally, but the answer should not merely concatenate separate per-node answers.
 
-## Expression Context
+## Expression Context Builder
 
-The generator should receive a **Simulator Expression Context**, not the raw **Reviewed Map**.
+The expression context builder converts the **Simulator Answer Intent** into a generator-safe **Simulator Expression Context**. The generator should receive this context, not the raw **Reviewed Map**.
+
+Input:
+
+- **Simulator Answer Intent**
+- grounded evidence signals after removing hidden evidence ids
+- visible dialogue needed for natural continuity
+
+Output:
+
+- one de-identified **Simulator Expression Context**
 
 The expression context may include:
 
@@ -149,6 +193,8 @@ Evidence refs used by policy may appear in hidden debug trace, but the generator
 The LLM generator is the naturalness-oriented path for simulator preview. A rule-based generator is useful as a soft fallback and for regression fixtures.
 
 This is a soft implementation preference, not a permanent architectural ban. Any generator must respect the same **Simulator Expression Context** and validation contract.
+
+LLM-backed answer prompt/message construction belongs inside the answer-generation component. Do not introduce a standalone simulator prompt module in the initial Phase 5 design; prompt helpers that are only used by answer generation should live with the generator, while validator-specific prompt helpers should live with answer validation.
 
 ## Profile Context
 

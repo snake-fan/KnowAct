@@ -280,14 +280,13 @@ core
 
 - `grounding.py`: Question Grounding over the visible `Authored Knowledge Graph` and `Visible Dialogue Context` only; produces grounded node ids, integrated-question flags, multiple-question flags, label-seeking flags, and no-grounding status without reading hidden map or hidden evidence.
 - `context_builder.py`: after grounding, constructs simulator-only context for directly grounded nodes, including grounded rubrics, hidden `User Knowledge States`, grounded `Ground-Truth Evidence`, and visible dialogue needed for follow-up wording. It must not pull hidden neighboring-node state merely because of graph edges.
-- `policy.py`: Answer Policy; derives one `Simulator Answer Intent` from grounded hidden state and evidence, including grounded ambiguity, ability boundaries, misconception stance, no-grounding handling, multi-question clarification, and hidden-label request behavior.
-- `expression.py`: builds the de-identified `Simulator Expression Context` from the answer intent, de-identified evidence signals, and visible dialogue. It removes hidden evidence ids, mastery labels, full map data, and state-table language before generation.
-- `prompting.py`: simulator prompt/message construction for LLM-backed generation and validation. Prompts consume the `Simulator Expression Context`, not raw reviewed maps.
-- `generators.py`: LLM and rule-based generator interfaces and implementations. Both generator paths must respect the same expression-context and validation contracts.
+- `policy.py`: Answer Policy component. It consumes the grounded simulator-only context, grounding result, and current diagnostic question, then outputs one `Simulator Answer Intent` with the structured content stance for the answer.
+- `expression.py`: Expression Context Builder component. It consumes the `Simulator Answer Intent`, de-identified evidence signals, and visible dialogue, then outputs one generator-safe `Simulator Expression Context` with hidden evidence ids, mastery labels, full map data, and state-table language removed.
+- `generators.py`: Answer Generator interfaces and LLM/rule-based implementations. Generators consume the `Simulator Expression Context` and output candidate natural-language answers; LLM-backed answer prompt/message helpers live here and must consume the expression context, not raw reviewed maps.
 - `style.py`: optional content-preserving style pass using confirmed `Profile Context` for tone, brevity, and wording only. It must not introduce profile-derived facts, examples, prior-experience claims, or ability claims unless those are already present as grounded evidence.
-- `checks.py`: `Simulator Answer Validation`, including leakage checks, intent-coverage checks, consistency checks, and fallback guidance. Validator inputs should be de-identified and should not become scoring signals.
+- `checks.py`: `Simulator Answer Validation`, including leakage checks, intent-coverage checks, consistency checks, fallback guidance, and validator-specific prompt/message helpers when using an LLM-backed validator. Validator inputs should be de-identified and should not become scoring signals.
 - `fallbacks.py`: natural non-leaking safe fallback construction for no grounding, multiple independent questions, hidden-label requests, generator failure, validator failure, and system failure.
-- `service.py`: simulator turn orchestration; wires grounding, context building, policy, expression context, generation, style pass, validation, fallback, and hidden debug trace production.
+- `service.py`: simulator turn orchestration; wires grounding, context building, answer policy, expression-context building, generation, style pass, validation, fallback, and hidden debug trace production.
 - `preview.py`: development-only stateless preview DTO/API boundary. It selects reviewed artifacts by identity and exposes only visible answer data, coarse preview metadata, non-leaking warnings, and optional debug trace handles.
 
 边界：
