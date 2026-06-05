@@ -33,6 +33,7 @@
 - `backend/`：FastAPI 后端，用于 profile generation、user simulator、agent loop、evaluation API 和实验任务编排。
 - `backend/knowact/api/`：FastAPI routers；当前包含 `/api/authoring` surface，用于从本地教材 PDF 运行真实 graph authoring workflow、生成 reviewable candidate graph artifacts、通过显式 review confirmation 将校验后的 candidate snapshot promote 为 reviewed authored graph version，并从 reviewed graph 与 confirmed Profile Context snapshot 生成可检查的 single-batch Candidate Knowledge Map。
 - `backend/knowact/core/` 和 `backend/knowact/validation/`：当前 V1 已开始实现的 schema 与 validation spine。
+- `backend/knowact/simulator/`：Phase 5 user simulator contracts；当前包含 development-only preview DTO，用于建立 tested-agent-visible request/response 边界。
 - `benchmark/fixtures/`：小型 development fixtures，可用于跑通 schema、validation 和 runtime wiring；不要把它们误认为正式 v1 benchmark graph。
 - `test/`：当前 Python `unittest` 测试入口。
 - `docs/`：研究设计、数据 schema、知识地图、评估指标和实验记录。
