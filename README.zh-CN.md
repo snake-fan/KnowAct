@@ -280,9 +280,10 @@ KnowAct 目前处于设计和原型阶段。
 
 V1 实现已经从 schema 与 validation spine 开始：
 
-- `backend/knowact/core/`：知识图谱、evidence record、知识地图、episode manifest 和 scoring report 的 Pydantic schema。
+- `backend/knowact/core/`：知识图谱、evidence record、知识地图、visible interaction contract、episode manifest 和 scoring report 的 Pydantic schema。
 - `backend/knowact/validation/`：用于 graph 引用、map coverage/evidence support 和 episode manifest 约束的跨对象 validator。
 - `backend/knowact/authoring/`：Phase 2 graph authoring workflow spine，包含 node extraction、node rubric authoring、edge proposal、candidate file export 边界，以及分离的 `templates/` 和 `parsers/` 模块来管理 agent prompts 与 raw model outputs。
+- `backend/knowact/simulator/`：Phase 5 user simulator contract，当前从 development-only preview DTO 开始，保持 request 与 response 字段只暴露 tested-agent-visible 信息。
 - `backend/knowact/llm/`：model-client interface，以及基于 OpenAI 和 DeepSeek SDK 的 clients，用于 text-based authoring steps。
 - `backend/knowact/storage/`：local artifact、material path 与 reviewed graph/map promotion helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
 - `backend/knowact/api/` 与 `backend/main.py`：FastAPI 入口，以及可从本地教材 PDF 运行真实 graph authoring workflow 的 authoring API。

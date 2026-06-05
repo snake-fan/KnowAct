@@ -280,9 +280,10 @@ KnowAct is currently in the design and prototyping stage.
 
 The V1 implementation has started with the schema and validation spine:
 
-- `backend/knowact/core/`: Pydantic schemas for knowledge graphs, evidence records, knowledge maps, episode manifests, and scoring reports.
+- `backend/knowact/core/`: Pydantic schemas for knowledge graphs, evidence records, knowledge maps, visible interaction contracts, episode manifests, and scoring reports.
 - `backend/knowact/validation/`: cross-object validators for graph references, map coverage/evidence support, and episode manifest constraints.
 - `backend/knowact/authoring/`: the Phase 2 graph authoring workflow spine, with node extraction, node rubric authoring, edge proposal, candidate file export boundaries, and separate `templates/` and `parsers/` modules for agent prompts and raw model outputs.
+- `backend/knowact/simulator/`: Phase 5 user simulator contracts, starting with development-only preview DTOs that keep request and response fields tested-agent-visible.
 - `backend/knowact/llm/`: a model-client interface plus OpenAI and DeepSeek SDK-backed clients for text-based authoring steps.
 - `backend/knowact/storage/`: local artifact, material path, and reviewed graph/map promotion helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
 - `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
