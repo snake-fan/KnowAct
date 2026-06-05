@@ -168,6 +168,14 @@ _Avoid_: multi-question batch, compound questionnaire, free chat segment
 A question asked by the **Tested Agent** to gather evidence about a user's **User Knowledge State**.
 _Avoid_: teaching prompt, explanation, recommendation
 
+**Integrated Diagnostic Question**:
+A single **Diagnostic Question** that probes multiple **Knowledge Nodes** through one integrated comparison, explanation, or application.
+_Avoid_: multi-question batch, compound questionnaire, question list
+
+**Question Grounding**:
+The interpretation of a **Diagnostic Question** into the **Knowledge Nodes** it is intended to probe.
+_Avoid_: question selection, question router, agent policy
+
 **Structured Map Comparison**:
 An automatic comparison between a **Reviewed Map** and a **Reconstructed Knowledge Map** over quantifiable user-state fields.
 _Avoid_: LLM judge, subjective profile review, evaluator agent
@@ -231,6 +239,30 @@ _Avoid_: evaluator, data-table oracle, tested agent
 **Simulator Answer Ambiguity**:
 Natural uncertainty, partial correctness, hesitation, or misconception in a **User Simulator** answer.
 _Avoid_: random behavior, evasive answer, state drift
+
+**Simulator Answer Intent**:
+The grounded knowledge-content stance that a **User Simulator** should express in one answer.
+_Avoid_: final answer text, style pass, freeform hidden rationale
+
+**Simulator Expression Context**:
+The de-identified material used to render a **Simulator Answer Intent** as natural language.
+_Avoid_: raw reviewed map, mastery labels, hidden evidence ids
+
+**Visible Dialogue Context**:
+The prior transcript and **Interaction Observations** already visible to the **Tested Agent**.
+_Avoid_: hidden evidence, simulator-only memory, updated user state
+
+**Simulator Debug Trace**:
+A hidden debug artifact recording simulator-internal grounding, intent, validation, and fallback decisions.
+_Avoid_: visible transcript, interaction observation, scoring input
+
+**Simulator Answer Validation**:
+The check that a generated simulator answer is safe to expose and consistent with its **Simulator Answer Intent**.
+_Avoid_: scorer, benchmark evaluation, primary metric
+
+**Simulator Safe Fallback**:
+A natural non-leaking answer used when a simulator answer cannot be safely exposed.
+_Avoid_: leaked answer, validation error dump, hidden-state explanation
 
 **Visibility Boundary**:
 The boundary between benchmark data visible to the **Tested Agent** and benchmark reference data hidden from it.
@@ -508,8 +540,35 @@ _Avoid_: ground-truth edge, authored edge
 - The v1 **Turn Budget** is not derived from the number of **Knowledge Nodes** in the **Episode Knowledge Graph**.
 - A v1 **Interaction Turn** contains one primary **Diagnostic Question**.
 - The user simulator answers only the primary **Diagnostic Question** in an **Interaction Turn**.
+- A v1 **Interaction Turn** may contain one **Integrated Diagnostic Question**.
+- A v1 **Interaction Turn** must not contain multiple independent **Diagnostic Questions**.
+- A **Diagnostic Question** may have **Question Grounding** to one or more **Knowledge Nodes**.
+- **Question Grounding** does not select the **Diagnostic Question** for the **Tested Agent**.
+- **Question Grounding** does not add neighboring **Knowledge Nodes** merely because of **Knowledge Edges**.
+- **Question Grounding** defines a semantic interpretation contract, not a required implementation mechanism.
+- **Question Grounding** must not use hidden **Reviewed Map** state or hidden **Ground-Truth Evidence**.
+- When a **Diagnostic Question** has no **Question Grounding**, the **User Simulator** should give a natural clarification or non-answer without using hidden map content.
 - The **User Simulator** uses hidden map and evidence to generate natural answers, not structured benchmark labels.
+- The **User Simulator** bases answer content on the grounded **User Knowledge States** and their **Ground-Truth Evidence**.
 - The **User Simulator** must not directly reveal mastery labels, hidden evidence ids, or the full **Reviewed Map**.
+- **Profile Context** may shape simulator expression style but must not replace grounded **User Knowledge State** as the answer-content basis.
+- Simulator expression styling from **Profile Context** must preserve the answer content determined by the **Simulator Answer Intent**.
+- A **Simulator Answer Intent** is derived from grounded **User Knowledge States** and **Ground-Truth Evidence** before natural-language answer generation.
+- An **Integrated Diagnostic Question** should produce one integrated **Simulator Answer Intent**, not merely concatenated per-node answers.
+- A **Simulator Answer Intent** may include grounded **Simulator Answer Ambiguity**.
+- A **Simulator Expression Context** may include a **Simulator Answer Intent** and de-identified evidence signals.
+- A **Simulator Expression Context** must not include raw **Reviewed Map** content, mastery labels, or hidden evidence ids.
+- The **User Simulator** may use **Visible Dialogue Context** to resolve follow-up wording and keep conversational continuity.
+- **Visible Dialogue Context** must not update the **Static User Knowledge State**.
+- A **Simulator Debug Trace** must remain separate from visible transcript data.
+- A **Simulator Debug Trace** must not be visible to the **Tested Agent** or used as primary scoring input.
+- A **Simulator Answer Intent** may be retained in a **Simulator Debug Trace** but must not become visible transcript data or primary scoring input.
+- **Simulator Answer Validation** checks both **Visibility Boundary** safety and **Simulator Answer Intent** coverage.
+- **Visibility Boundary** failures are blocking **Simulator Answer Validation** failures.
+- Weak **Simulator Answer Intent** coverage is a simulator quality issue rather than a primary scoring signal.
+- When asked for hidden benchmark labels, the **User Simulator** may provide a natural self-report consistent with the **Simulator Answer Intent** but must not reveal the labels.
+- A **User Simulator** answer that violates the **Visibility Boundary** must not become visible to the **Tested Agent**.
+- A **Simulator Safe Fallback** is used when answer generation cannot safely produce a visible answer.
 - **Simulator Answer Ambiguity** is allowed when it is consistent with the hidden map and evidence.
 - **Simulator Answer Ambiguity** must not change the user's hidden mastery state or evade all diagnosis.
 - A **Missing Prediction** receives the maximum penalty defined by the **Mastery Distance Function**.
@@ -652,6 +711,22 @@ _Avoid_: ground-truth edge, authored edge
 - "enough knowledge nodes" is vague; resolved: the first v1 graph targets 30-50 **Knowledge Nodes**.
 - "authoritative source" can remain underspecified; resolved: v1 starts from *An Introduction to Statistical Learning with Applications in Python*.
 - "one turn" can hide multiple questions; resolved: v1 **Interaction Turn** allows one primary **Diagnostic Question**.
+- "multi-node question" can mean either one **Integrated Diagnostic Question** or a batch of independent questions; resolved: one integrated question is allowed, while multiple independent questions in one turn are disallowed.
+- "Question Router" can sound like tested-agent question selection; resolved: **Question Grounding** only interprets a received **Diagnostic Question** against **Knowledge Nodes**.
+- "Question Grounding" can sound like a required LLM classifier; resolved: it names the simulator contract, not a fixed implementation mechanism.
+- "Grounding with hidden state" can mix question interpretation with user-state simulation; resolved: **Question Grounding** uses visible graph context, not hidden **Reviewed Map** state or hidden **Ground-Truth Evidence**.
+- "Context Builder" can sound like graph-neighbor expansion; resolved: simulator context uses directly grounded nodes, not hidden state from merely adjacent **Knowledge Nodes**.
+- "Unmatched question" can invite global fallback over the hidden map; resolved: no-grounding answers should ask for clarification or decline naturally without hidden map content.
+- "Profile Context" in simulator generation can blur style with knowledge content; resolved: answer content comes from grounded **User Knowledge States** and **Ground-Truth Evidence**, while profile context may shape expression style.
+- "Style pass" can accidentally add profile-derived facts; resolved: simulator expression styling must preserve **Simulator Answer Intent** content.
+- "Answer Policy" can sound like freeform answer generation; resolved: it first derives a **Simulator Answer Intent** before natural-language wording.
+- "Integrated answer" can sound like concatenating per-node answers; resolved: an **Integrated Diagnostic Question** should produce one integrated **Simulator Answer Intent**.
+- "Generator context" can accidentally include raw hidden state; resolved: natural-language generation uses a **Simulator Expression Context** without raw maps, mastery labels, or hidden evidence ids.
+- "Dialogue history" can sound like hidden simulator memory; resolved: **Visible Dialogue Context** is prior transcript visible to the **Tested Agent** and cannot update the hidden user state.
+- "Simulator trace" can be confused with visible conversation evidence; resolved: **Simulator Debug Trace** is hidden debug data and separate from visible transcript data.
+- "Answer validation" can sound like scoring; resolved: **Simulator Answer Validation** checks simulator safety and intent coverage, not benchmark performance.
+- "Asking for mastery level" can bypass diagnosis; resolved: the **User Simulator** may answer with natural self-report but must not reveal hidden benchmark labels.
+- "Post Validator" can sound like an advisory lint; resolved: visibility-boundary failures block exposure and use a **Simulator Safe Fallback** if generation cannot be made safe.
 - "user simulator" can be mistaken for a state oracle; resolved: v1 **User Simulator** produces natural answers without exposing hidden labels or evidence ids.
 - "ambiguous simulator answer" can mean random inconsistency; resolved: v1 allows natural ambiguity only when grounded in hidden map and evidence.
 - "scored node set" can imply an extra scoring configuration; resolved: v1 scores all **Knowledge Nodes** in the **Episode Knowledge Graph**.

@@ -84,6 +84,7 @@ V1 starts with a single benchmark domain, `classical_supervised_ml_algorithms`, 
 3. **User Simulation**
 
    An LLM-based user simulator is conditioned on the hidden knowledge map and evidence, then answers diagnostic questions naturally without revealing mastery labels, hidden evidence ids, or the full map. It may be uncertain, partially correct, or reveal misconceptions, but its answers should remain consistent with the hidden map and evidence.
+   See `docs/UserSimulator.md` for the Phase 5 simulator workflow, grounding, validation, fallback, and preview boundaries.
 
 4. **Agent Interaction**
 

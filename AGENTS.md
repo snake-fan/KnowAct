@@ -10,6 +10,7 @@
 - 主要文档：
   - `README.md`：项目说明。
   - `docs/KnowledgeGraph.md`：知识图谱、知识地图、概念关系和画像结构设计记录。
+  - `docs/UserSimulator.md`：V1 user simulator workflow、question grounding、answer validation、fallback 和 preview 边界设计记录。
   - `docs/V1ProjectArchitecture.md`：V1 项目架构、模块边界和推荐目录布局；开发前必须阅读。
   - `docs/V1ProjectBreakdown.md`：V1 阶段拆解、里程碑和实现顺序；开发前必须阅读。
   - `AGENTS.md`：面向 AI agents 的协作约定。
@@ -130,6 +131,7 @@ This repo uses a single-context domain documentation layout. See `docs/agents/do
 ## Documentation Notes
 
 - `docs/KnowledgeGraph.md` 应用于沉淀知识地图、概念关系、用户知识状态和画像重建设计。
+- `docs/UserSimulator.md` 应用于沉淀 V1 user simulator、question grounding、answer intent、validation、fallback 和 preview 边界设计。
 - `docs/V1ProjectArchitecture.md` 是 V1 源码结构、模块边界、runtime 闭环和 visibility boundary 的主要依据。
 - `docs/V1ProjectBreakdown.md` 是 V1 里程碑、开发顺序和窄切片优先级的主要依据。
 - README 应保持面向新读者：项目是什么、研究问题是什么、如何运行、如何贡献。

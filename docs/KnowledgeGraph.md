@@ -764,7 +764,7 @@ Authored Knowledge Graph
 
 因此，map generation workflow 也属于 authoring pipeline，不属于 evaluation runtime。
 
-Persona、background、preferences 和 task goal 属于 `Profile Context`。它们可以用于生成更一致的 `Candidate Knowledge Map`，也可以作为 `background_fact` evidence 的来源，并影响 simulator 的表达方式、熟悉例子和自述内容。它们必须与 reviewed map 保持一致，但不进入 v1 的 `episode_mastery_distance` 主评分。
+Persona、background、preferences 和 task goal 属于 `Profile Context`。它们可以用于生成更一致的 `Candidate Knowledge Map`，也可以作为 `background_fact` evidence 的来源。在 simulator runtime 中，`Profile Context` 只用于 content-preserving 的表达风格润色；回答内容应先由 grounded `User Knowledge State`、`Ground-Truth Evidence` 和 `Simulator Answer Intent` 决定，不能在润色阶段新增 profile-derived facts、例子、自述经历或能力判断。它们必须与 reviewed map 保持一致，但不进入 v1 的 `episode_mastery_distance` 主评分。
 
 `Profile Context` 使用结构化 JSON artifact，而不是只保存一段自由文本。它包含 `user_id`、`benchmark_domain`、可读的 `summary`、`background`、`prior_experience`、`goals` 和 `preferences`。它不保存逐节点 mastery 值；逐节点知识状态属于 `Knowledge Map`。
 
@@ -1166,6 +1166,8 @@ Profile Context
 ↛ episode_mastery_distance
 ```
 
+Simulator runtime 对 `Profile Context` 的使用边界见 `docs/UserSimulator.md`。
+
 #### 不进入 Knowledge Edge v1 的字段
 
 以下内容暂不进入 `Knowledge Edge` v1 schema：
@@ -1441,7 +1443,7 @@ one tested-agent diagnostic question
 
 每轮只允许一个主要 `Diagnostic Question`。被测 agent 可以用一句很短的上下文铺垫问题，但不能在同一轮打包多个独立问题；user simulator 也只回答该轮的主要诊断问题。这样 `max_turns` 才能稳定表示诊断机会数量。
 
-`User Simulator` 应使用 hidden reviewed map、`simulator_only` evidence、当前 `Diagnostic Question` 和对话历史来生成自然语言回答。它不是状态查询接口，不应主动暴露：
+`User Simulator` 应使用当前 `Diagnostic Question` 的 grounding、grounded hidden reviewed map state、grounded `simulator_only` evidence 和 visible dialogue context 来生成自然语言回答。它不是状态查询接口，不应主动暴露：
 
 ``` text
 完整 userstate table

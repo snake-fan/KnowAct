@@ -309,10 +309,13 @@ Implementation note:
 
 Goal: answer diagnostic questions naturally while staying faithful to a reviewed hidden map before formal experiment episodes are configured.
 
+Design reference: `docs/UserSimulator.md`.
+
 Milestone M5:
 
 - The simulator can be launched against a reviewed `Knowledge Map`, its reviewed `Authored Knowledge Graph`, hidden evidence, and optional confirmed profile context without requiring an `Evaluation Episode Manifest`.
 - It answers only the primary diagnostic question for each turn-like exchange.
+- Clarification or non-answer responses for no-grounding questions and multiple-question violations still count as visible simulator answers.
 - It can express grounded ambiguity: uncertainty, partial correctness, self-correction, not knowing, or misconceptions.
 - It does not reveal mastery labels, hidden evidence ids, or the full hidden map.
 - Simulator preview transcripts are recorded as visible `Interaction Observations` for benchmark-author inspection, but they are not formal evaluation episodes.
@@ -331,7 +334,7 @@ Recommended development fixture:
 Implementation note:
 
 - Structures to implement: `backend/knowact/simulator/context_builder.py`, `prompting.py`, `policy.py`, `service.py`, and `checks.py`, with LLM calls behind `backend/knowact/llm/`.
-- Interfaces to open: a development-only conversational simulator preview endpoint may be added after leakage guards exist. It should select reviewed artifacts by `benchmark_domain` and `map_id`, accept one primary diagnostic question per call or session turn, and return only the simulator answer plus visible observation metadata.
+- Interfaces to open: a development-only stateless simulator preview endpoint may be added after leakage guards exist. It should select reviewed artifacts by `benchmark_domain` and `map_id`, derive `graph_version` and `user_id` from the reviewed map manifest, load confirmed Profile Context when available for content-preserving style only, continue with a non-leaking preview configuration warning if that style context is missing, reject inline profile-context overrides, accept one primary diagnostic question plus optional request-carried visible dialogue context per call, and return only the simulator answer plus preview observation metadata. Formal tested-agent-visible observation metadata should not include preview configuration warnings. If debug tracing is enabled, the response should include only a trace reference or availability flag, not the full simulator debug trace.
 - Stable formal API exposure should still happen later through episode run endpoints, where simulator answers become visible `Interaction Observations` inside an evaluation run rather than hidden state dumps.
 
 ## Phase 6: Episode Runtime Contract
