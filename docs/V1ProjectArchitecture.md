@@ -274,13 +274,21 @@ core
 
 职责：根据 hidden map 和 hidden evidence 生成自然但受约束的 simulator answer。
 
+设计引用：`docs/UserSimulator.md` 定义 Phase 5 的 simulator workflow 和信息边界。该 workflow 是行为契约；实现可以合并或拆分步骤，但模块边界必须保留同样的可见性约束。
+
 建议模块：
 
-- `context_builder.py`: 构造 simulator-only context。
-- `prompting.py`: simulator prompt。
-- `policy.py`: leakage guard 和 grounded ambiguity policy。
-- `service.py`: simulator turn service。
-- `checks.py`: answer leakage and consistency checks。
+- `grounding.py`: Question Grounding over the visible `Authored Knowledge Graph` and `Visible Dialogue Context` only; produces grounded node ids, integrated-question flags, multiple-question flags, label-seeking flags, and no-grounding status without reading hidden map or hidden evidence.
+- `context_builder.py`: after grounding, constructs simulator-only context for directly grounded nodes, including grounded rubrics, hidden `User Knowledge States`, grounded `Ground-Truth Evidence`, and visible dialogue needed for follow-up wording. It must not pull hidden neighboring-node state merely because of graph edges.
+- `policy.py`: Answer Policy; derives one `Simulator Answer Intent` from grounded hidden state and evidence, including grounded ambiguity, ability boundaries, misconception stance, no-grounding handling, multi-question clarification, and hidden-label request behavior.
+- `expression.py`: builds the de-identified `Simulator Expression Context` from the answer intent, de-identified evidence signals, and visible dialogue. It removes hidden evidence ids, mastery labels, full map data, and state-table language before generation.
+- `prompting.py`: simulator prompt/message construction for LLM-backed generation and validation. Prompts consume the `Simulator Expression Context`, not raw reviewed maps.
+- `generators.py`: LLM and rule-based generator interfaces and implementations. Both generator paths must respect the same expression-context and validation contracts.
+- `style.py`: optional content-preserving style pass using confirmed `Profile Context` for tone, brevity, and wording only. It must not introduce profile-derived facts, examples, prior-experience claims, or ability claims unless those are already present as grounded evidence.
+- `checks.py`: `Simulator Answer Validation`, including leakage checks, intent-coverage checks, consistency checks, and fallback guidance. Validator inputs should be de-identified and should not become scoring signals.
+- `fallbacks.py`: natural non-leaking safe fallback construction for no grounding, multiple independent questions, hidden-label requests, generator failure, validator failure, and system failure.
+- `service.py`: simulator turn orchestration; wires grounding, context building, policy, expression context, generation, style pass, validation, fallback, and hidden debug trace production.
+- `preview.py`: development-only stateless preview DTO/API boundary. It selects reviewed artifacts by identity and exposes only visible answer data, coarse preview metadata, non-leaking warnings, and optional debug trace handles.
 
 边界：
 
@@ -289,6 +297,10 @@ core
 - simulator answer 进入 transcript 后成为 tested-agent-visible `Interaction Observation`。
 - simulator 可以在 formal episode manifest 存在前，通过 development-only preview flow 直接绑定 reviewed graph、reviewed map 和 optional confirmed profile context 来进行人工对话测试。
 - simulator preview 不是 benchmark run，也不产生 scoring report；它用于检查回答自然度、泄漏风险和 hidden-map 一致性。
+- `Question Grounding` 只解释被测 agent 已提出的问题；它不是 tested-agent question selection policy。
+- hidden map state 和 hidden evidence 只能在 grounding 之后、针对 directly grounded nodes 进入 simulator-only context。
+- `Simulator Answer Intent` 可以进入 hidden debug trace，但正式 visible transcript 和 scoring artifacts 不应存储 intent、grounded node ids、hidden evidence ids 或 validator internals。
+- `Profile Context` 在 simulator runtime 中只用于 content-preserving expression style；回答内容必须先由 grounded user state、ground-truth evidence 和 answer intent 决定。
 
 ### `agents/`
 
