@@ -42,6 +42,7 @@ Current opened endpoint:
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`: returns one saved Candidate Knowledge Map and its debug artifact references for benchmark-author inspection.
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`: revalidates one saved Candidate Knowledge Map with its reviewed graph version and confirmed Profile Context, converts lifecycle `kind` from `candidate` to `ground_truth`, and publishes immutable `map.json` plus minimal `map_manifest.json` under `maps/{map_id}/`. Existing map ids return conflicts; generation-time consistency warnings are ignored, and successful promotion removes the originating run from `candidate_maps/`.
 - `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`: list and read reviewed Knowledge Map snapshots for read-only workbench preview. These endpoints do not create simulator episodes or expose simulator runtime behavior.
+- `POST /api/simulator/preview`: development-only single-turn simulator preview. It accepts `benchmark_domain`, reviewed `map_id`, one `DiagnosticQuestion`, and optional `Visible Dialogue Context`; derives `graph_version` and `user_id` from the reviewed `map_manifest.json`; loads only reviewed graph/map artifacts; loads confirmed Profile Context when available; emits a non-leaking warning when Profile Context is missing; and renders a rule-based visible answer from direct grounded nodes only. It does not require or load an `Evaluation Episode Manifest`.
 
 Guardrails:
 

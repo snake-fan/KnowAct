@@ -1,4 +1,5 @@
 from enum import StrEnum
+import re
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -8,6 +9,9 @@ from backend.knowact.core.interaction import (
     VisibleDialogueContext,
     VisibleSimulatorAnswer,
 )
+
+
+_SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 
 class SimulatorPreviewRequest(BaseModel):
@@ -20,9 +24,13 @@ class SimulatorPreviewRequest(BaseModel):
 
     @field_validator("benchmark_domain", "map_id")
     @classmethod
-    def _must_not_be_blank(cls, value: str) -> str:
+    def _must_be_safe_id(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("must not be blank")
+        if not _SAFE_ID_PATTERN.fullmatch(value):
+            raise ValueError(
+                "must contain only letters, numbers, dots, underscores, or dashes"
+            )
         return value
 
 

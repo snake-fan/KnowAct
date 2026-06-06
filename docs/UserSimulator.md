@@ -270,7 +270,9 @@ No-grounding and multiple-question flags belong in this hidden debug trace, not 
 
 Phase 5 may expose a development-only simulator preview before formal **Evaluation Episode Manifests** exist. The preview should be stateless per turn so it does not become a parallel episode runtime.
 
-This document defines the endpoint contract, not the final API path. The route name can be chosen during implementation.
+Current initial route: `POST /api/simulator/preview`.
+
+The initial implementation supports the clearly grounded success path with a conservative rule-based pipeline: visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Intent** derivation, de-identified **Simulator Expression Context** construction, and rule-based visible answer rendering. It intentionally does not implement no-grounding clarification policy, label-seeking handling, LLM answer generation, semantic validation, retries, fallback orchestration, or formal episode persistence yet.
 
 The preview should:
 
