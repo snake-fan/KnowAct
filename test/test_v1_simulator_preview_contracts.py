@@ -14,6 +14,8 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
         }
 
         forbidden_fields = {
+            "graph_version": "v1",
+            "user_id": "synthetic_user_001",
             "mastery_level": "L3",
             "evidence_refs": ["ev_hidden"],
             "evidence_ids": ["ev_hidden"],
@@ -81,6 +83,11 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
         }
         with self.assertRaises(ValidationError):
             SimulatorPreviewRequest.model_validate(hidden_context_payload)
+
+        candidate_path_payload = dict(payload)
+        candidate_path_payload["map_id"] = "candidate_maps/dev_map_001"
+        with self.assertRaises(ValidationError):
+            SimulatorPreviewRequest.model_validate(candidate_path_payload)
 
     def test_preview_response_exposes_only_visible_answer_metadata_and_trace_handle(self):
         payload = {

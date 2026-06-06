@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict
 
 from backend.knowact.api.authoring import build_authoring_router
+from backend.knowact.api.simulator import build_simulator_router
 from backend.knowact.authoring.openai_workflow import (
     GraphAuthoringClientProvider,
     build_graph_authoring_workflow_for_provider,
@@ -71,6 +72,11 @@ def create_app(
         ),
         prefix="/api/authoring",
         tags=["authoring"],
+    )
+    app.include_router(
+        build_simulator_router(workspace_root=workspace_root),
+        prefix="/api/simulator",
+        tags=["simulator"],
     )
 
     @app.get("/health", response_model=HealthResponse)
