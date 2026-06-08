@@ -3,10 +3,13 @@ from pathlib import Path
 from backend.knowact.core.interaction import (
     CoarseObservationMetadata,
     VisibleObservationKind,
-    VisibleSimulatorAnswer,
 )
 from backend.knowact.simulator.context_builder import SimulatorContextBuilder
 from backend.knowact.simulator.expression import SimulatorExpressionContextBuilder
+from backend.knowact.simulator.fallbacks import (
+    multiple_question_clarification,
+    no_grounding_answer,
+)
 from backend.knowact.simulator.generators import RuleBasedAnswerGenerator
 from backend.knowact.simulator.grounding import RuleBasedQuestionGrounder
 from backend.knowact.simulator.policy import RuleBasedAnswerPolicy
@@ -21,7 +24,10 @@ from backend.knowact.storage.profile_contexts import (
     load_confirmed_profile_context,
 )
 from backend.knowact.storage.reviewed_graphs import load_reviewed_graph
-from backend.knowact.storage.reviewed_maps import load_reviewed_map
+from backend.knowact.storage.reviewed_maps import (
+    load_reviewed_map,
+    load_reviewed_map_manifest,
+)
 
 
 class SimulatorService:
@@ -34,20 +40,15 @@ class SimulatorService:
         self._generator = RuleBasedAnswerGenerator()
 
     def answer_preview(self, request: SimulatorPreviewRequest) -> SimulatorPreviewResponse:
-        map_artifacts = load_reviewed_map(
+        manifest = load_reviewed_map_manifest(
             workspace_root=self._workspace_root,
             benchmark_domain=request.benchmark_domain,
             map_id=request.map_id,
         )
-        manifest = map_artifacts.manifest
         graph_artifacts = load_reviewed_graph(
             workspace_root=self._workspace_root,
             benchmark_domain=manifest.benchmark_domain,
             version=manifest.graph_version,
-        )
-        profile_context, warnings = self._load_optional_profile_context(
-            benchmark_domain=manifest.benchmark_domain,
-            user_id=manifest.user_id,
         )
 
         grounding = self._grounder.ground(
@@ -57,12 +58,28 @@ class SimulatorService:
         )
         if not grounding.has_grounding:
             return SimulatorPreviewResponse(
-                answer=VisibleSimulatorAnswer(
-                    text="I am not sure which concept you want me to answer about."
-                ),
+                answer=no_grounding_answer(),
                 observation=CoarseObservationMetadata(kind=VisibleObservationKind.NON_ANSWER),
-                warnings=warnings,
+                warnings=(),
             )
+        if grounding.is_multiple_question:
+            return SimulatorPreviewResponse(
+                answer=multiple_question_clarification(),
+                observation=CoarseObservationMetadata(
+                    kind=VisibleObservationKind.CLARIFICATION
+                ),
+                warnings=(),
+            )
+
+        map_artifacts = load_reviewed_map(
+            workspace_root=self._workspace_root,
+            benchmark_domain=request.benchmark_domain,
+            map_id=request.map_id,
+        )
+        profile_context, warnings = self._load_optional_profile_context(
+            benchmark_domain=manifest.benchmark_domain,
+            user_id=manifest.user_id,
+        )
 
         simulator_context = self._context_builder.build(
             benchmark_domain=manifest.benchmark_domain,

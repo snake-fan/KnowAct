@@ -49,10 +49,11 @@ class RuleBasedQuestionGrounder:
             if any(_normalize_for_matching(term) in haystack for term in terms if term):
                 grounded_node_ids.append(node.id)
 
+        is_multiple_question = _looks_like_multiple_questions(question.text)
         return QuestionGroundingResult(
             grounded_node_ids=tuple(grounded_node_ids),
-            is_integrated_question=len(grounded_node_ids) > 1,
-            is_multiple_question=_looks_like_multiple_questions(question.text),
+            is_integrated_question=len(grounded_node_ids) > 1 and not is_multiple_question,
+            is_multiple_question=is_multiple_question,
             is_label_seeking=_looks_like_label_seeking(question.text),
         )
 

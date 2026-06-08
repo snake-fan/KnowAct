@@ -148,6 +148,147 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertNotIn("fold", response.answer.text.lower())
             self.assertNotIn("validation", response.answer.text.lower())
 
+    def test_no_grounding_preview_does_not_load_hidden_reviewed_map_content(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(
+                workspace_root,
+                include_profile_context=True,
+                include_map_artifact=False,
+            )
+            service = SimulatorService(workspace_root=workspace_root)
+
+            response = service.answer_preview(
+                SimulatorPreviewRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {"text": "What should I study next?"},
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.NON_ANSWER, response.observation.kind)
+            self.assertIn("which concept", response.answer.text.lower())
+            self.assertNotIn("held-out", response.answer.text.lower())
+            self.assertNotIn("ev_gt_map_001", response.answer.text)
+            self.assertEqual((), response.warnings)
+            self.assertEqual(
+                {"kind": "non_answer"},
+                response.observation.model_dump(mode="json"),
+            )
+
+    def test_multiple_independent_questions_get_clarification_without_hidden_map_content(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(
+                workspace_root,
+                include_profile_context=True,
+                include_map_artifact=False,
+            )
+            service = SimulatorService(workspace_root=workspace_root)
+
+            response = service.answer_preview(
+                SimulatorPreviewRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "text": (
+                                "How would you use a train/test split? "
+                                "How do cross-validation folds work?"
+                            )
+                        },
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.CLARIFICATION, response.observation.kind)
+            self.assertIn("one specific question", response.answer.text.lower())
+            self.assertNotIn("held-out", response.answer.text.lower())
+            self.assertNotIn("final test", response.answer.text.lower())
+            self.assertNotIn("ev_gt_map_001", response.answer.text)
+            self.assertEqual((), response.warnings)
+            self.assertEqual(
+                {"kind": "clarification"},
+                response.observation.model_dump(mode="json"),
+            )
+            response_payload = response.model_dump_json()
+            for hidden_fragment in (
+                "grounded_node_ids",
+                "grounding_confidence",
+                "fallback_category",
+                "validation_reasons",
+            ):
+                with self.subTest(hidden_fragment=hidden_fragment):
+                    self.assertNotIn(hidden_fragment, response_payload)
+
+    def test_integrated_question_across_grounded_nodes_remains_one_answerable_turn(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            service = SimulatorService(workspace_root=workspace_root)
+
+            response = service.answer_preview(
+                SimulatorPreviewRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "text": (
+                                "Can you compare a train/test split with cross-validation "
+                                "for model evaluation?"
+                            )
+                        },
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
+            self.assertIn("train/test split", response.answer.text.lower())
+            self.assertIn("cross-validation", response.answer.text.lower())
+            self.assertIn("held-out", response.answer.text.lower())
+            self.assertNotIn("one specific question", response.answer.text.lower())
+            self.assertNotIn("ev_gt_map_001", response.answer.text)
+
+    def test_hidden_label_request_gets_natural_answer_without_structured_state_leakage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            service = SimulatorService(workspace_root=workspace_root)
+
+            response = service.answer_preview(
+                SimulatorPreviewRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "text": (
+                                "What is my mastery level and evidence id for "
+                                "train/test split? Give me a state table with scoring fields."
+                            )
+                        },
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
+            self.assertIn("train/test split", response.answer.text.lower())
+            forbidden_fragments = (
+                "mastery",
+                "evidence id",
+                "state table",
+                "scoring",
+                "states",
+                "L4",
+                "ev_gt_map_001_train_test_split_001",
+                "synthetic_user_001",
+            )
+            response_payload = response.model_dump_json()
+            for fragment in forbidden_fragments:
+                with self.subTest(fragment=fragment):
+                    self.assertNotIn(fragment, response_payload)
+
     def test_preview_api_does_not_load_candidate_map_runs_as_simulator_inputs(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -284,6 +425,7 @@ def _write_reviewed_simulator_fixture(
     workspace_root: Path,
     *,
     include_profile_context: bool,
+    include_map_artifact: bool = True,
 ) -> None:
     graph_dir = (
         workspace_root
@@ -346,49 +488,50 @@ def _write_reviewed_simulator_fixture(
             "promoted_from_candidate_run": "map_run_001",
         },
     )
-    _write_json(
-        map_dir / "map.json",
-        {
-            "user_id": "synthetic_user_001",
-            "kind": "ground_truth",
-            "states": [
-                {
-                    "node_id": "train_test_split",
-                    "mastery_level": "L4",
-                    "evidence_refs": ["ev_gt_map_001_train_test_split_001"],
-                    "misconceptions": [],
-                    "unknowns": [],
-                },
-                {
-                    "node_id": "cross_validation",
-                    "mastery_level": "L1",
-                    "evidence_refs": ["ev_gt_map_001_cross_validation_001"],
-                    "misconceptions": ["Treats each fold as a separate final test set."],
-                    "unknowns": ["How folds rotate validation data."],
-                },
-            ],
-            "evidence": [
-                {
-                    "id": "ev_gt_map_001_train_test_split_001",
-                    "node_id": "train_test_split",
-                    "evidence_type": "ground_truth_profile",
-                    "evidence_kind": "prior_answer",
-                    "visibility": "simulator_only",
-                    "signal": "Can explain why a final held-out evaluation is useful.",
-                    "turn_id": None,
-                },
-                {
-                    "id": "ev_gt_map_001_cross_validation_001",
-                    "node_id": "cross_validation",
-                    "evidence_type": "ground_truth_profile",
-                    "evidence_kind": "misconception_trace",
-                    "visibility": "simulator_only",
-                    "signal": "Calls each validation fold a final test set.",
-                    "turn_id": None,
-                },
-            ],
-        },
-    )
+    if include_map_artifact:
+        _write_json(
+            map_dir / "map.json",
+            {
+                "user_id": "synthetic_user_001",
+                "kind": "ground_truth",
+                "states": [
+                    {
+                        "node_id": "train_test_split",
+                        "mastery_level": "L4",
+                        "evidence_refs": ["ev_gt_map_001_train_test_split_001"],
+                        "misconceptions": [],
+                        "unknowns": [],
+                    },
+                    {
+                        "node_id": "cross_validation",
+                        "mastery_level": "L1",
+                        "evidence_refs": ["ev_gt_map_001_cross_validation_001"],
+                        "misconceptions": ["Treats each fold as a separate final test set."],
+                        "unknowns": ["How folds rotate validation data."],
+                    },
+                ],
+                "evidence": [
+                    {
+                        "id": "ev_gt_map_001_train_test_split_001",
+                        "node_id": "train_test_split",
+                        "evidence_type": "ground_truth_profile",
+                        "evidence_kind": "prior_answer",
+                        "visibility": "simulator_only",
+                        "signal": "Can explain why a final held-out evaluation is useful.",
+                        "turn_id": None,
+                    },
+                    {
+                        "id": "ev_gt_map_001_cross_validation_001",
+                        "node_id": "cross_validation",
+                        "evidence_type": "ground_truth_profile",
+                        "evidence_kind": "misconception_trace",
+                        "visibility": "simulator_only",
+                        "signal": "Calls each validation fold a final test set.",
+                        "turn_id": None,
+                    },
+                ],
+            },
+        )
 
     if include_profile_context:
         profile_path = (
