@@ -272,7 +272,7 @@ Phase 5 may expose a development-only simulator preview before formal **Evaluati
 
 Current initial route: `POST /api/simulator/preview`.
 
-The initial implementation supports the clearly grounded success path with a conservative rule-based pipeline: visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Intent** derivation, de-identified **Simulator Expression Context** construction, and rule-based visible answer rendering. It intentionally does not implement no-grounding clarification policy, label-seeking handling, LLM answer generation, semantic validation, retries, fallback orchestration, or formal episode persistence yet.
+The initial implementation supports a conservative rule-based pipeline: visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Intent** derivation, de-identified **Simulator Expression Context** construction, and rule-based visible answer rendering. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement LLM answer generation, semantic validation, retries, full fallback orchestration, persistent debug trace artifacts, or formal episode persistence yet.
 
 The preview should:
 
@@ -284,6 +284,7 @@ The preview should:
 - continue with a configuration warning when confirmed **Profile Context** is missing
 - accept one primary diagnostic question per request
 - accept optional request-carried **Visible Dialogue Context**
+- accept optional `preview_options.include_debug_trace` and report only trace availability/reference metadata
 - return only the visible simulator answer plus visible observation metadata
 - keep visible observation metadata coarse, such as `answer`, `clarification`, or `non_answer`
 - keep internal fallback categories and validation reasons out of visible metadata

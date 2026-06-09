@@ -57,18 +57,28 @@ class SimulatorService:
             visible_dialogue_context=request.visible_dialogue_context,
         )
         if not grounding.has_grounding:
+            warnings, debug_trace_available = self._apply_debug_trace_preview_options(
+                warnings=(),
+                request=request,
+            )
             return SimulatorPreviewResponse(
                 answer=no_grounding_answer(),
                 observation=CoarseObservationMetadata(kind=VisibleObservationKind.NON_ANSWER),
-                warnings=(),
+                warnings=warnings,
+                debug_trace_available=debug_trace_available,
             )
         if grounding.is_multiple_question:
+            warnings, debug_trace_available = self._apply_debug_trace_preview_options(
+                warnings=(),
+                request=request,
+            )
             return SimulatorPreviewResponse(
                 answer=multiple_question_clarification(),
                 observation=CoarseObservationMetadata(
                     kind=VisibleObservationKind.CLARIFICATION
                 ),
-                warnings=(),
+                warnings=warnings,
+                debug_trace_available=debug_trace_available,
             )
 
         map_artifacts = load_reviewed_map(
@@ -101,11 +111,38 @@ class SimulatorService:
             profile_context=profile_context,
         )
         answer = self._generator.render(expression_context)
+        warnings, debug_trace_available = self._apply_debug_trace_preview_options(
+            warnings=warnings,
+            request=request,
+        )
 
         return SimulatorPreviewResponse(
             answer=answer,
             observation=CoarseObservationMetadata(kind=VisibleObservationKind.ANSWER),
             warnings=warnings,
+            debug_trace_available=debug_trace_available,
+        )
+
+    def _apply_debug_trace_preview_options(
+        self,
+        *,
+        warnings: tuple[SimulatorPreviewWarning, ...],
+        request: SimulatorPreviewRequest,
+    ) -> tuple[tuple[SimulatorPreviewWarning, ...], bool | None]:
+        if not request.preview_options.include_debug_trace:
+            return warnings, None
+        return (
+            warnings
+            + (
+                SimulatorPreviewWarning(
+                    code=SimulatorPreviewWarningCode.DEBUG_TRACE_UNAVAILABLE,
+                    message=(
+                        "Debug trace content is not persisted by the stateless "
+                        "preview endpoint."
+                    ),
+                ),
+            ),
+            False,
         )
 
     def _load_optional_profile_context(

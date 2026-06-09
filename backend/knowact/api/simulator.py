@@ -28,16 +28,33 @@ def build_simulator_router(*, workspace_root: Path | None = None) -> APIRouter:
     def answer_preview(request: SimulatorPreviewRequest) -> SimulatorPreviewResponse:
         try:
             return service.answer_preview(request)
-        except (ReviewedMapNotFoundError, ReviewedGraphNotFoundError) as exc:
+        except ReviewedMapNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except (
-            ReviewedMapArtifactError,
-            ReviewedGraphArtifactError,
-            ConfirmedProfileContextArtifactError,
-            KeyError,
-            ValueError,
-        ) as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ReviewedGraphNotFoundError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail="Reviewed graph binding does not exist.",
+            ) from exc
+        except ReviewedMapArtifactError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Reviewed map artifact is malformed.",
+            ) from exc
+        except ReviewedGraphArtifactError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Reviewed graph artifact is malformed.",
+            ) from exc
+        except ConfirmedProfileContextArtifactError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Confirmed Profile Context artifact is malformed.",
+            ) from exc
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Simulator preview request could not be satisfied by reviewed artifacts.",
+            ) from exc
 
     return router
 

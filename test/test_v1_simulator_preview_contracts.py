@@ -89,6 +89,26 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SimulatorPreviewRequest.model_validate(candidate_path_payload)
 
+    def test_preview_request_accepts_debug_trace_availability_option_only(self):
+        payload = {
+            "benchmark_domain": "classical_supervised_ml_algorithms",
+            "map_id": "dev_map_001",
+            "question": {"text": "How would you decide whether linear regression is appropriate?"},
+            "preview_options": {"include_debug_trace": True},
+        }
+
+        request = SimulatorPreviewRequest.model_validate(payload)
+
+        self.assertTrue(request.preview_options.include_debug_trace)
+
+        hidden_options_payload = dict(payload)
+        hidden_options_payload["preview_options"] = {
+            "include_debug_trace": True,
+            "raw_debug_trace": {"grounding": "hidden internals"},
+        }
+        with self.assertRaises(ValidationError):
+            SimulatorPreviewRequest.model_validate(hidden_options_payload)
+
     def test_preview_response_exposes_only_visible_answer_metadata_and_trace_handle(self):
         payload = {
             "answer": {"text": "I can explain the slope, but I am less sure about the assumptions."},
