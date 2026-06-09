@@ -6,10 +6,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.knowact.core.interaction import VisibleSimulatorAnswer
 from backend.knowact.llm.client import ModelClient, ModelClientError
+from backend.knowact.logging_config import get_knowact_logger
 from backend.knowact.simulator.expression import SimulatorExpressionContext
 from backend.knowact.simulator.templates.answer_validation import (
     build_answer_validation_messages,
 )
+
+
+_LOGGER = get_knowact_logger("simulator.checks")
 
 
 class SimulatorAnswerValidationDecision(BaseModel):
@@ -55,8 +59,13 @@ class HeuristicSimulatorAnswerValidator:
         candidate_answer: VisibleSimulatorAnswer,
         expression_context: SimulatorExpressionContext,
     ) -> SimulatorAnswerValidationDecision:
+        _LOGGER.info(
+            "Heuristic simulator answer validation started answer_chars=%d expression_nodes=%d",
+            len(candidate_answer.text),
+            len(expression_context.nodes),
+        )
         blocking_reasons = _blocking_safety_reasons(candidate_answer.text)
-        return SimulatorAnswerValidationDecision(
+        decision = SimulatorAnswerValidationDecision(
             passed=not blocking_reasons,
             blocking_safety_reasons=blocking_reasons,
             intent_coverage_notes=(
@@ -67,6 +76,13 @@ class HeuristicSimulatorAnswerValidator:
                 if blocking_reasons else None
             ),
         )
+        _LOGGER.info(
+            "Heuristic simulator answer validation completed passed=%s blocking_reasons=%d intent_coverage_notes=%d",
+            decision.passed,
+            len(decision.blocking_safety_reasons),
+            len(decision.intent_coverage_notes),
+        )
+        return decision
 
 
 class ModelClientAnswerValidator:
@@ -85,6 +101,15 @@ class ModelClientAnswerValidator:
         candidate_answer: VisibleSimulatorAnswer,
         expression_context: SimulatorExpressionContext,
     ) -> SimulatorAnswerValidationDecision:
+        metadata = getattr(self._model_client, "metadata", None)
+        _LOGGER.info(
+            "Simulator answer validation model call started provider=%s model_name=%s answer_chars=%d expression_nodes=%d temperature=%s",
+            metadata.provider if metadata is not None else None,
+            metadata.model_name if metadata is not None else None,
+            len(candidate_answer.text),
+            len(expression_context.nodes),
+            self._temperature,
+        )
         raw_output = self._model_client.complete(
             messages=build_answer_validation_messages(
                 candidate_answer=candidate_answer,
@@ -93,21 +118,41 @@ class ModelClientAnswerValidator:
             ),
             temperature=self._temperature,
         )
+        _LOGGER.info(
+            "Simulator answer validation model call succeeded provider=%s model_name=%s raw_output_chars=%d",
+            metadata.provider if metadata is not None else None,
+            metadata.model_name if metadata is not None else None,
+            len(raw_output),
+        )
         decision = _parse_validation_decision(raw_output)
         hard_block_reasons = _blocking_safety_reasons(candidate_answer.text)
         if not hard_block_reasons:
+            _LOGGER.info(
+                "Simulator answer validation parser succeeded passed=%s blocking_reasons=%d intent_coverage_notes=%d hard_blocking_reasons=0",
+                decision.passed,
+                len(decision.blocking_safety_reasons),
+                len(decision.intent_coverage_notes),
+            )
             return decision
 
         merged_reasons = tuple(
             dict.fromkeys((*decision.blocking_safety_reasons, *hard_block_reasons))
         )
-        return SimulatorAnswerValidationDecision(
+        merged_decision = SimulatorAnswerValidationDecision(
             passed=False,
             blocking_safety_reasons=merged_reasons,
             intent_coverage_notes=decision.intent_coverage_notes,
             fallback_guidance=decision.fallback_guidance
             or "Return a safe simulator fallback.",
         )
+        _LOGGER.info(
+            "Simulator answer validation parser succeeded passed=%s blocking_reasons=%d intent_coverage_notes=%d hard_blocking_reasons=%d",
+            merged_decision.passed,
+            len(merged_decision.blocking_safety_reasons),
+            len(merged_decision.intent_coverage_notes),
+            len(hard_block_reasons),
+        )
+        return merged_decision
 
 
 def _blocking_safety_reasons(answer_text: str) -> tuple[str, ...]:

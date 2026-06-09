@@ -3,6 +3,7 @@ from typing import Protocol
 
 from backend.knowact.core.interaction import VisibleSimulatorAnswer
 from backend.knowact.llm.client import ModelClient, ModelClientError
+from backend.knowact.logging_config import get_knowact_logger
 from backend.knowact.simulator.expression import (
     NodeExpressionContext,
     SimulatorExpressionContext,
@@ -11,6 +12,9 @@ from backend.knowact.simulator.policy import SimulatorAnswerStance
 from backend.knowact.simulator.templates.answer_generation import (
     build_answer_generation_messages,
 )
+
+
+_LOGGER = get_knowact_logger("simulator.generators")
 
 
 class SimulatorAnswerGenerator(Protocol):
@@ -29,6 +33,14 @@ class ModelClientAnswerGenerator:
         self._temperature = temperature
 
     def render(self, expression_context: SimulatorExpressionContext) -> VisibleSimulatorAnswer:
+        metadata = getattr(self._model_client, "metadata", None)
+        _LOGGER.info(
+            "Simulator answer generation model call started provider=%s model_name=%s expression_nodes=%d temperature=%s",
+            metadata.provider if metadata is not None else None,
+            metadata.model_name if metadata is not None else None,
+            len(expression_context.nodes),
+            self._temperature,
+        )
         raw_output = self._model_client.complete(
             messages=build_answer_generation_messages(
                 expression_context=expression_context,
@@ -36,21 +48,42 @@ class ModelClientAnswerGenerator:
             ),
             temperature=self._temperature,
         )
-        return VisibleSimulatorAnswer(text=_parse_answer_text(raw_output))
+        _LOGGER.info(
+            "Simulator answer generation model call succeeded provider=%s model_name=%s raw_output_chars=%d",
+            metadata.provider if metadata is not None else None,
+            metadata.model_name if metadata is not None else None,
+            len(raw_output),
+        )
+        answer_text = _parse_answer_text(raw_output)
+        _LOGGER.info(
+            "Simulator answer generation parser succeeded answer_chars=%d",
+            len(answer_text),
+        )
+        return VisibleSimulatorAnswer(text=answer_text)
 
 
 class RuleBasedAnswerGenerator:
     def render(self, expression_context: SimulatorExpressionContext) -> VisibleSimulatorAnswer:
+        _LOGGER.info(
+            "Rule-based simulator answer generation started expression_nodes=%d",
+            len(expression_context.nodes),
+        )
         if not expression_context.nodes:
-            return VisibleSimulatorAnswer(
+            answer = VisibleSimulatorAnswer(
                 text="I am not sure which concept you want me to answer about."
             )
-        if len(expression_context.nodes) == 1:
-            return VisibleSimulatorAnswer(
+        elif len(expression_context.nodes) == 1:
+            answer = VisibleSimulatorAnswer(
                 text=_render_node_answer(expression_context.nodes[0])
             )
-        rendered_parts = [_render_node_answer(node) for node in expression_context.nodes]
-        return VisibleSimulatorAnswer(text=" ".join(rendered_parts))
+        else:
+            rendered_parts = [_render_node_answer(node) for node in expression_context.nodes]
+            answer = VisibleSimulatorAnswer(text=" ".join(rendered_parts))
+        _LOGGER.info(
+            "Rule-based simulator answer generation succeeded answer_chars=%d",
+            len(answer.text),
+        )
+        return answer
 
 
 def _render_node_answer(node: NodeExpressionContext) -> str:

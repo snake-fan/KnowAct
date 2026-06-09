@@ -266,6 +266,21 @@ No-grounding and multiple-question flags belong in this hidden debug trace, not 
 
 **Simulator Answer Intent** may be retained in hidden debug artifacts for audit, but it should not be stored as part of the formal visible episode run artifacts. Formal run artifacts should center on visible transcript data, tested-agent outputs, and scoring reports.
 
+## Runtime Logging
+
+The simulator implementation should emit operator-facing logger `info` messages at
+workflow boundaries so terminal output shows which step is running: reviewed
+artifact loading, question grounding, simulator context construction, answer
+intent derivation, expression-context construction, answer generation, answer
+validation, fallback, and final preview completion.
+
+Runtime logs are not **Simulator Debug Trace** artifacts and are not visible
+transcript data. They should record only progress metadata such as artifact
+identities, component names, counts, flags, result status, and output lengths.
+They must not record full hidden map payloads, hidden evidence ids, hidden
+evidence signals, profile-context prose, raw model output, prompt payloads, or
+visible answer text.
+
 ## Preview Boundary
 
 Phase 5 may expose a development-only simulator preview before formal **Evaluation Episode Manifests** exist. The preview should be stateless per turn so it does not become a parallel episode runtime.

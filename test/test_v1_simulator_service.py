@@ -64,6 +64,56 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertNotIn("ev_gt_map_001_train_test_split_001", response.answer.text)
             self.assertNotIn("synthetic_user_001", response.answer.text)
 
+    def test_service_logs_preview_workflow_steps_without_hidden_payloads(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            service = SimulatorService(workspace_root=workspace_root)
+            request = SimulatorPreviewRequest.model_validate(
+                {
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "map_id": "gt_map_001",
+                    "question": {
+                        "text": "How would you decide whether a train/test split is appropriate?"
+                    },
+                }
+            )
+
+            with self.assertLogs("knowact.simulator", level="INFO") as captured_logs:
+                response = service.answer_preview(request)
+
+            self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
+            log_text = "\n".join(captured_logs.output)
+            for expected_fragment in (
+                "Simulator preview workflow started",
+                "Simulator preview map manifest loaded",
+                "Simulator preview reviewed graph loaded",
+                "Question grounding succeeded",
+                "Simulator preview reviewed map loaded",
+                "Simulator profile context loaded",
+                "Simulator context built",
+                "Answer intent derived",
+                "Expression context built",
+                "Simulator answer generation started",
+                "Rule-based simulator answer generation succeeded",
+                "Simulator answer validation completed",
+                "Simulator preview workflow succeeded",
+            ):
+                with self.subTest(expected_fragment=expected_fragment):
+                    self.assertIn(expected_fragment, log_text)
+            for hidden_fragment in (
+                "ev_gt_map_001_train_test_split_001",
+                "Can explain why a final held-out evaluation is useful.",
+                "A practical beginner with limited statistical foundations.",
+                "Has followed introductory sklearn examples.",
+                "Can run basic estimator workflows.",
+                "Understand model evaluation.",
+                "Prefers concrete examples.",
+                response.answer.text,
+            ):
+                with self.subTest(hidden_fragment=hidden_fragment):
+                    self.assertNotIn(hidden_fragment, log_text)
+
     def test_preview_api_answers_reviewed_map_request_without_episode_manifest(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
