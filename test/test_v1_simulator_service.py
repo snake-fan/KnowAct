@@ -76,6 +76,129 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertNotIn("graph_version", payload)
             self.assertNotIn("user_id", payload)
 
+    def test_preview_api_reports_debug_trace_availability_without_inline_trace(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/simulator/preview",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "map_id": "gt_map_001",
+                    "question": {
+                        "text": "How would you decide whether a train/test split is appropriate?"
+                    },
+                    "preview_options": {"include_debug_trace": True},
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("answer", payload["observation"]["kind"])
+            self.assertIsNone(payload["debug_trace_id"])
+            self.assertEqual(False, payload["debug_trace_available"])
+            self.assertIn(
+                "debug_trace_unavailable",
+                {warning["code"] for warning in payload["warnings"]},
+            )
+            response_payload = json.dumps(payload, sort_keys=True)
+            for hidden_fragment in (
+                "grounded_node_ids",
+                "grounding_confidence",
+                "debug_trace_payload",
+                "raw_debug_trace",
+                "ev_gt_map_001_train_test_split_001",
+            ):
+                with self.subTest(hidden_fragment=hidden_fragment):
+                    self.assertNotIn(hidden_fragment, response_payload)
+
+    def test_preview_api_returns_no_grounding_non_answer_without_hidden_map_content(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(
+                workspace_root,
+                include_profile_context=True,
+                include_map_artifact=False,
+            )
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/simulator/preview",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "map_id": "gt_map_001",
+                    "question": {"text": "What should I study next?"},
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("non_answer", payload["observation"]["kind"])
+            self.assertIn("which concept", payload["answer"]["text"].lower())
+            response_payload = json.dumps(payload, sort_keys=True)
+            self.assertNotIn("ev_gt_map_001", response_payload)
+            self.assertNotIn("held-out", response_payload.lower())
+
+    def test_preview_api_returns_multi_question_clarification_without_hidden_map_content(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(
+                workspace_root,
+                include_profile_context=True,
+                include_map_artifact=False,
+            )
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/simulator/preview",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "map_id": "gt_map_001",
+                    "question": {
+                        "text": (
+                            "How would you use a train/test split? "
+                            "How do cross-validation folds work?"
+                        )
+                    },
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("clarification", payload["observation"]["kind"])
+            self.assertIn("one specific question", payload["answer"]["text"].lower())
+            response_payload = json.dumps(payload, sort_keys=True)
+            self.assertNotIn("ev_gt_map_001", response_payload)
+            self.assertNotIn("final test", response_payload.lower())
+
+    def test_preview_api_returns_missing_profile_context_warning(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=False)
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/simulator/preview",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "map_id": "gt_map_001",
+                    "question": {
+                        "text": "How would you decide whether a train/test split is appropriate?"
+                    },
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("answer", payload["observation"]["kind"])
+            self.assertIn("held-out", payload["answer"]["text"].lower())
+            self.assertEqual(["missing_profile_context"], [
+                warning["code"] for warning in payload["warnings"]
+            ])
+            self.assertNotIn("synthetic_user_001", json.dumps(payload, sort_keys=True))
+
     def test_service_continues_with_non_leaking_warning_when_profile_context_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -315,6 +438,42 @@ class V1SimulatorServiceTest(unittest.TestCase):
 
             self.assertEqual(404, response.status_code)
             self.assertIn("Reviewed map candidate_only does not exist", response.json()["detail"])
+
+    def test_preview_api_malformed_reviewed_map_error_does_not_echo_hidden_map_payload(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            secret_hidden_value = "SECRET_HIDDEN_MASTERY_LABEL_SHOULD_NOT_LEAK"
+            map_path = (
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "maps"
+                / "gt_map_001"
+                / "map.json"
+            )
+            with map_path.open(encoding="utf-8") as handle:
+                map_payload = json.load(handle)
+            map_payload["states"][0]["mastery_level"] = secret_hidden_value
+            _write_json(map_path, map_payload)
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/simulator/preview",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "map_id": "gt_map_001",
+                    "question": {
+                        "text": "How would you decide whether a train/test split is appropriate?"
+                    },
+                },
+            )
+
+            self.assertEqual(422, response.status_code)
+            response_payload = json.dumps(response.json(), sort_keys=True)
+            self.assertIn("reviewed map artifact", response_payload.lower())
+            self.assertNotIn(secret_hidden_value, response_payload)
 
     def test_policy_expression_and_generator_do_not_expose_raw_hidden_state(self):
         simulator_context = SimulatorTurnContext(
