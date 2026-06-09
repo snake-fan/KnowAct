@@ -1,6 +1,42 @@
+import json
+from typing import Protocol
+
 from backend.knowact.core.interaction import VisibleSimulatorAnswer
-from backend.knowact.simulator.expression import NodeExpressionContext, SimulatorExpressionContext
+from backend.knowact.llm.client import ModelClient, ModelClientError
+from backend.knowact.simulator.expression import (
+    NodeExpressionContext,
+    SimulatorExpressionContext,
+)
 from backend.knowact.simulator.policy import SimulatorAnswerStance
+from backend.knowact.simulator.templates.answer_generation import (
+    build_answer_generation_messages,
+)
+
+
+class SimulatorAnswerGenerator(Protocol):
+    def render(self, expression_context: SimulatorExpressionContext) -> VisibleSimulatorAnswer:
+        """Render a candidate visible simulator answer from de-identified context."""
+
+
+class ModelClientAnswerGenerator:
+    def __init__(
+        self,
+        *,
+        model_client: ModelClient,
+        temperature: float | None = None,
+    ) -> None:
+        self._model_client = model_client
+        self._temperature = temperature
+
+    def render(self, expression_context: SimulatorExpressionContext) -> VisibleSimulatorAnswer:
+        raw_output = self._model_client.complete(
+            messages=build_answer_generation_messages(
+                expression_context=expression_context,
+                message_profile=self._model_client.message_profile,
+            ),
+            temperature=self._temperature,
+        )
+        return VisibleSimulatorAnswer(text=_parse_answer_text(raw_output))
 
 
 class RuleBasedAnswerGenerator:
@@ -46,3 +82,16 @@ def _first_nonblank(values: tuple[str, ...]) -> str | None:
         if value.strip():
             return value
     return None
+
+
+def _parse_answer_text(raw_output: str) -> str:
+    try:
+        payload = json.loads(raw_output)
+    except json.JSONDecodeError as exc:
+        raise ModelClientError("Simulator answer generator returned invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise ModelClientError("Simulator answer generator returned a non-object payload")
+    answer = payload.get("answer")
+    if not isinstance(answer, str) or not answer.strip():
+        raise ModelClientError("Simulator answer generator returned an empty answer")
+    return answer.strip()

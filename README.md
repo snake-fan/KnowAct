@@ -284,7 +284,7 @@ The V1 implementation has started with the schema and validation spine:
 - `backend/knowact/validation/`: cross-object validators for graph references, map coverage/evidence support, and episode manifest constraints.
 - `backend/knowact/authoring/`: the Phase 2 graph authoring workflow spine, with node extraction, node rubric authoring, edge proposal, candidate file export boundaries, and separate `templates/` and `parsers/` modules for agent prompts and raw model outputs.
 - `backend/knowact/simulator/`: Phase 5 user simulator contracts, starting with development-only preview DTOs that keep request and response fields tested-agent-visible.
-- `backend/knowact/llm/`: a model-client interface plus OpenAI and DeepSeek SDK-backed clients for text-based authoring steps.
+- `backend/knowact/llm/`: a model-client interface plus OpenAI and DeepSeek SDK-backed clients for text-based authoring steps and LLM-backed simulator preview.
 - `backend/knowact/storage/`: local artifact, material path, and reviewed graph/map promotion helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
 - `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
 - `frontend/`: a React/Vite research workbench with top-level Knowledge Graph and User Profile modules. It supports candidate graph review and the Profile Context generation, editing, save, and immutable-confirmation gate.
@@ -296,6 +296,7 @@ Configure local OpenAI API access by copying `.env.example` to `.env` and fillin
 ```bash
 OPENAI_API_KEY=...
 KNOWACT_OPENAI_MODEL=gpt-4.1-mini
+KNOWACT_SIMULATOR_CLIENT_PROVIDER=openai
 ```
 
 DeepSeek can be selected per authoring request with `client_provider="deepseek"` and is configured through environment variables rather than request-body secrets:
@@ -306,6 +307,8 @@ KNOWACT_DEEPSEEK_MODEL=deepseek-v4-flash
 KNOWACT_DEEPSEEK_BASE_URL=https://api.deepseek.com
 KNOWACT_DEEPSEEK_TIMEOUT_SECONDS=120
 ```
+
+The simulator preview endpoint `/api/simulator/preview` uses the configured LLM provider for both answer generation and answer validation. Set `KNOWACT_SIMULATOR_CLIENT_PROVIDER=deepseek` to use DeepSeek instead of the default OpenAI path. If the provider is not configured, the preview endpoint returns a non-leaking configuration error rather than falling back to unvalidated model text.
 
 The current tests use deterministic fixtures and fake clients; they do not call the OpenAI or DeepSeek APIs.
 

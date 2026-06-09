@@ -5,7 +5,10 @@ from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict
 
 from backend.knowact.api.authoring import build_authoring_router
-from backend.knowact.api.simulator import build_simulator_router
+from backend.knowact.api.simulator import (
+    SimulatorServiceFactory,
+    build_simulator_router,
+)
 from backend.knowact.authoring.openai_workflow import (
     GraphAuthoringClientProvider,
     build_graph_authoring_workflow_for_provider,
@@ -45,6 +48,7 @@ def create_app(
     graph_authoring_workflow_factory: GraphAuthoringWorkflowFactory | None = None,
     profile_context_authoring_workflow_factory: ProfileContextAuthoringWorkflowFactory | None = None,
     candidate_map_authoring_workflow_factory: CandidateMapAuthoringWorkflowFactory | None = None,
+    simulator_service_factory: SimulatorServiceFactory | None = None,
     source_parser: SourceParser | None = None,
     workspace_root: Path | None = None,
 ) -> FastAPI:
@@ -74,7 +78,10 @@ def create_app(
         tags=["authoring"],
     )
     app.include_router(
-        build_simulator_router(workspace_root=workspace_root),
+        build_simulator_router(
+            workspace_root=workspace_root,
+            simulator_service_factory=simulator_service_factory,
+        ),
         prefix="/api/simulator",
         tags=["simulator"],
     )

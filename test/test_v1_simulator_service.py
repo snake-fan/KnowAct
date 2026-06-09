@@ -2,20 +2,34 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from backend.knowact.api.app import create_app
 from backend.knowact.core.evidence import EvidenceRecord
 from backend.knowact.core.graph import KnowledgeNode
-from backend.knowact.core.interaction import VisibleObservationKind
+from backend.knowact.core.interaction import (
+    VisibleObservationKind,
+    VisibleSimulatorAnswer,
+)
 from backend.knowact.core.map import UserKnowledgeState
+from backend.knowact.llm.client import ModelClientMetadata
+from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE
+from backend.knowact.simulator.checks import (
+    HeuristicSimulatorAnswerValidator,
+    ModelClientAnswerValidator,
+    SimulatorAnswerValidationDecision,
+)
 from backend.knowact.simulator.context_builder import (
     GroundedSimulatorNodeContext,
     SimulatorTurnContext,
 )
 from backend.knowact.simulator.expression import SimulatorExpressionContextBuilder
-from backend.knowact.simulator.generators import RuleBasedAnswerGenerator
+from backend.knowact.simulator.generators import (
+    ModelClientAnswerGenerator,
+    RuleBasedAnswerGenerator,
+)
 from backend.knowact.simulator.policy import RuleBasedAnswerPolicy, SimulatorAnswerStance
 from backend.knowact.simulator.preview import (
     SimulatorPreviewRequest,
@@ -54,7 +68,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _simulator_preview_test_client(workspace_root)
 
             response = client.post(
                 "/api/simulator/preview",
@@ -80,7 +94,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _simulator_preview_test_client(workspace_root)
 
             response = client.post(
                 "/api/simulator/preview",
@@ -122,7 +136,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 include_profile_context=True,
                 include_map_artifact=False,
             )
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _simulator_preview_test_client(workspace_root)
 
             response = client.post(
                 "/api/simulator/preview",
@@ -149,7 +163,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 include_profile_context=True,
                 include_map_artifact=False,
             )
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _simulator_preview_test_client(workspace_root)
 
             response = client.post(
                 "/api/simulator/preview",
@@ -177,7 +191,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=False)
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _simulator_preview_test_client(workspace_root)
 
             response = client.post(
                 "/api/simulator/preview",
@@ -425,7 +439,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             )
             candidate_dir.mkdir(parents=True)
             _write_json(candidate_dir / "candidate_map.json", {"states": []})
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _simulator_preview_test_client(workspace_root)
 
             response = client.post(
                 "/api/simulator/preview",
@@ -457,7 +471,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 map_payload = json.load(handle)
             map_payload["states"][0]["mastery_level"] = secret_hidden_value
             _write_json(map_path, map_payload)
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _simulator_preview_test_client(workspace_root)
 
             response = client.post(
                 "/api/simulator/preview",
@@ -474,6 +488,33 @@ class V1SimulatorServiceTest(unittest.TestCase):
             response_payload = json.dumps(response.json(), sort_keys=True)
             self.assertIn("reviewed map artifact", response_payload.lower())
             self.assertNotIn(secret_hidden_value, response_payload)
+
+    def test_preview_api_returns_configuration_error_when_llm_provider_is_missing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            with patch.dict("os.environ", {}, clear=True):
+                response = client.post(
+                    "/api/simulator/preview",
+                    json={
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "text": (
+                                "How would you decide whether a train/test split "
+                                "is appropriate?"
+                            )
+                        },
+                    },
+                )
+
+            self.assertEqual(503, response.status_code)
+            self.assertEqual(
+                "Simulator LLM service is not configured.",
+                response.json()["detail"],
+            )
 
     def test_policy_expression_and_generator_do_not_expose_raw_hidden_state(self):
         simulator_context = SimulatorTurnContext(
@@ -578,6 +619,441 @@ class V1SimulatorServiceTest(unittest.TestCase):
 
                 self.assertEqual(stance, intent.primary_stance)
                 self.assertIn(answer_fragment, answer.text.lower())
+
+    def test_service_uses_deidentified_llm_generator_and_validator_for_safe_answers(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            fake_model_client = FixtureSimulatorAnswerModelClient(
+                json.dumps(
+                    {
+                        "answer": (
+                            "I can explain the held-out split idea, but I would "
+                            "be careful about validation details."
+                        )
+                    }
+                )
+            )
+            fake_validator = PassingSimulatorAnswerValidator()
+            service = SimulatorService(
+                workspace_root=workspace_root,
+                generator=ModelClientAnswerGenerator(model_client=fake_model_client),
+                validator=fake_validator,
+            )
+
+            response = service.answer_preview(
+                SimulatorPreviewRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "text": (
+                                "How would you decide whether a train/test split "
+                                "is appropriate?"
+                            )
+                        },
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
+            self.assertIn("held-out split", response.answer.text.lower())
+            self.assertEqual(1, len(fake_model_client.calls))
+            self.assertIsNotNone(fake_validator.expression_context_json)
+            prompt_text = "\n".join(message.content for message in fake_model_client.calls[0])
+            validator_payload = fake_validator.expression_context_json or ""
+            for hidden_fragment in (
+                "ev_gt_map_001_train_test_split_001",
+                "synthetic_user_001",
+                "mastery_level",
+                "evidence_refs",
+                "L4",
+                "ground_truth",
+                "map_manifest",
+                "sklearn examples",
+                "basic estimator workflows",
+            ):
+                with self.subTest(hidden_fragment=hidden_fragment):
+                    self.assertNotIn(hidden_fragment, prompt_text)
+                    self.assertNotIn(hidden_fragment, validator_payload)
+                    self.assertNotIn(hidden_fragment, response.answer.text)
+
+    def test_llm_expression_context_includes_visible_dialogue_for_continuity(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            fake_model_client = FixtureSimulatorAnswerModelClient(
+                json.dumps(
+                    {
+                        "answer": (
+                            "I still mix up validation and final testing when I "
+                            "explain the split."
+                        )
+                    }
+                )
+            )
+            service = SimulatorService(
+                workspace_root=workspace_root,
+                generator=ModelClientAnswerGenerator(model_client=fake_model_client),
+                validator=PassingSimulatorAnswerValidator(),
+            )
+
+            response = service.answer_preview(
+                SimulatorPreviewRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "text": "Can you follow up on how you use a train/test split?"
+                        },
+                        "visible_dialogue_context": {
+                            "turns": [
+                                {
+                                    "turn_id": "visible_turn_001",
+                                    "question": {
+                                        "text": "What felt uncertain in your previous answer?"
+                                    },
+                                    "answer": {
+                                        "text": "I said I mixed up validation and final testing."
+                                    },
+                                    "observation": {"kind": "answer"},
+                                }
+                            ]
+                        },
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
+            prompt_text = "\n".join(message.content for message in fake_model_client.calls[0])
+            self.assertIn("mixed up validation and final testing", prompt_text)
+            self.assertNotIn("visible_turn_001", prompt_text)
+            for hidden_fragment in (
+                "ev_gt_map_001_train_test_split_001",
+                "synthetic_user_001",
+                "mastery_level",
+                "profile_context",
+                "sklearn examples",
+            ):
+                with self.subTest(hidden_fragment=hidden_fragment):
+                    self.assertNotIn(hidden_fragment, prompt_text)
+
+    def test_service_returns_safe_fallback_when_llm_generator_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            service = SimulatorService(
+                workspace_root=workspace_root,
+                generator=ModelClientAnswerGenerator(
+                    model_client=FixtureSimulatorAnswerModelClient("not-json")
+                ),
+                validator=PassingSimulatorAnswerValidator(),
+            )
+
+            response = service.answer_preview(
+                SimulatorPreviewRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "text": (
+                                "How would you decide whether a train/test split "
+                                "is appropriate?"
+                            )
+                        },
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
+            self.assertIn("not confident", response.answer.text.lower())
+            response_payload = response.model_dump_json()
+            for hidden_fragment in (
+                "not-json",
+                "ev_gt_map_001_train_test_split_001",
+                "synthetic_user_001",
+                "L4",
+                "validation_reasons",
+                "fallback_guidance",
+            ):
+                with self.subTest(hidden_fragment=hidden_fragment):
+                    self.assertNotIn(hidden_fragment, response_payload)
+
+    def test_service_returns_safe_fallback_when_validator_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            service = SimulatorService(
+                workspace_root=workspace_root,
+                generator=ModelClientAnswerGenerator(
+                    model_client=FixtureSimulatorAnswerModelClient(
+                        json.dumps({"answer": "I can explain the held-out split idea."})
+                    )
+                ),
+                validator=UnavailableSimulatorAnswerValidator(),
+            )
+
+            response = service.answer_preview(
+                SimulatorPreviewRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "text": (
+                                "How would you decide whether a train/test split "
+                                "is appropriate?"
+                            )
+                        },
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
+            self.assertIn("not confident", response.answer.text.lower())
+            self.assertNotIn("held-out split", response.answer.text.lower())
+            response_payload = response.model_dump_json()
+            for hidden_fragment in (
+                "validator",
+                "timeout",
+                "ev_gt_map_001_train_test_split_001",
+                "synthetic_user_001",
+            ):
+                with self.subTest(hidden_fragment=hidden_fragment):
+                    self.assertNotIn(hidden_fragment, response_payload.lower())
+
+    def test_service_returns_safe_fallback_when_validation_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            service = SimulatorService(
+                workspace_root=workspace_root,
+                generator=ModelClientAnswerGenerator(
+                    model_client=FixtureSimulatorAnswerModelClient(
+                        json.dumps(
+                            {
+                                "answer": (
+                                    "My mastery label is L4 and the hidden evidence "
+                                    "id is ev_gt_map_001_train_test_split_001."
+                                )
+                            }
+                        )
+                    )
+                ),
+            )
+
+            response = service.answer_preview(
+                SimulatorPreviewRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "text": (
+                                "How would you decide whether a train/test split "
+                                "is appropriate?"
+                            )
+                        },
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
+            self.assertIn("not confident", response.answer.text.lower())
+            response_payload = response.model_dump_json()
+            for hidden_fragment in (
+                "mastery label",
+                "ev_gt_map_001_train_test_split_001",
+                "L4",
+                "validation_reasons",
+                "fallback_guidance",
+            ):
+                with self.subTest(hidden_fragment=hidden_fragment):
+                    self.assertNotIn(hidden_fragment, response_payload)
+
+    def test_heuristic_validator_returns_structured_blocking_reasons(self):
+        simulator_context = _simulator_context_for_state(
+            mastery_level="L4",
+            misconceptions=(),
+            unknowns=(),
+        )
+        expression_context = SimulatorExpressionContextBuilder().build(
+            intent=RuleBasedAnswerPolicy().derive_intent(
+                question_text="How would you use a train/test split?",
+                simulator_context=simulator_context,
+            ),
+            simulator_context=simulator_context,
+        )
+
+        decision = HeuristicSimulatorAnswerValidator().validate(
+            candidate_answer=VisibleSimulatorAnswer(
+                text=(
+                    "My L4 mastery appears in the state table with hidden evidence "
+                    "id ev_hidden, scoring fields, and a knowledge map dump."
+                )
+            ),
+            expression_context=expression_context,
+        )
+
+        self.assertFalse(decision.passed)
+        self.assertIsNotNone(decision.fallback_guidance)
+        self.assertEqual(
+            {
+                "mastery label leakage",
+                "hidden evidence id leakage",
+                "state-table language",
+                "benchmark scoring fields",
+                "full-map or state dump language",
+            },
+            set(decision.blocking_safety_reasons),
+        )
+
+    def test_model_client_validator_parses_deidentified_structured_decision(self):
+        simulator_context = _simulator_context_for_state(
+            mastery_level="L2",
+            misconceptions=(),
+            unknowns=("When a separate validation set is needed.",),
+        )
+        expression_context = SimulatorExpressionContextBuilder().build(
+            intent=RuleBasedAnswerPolicy().derive_intent(
+                question_text="How would you use a train/test split?",
+                simulator_context=simulator_context,
+            ),
+            simulator_context=simulator_context,
+        )
+        fake_model_client = FixtureSimulatorAnswerModelClient(
+            json.dumps(
+                {
+                    "passed": True,
+                    "blocking_safety_reasons": [],
+                    "intent_coverage_notes": ["The answer preserves partial understanding."],
+                    "fallback_guidance": None,
+                }
+            )
+        )
+
+        decision = ModelClientAnswerValidator(model_client=fake_model_client).validate(
+            candidate_answer=VisibleSimulatorAnswer(
+                text="I understand the held-out split idea but still mix up validation."
+            ),
+            expression_context=expression_context,
+        )
+
+        self.assertTrue(decision.passed)
+        self.assertEqual(("The answer preserves partial understanding.",), decision.intent_coverage_notes)
+        self.assertEqual(1, len(fake_model_client.calls))
+        validator_prompt = "\n".join(message.content for message in fake_model_client.calls[0])
+        self.assertIn("held-out split idea", validator_prompt)
+        for hidden_fragment in (
+            "ev_hidden_state",
+            "synthetic_user_001",
+            "mastery_level",
+            "evidence_refs",
+            "L2",
+        ):
+            with self.subTest(hidden_fragment=hidden_fragment):
+                self.assertNotIn(hidden_fragment, validator_prompt)
+
+    def test_preview_api_uses_llm_generator_and_llm_validator(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            fake_model_client = SequenceSimulatorModelClient(
+                (
+                    json.dumps({"answer": "I can explain the held-out split idea."}),
+                    json.dumps(
+                        {
+                            "passed": True,
+                            "blocking_safety_reasons": [],
+                            "intent_coverage_notes": ["Safe and intent-covering."],
+                            "fallback_guidance": None,
+                        }
+                    ),
+                )
+            )
+            client = _simulator_preview_test_client(
+                workspace_root,
+                service=SimulatorService(
+                    workspace_root=workspace_root,
+                    generator=ModelClientAnswerGenerator(model_client=fake_model_client),
+                    validator=ModelClientAnswerValidator(model_client=fake_model_client),
+                ),
+            )
+
+            response = client.post(
+                "/api/simulator/preview",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "map_id": "gt_map_001",
+                    "question": {
+                        "text": "How would you decide whether a train/test split is appropriate?"
+                    },
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("answer", payload["observation"]["kind"])
+            self.assertIn("held-out split", payload["answer"]["text"].lower())
+            self.assertEqual(2, len(fake_model_client.calls))
+
+
+class FixtureSimulatorAnswerModelClient:
+    message_profile = OPENAI_MESSAGE_PROFILE
+
+    def __init__(self, raw_output: str) -> None:
+        self._raw_output = raw_output
+        self.metadata = ModelClientMetadata(
+            provider="fixture",
+            model_name="simulator-answer-fixture",
+            message_profile=self.message_profile.name,
+        )
+        self.calls = []
+
+    def complete(self, *, messages, temperature=None):
+        self.calls.append(tuple(messages))
+        return self._raw_output
+
+
+class PassingSimulatorAnswerValidator:
+    def __init__(self) -> None:
+        self.expression_context_json: str | None = None
+
+    def validate(self, *, candidate_answer, expression_context):
+        self.expression_context_json = expression_context.model_dump_json()
+        return SimulatorAnswerValidationDecision(
+            passed=True,
+            blocking_safety_reasons=(),
+            intent_coverage_notes=("Core stance is covered.",),
+            fallback_guidance=None,
+        )
+
+
+class UnavailableSimulatorAnswerValidator:
+    def validate(self, *, candidate_answer, expression_context):
+        raise TimeoutError("validator timeout")
+
+
+class SequenceSimulatorModelClient(FixtureSimulatorAnswerModelClient):
+    def __init__(self, raw_outputs: tuple[str, ...]) -> None:
+        super().__init__("")
+        self._raw_outputs = list(raw_outputs)
+
+    def complete(self, *, messages, temperature=None):
+        self.calls.append(tuple(messages))
+        return self._raw_outputs.pop(0)
+
+
+def _simulator_preview_test_client(
+    workspace_root: Path,
+    *,
+    service: SimulatorService | None = None,
+) -> TestClient:
+    return TestClient(
+        create_app(
+            workspace_root=workspace_root,
+            simulator_service_factory=lambda root: service
+            or SimulatorService(workspace_root=root),
+        )
+    )
 
 
 def _write_reviewed_simulator_fixture(

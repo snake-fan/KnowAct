@@ -3,14 +3,27 @@ from pathlib import Path
 from backend.knowact.core.interaction import (
     CoarseObservationMetadata,
     VisibleObservationKind,
+    VisibleSimulatorAnswer,
+)
+from backend.knowact.llm.client import ModelClientError
+from backend.knowact.simulator.checks import (
+    HeuristicSimulatorAnswerValidator,
+    SimulatorAnswerValidator,
 )
 from backend.knowact.simulator.context_builder import SimulatorContextBuilder
-from backend.knowact.simulator.expression import SimulatorExpressionContextBuilder
+from backend.knowact.simulator.expression import (
+    SimulatorExpressionContext,
+    SimulatorExpressionContextBuilder,
+)
 from backend.knowact.simulator.fallbacks import (
     multiple_question_clarification,
     no_grounding_answer,
+    simulator_safe_fallback,
 )
-from backend.knowact.simulator.generators import RuleBasedAnswerGenerator
+from backend.knowact.simulator.generators import (
+    RuleBasedAnswerGenerator,
+    SimulatorAnswerGenerator,
+)
 from backend.knowact.simulator.grounding import RuleBasedQuestionGrounder
 from backend.knowact.simulator.policy import RuleBasedAnswerPolicy
 from backend.knowact.simulator.preview import (
@@ -31,13 +44,20 @@ from backend.knowact.storage.reviewed_maps import (
 
 
 class SimulatorService:
-    def __init__(self, *, workspace_root: Path) -> None:
+    def __init__(
+        self,
+        *,
+        workspace_root: Path,
+        generator: SimulatorAnswerGenerator | None = None,
+        validator: SimulatorAnswerValidator | None = None,
+    ) -> None:
         self._workspace_root = workspace_root
         self._grounder = RuleBasedQuestionGrounder()
         self._context_builder = SimulatorContextBuilder()
         self._policy = RuleBasedAnswerPolicy()
         self._expression_builder = SimulatorExpressionContextBuilder()
-        self._generator = RuleBasedAnswerGenerator()
+        self._generator = generator or RuleBasedAnswerGenerator()
+        self._validator = validator or HeuristicSimulatorAnswerValidator()
 
     def answer_preview(self, request: SimulatorPreviewRequest) -> SimulatorPreviewResponse:
         manifest = load_reviewed_map_manifest(
@@ -110,7 +130,7 @@ class SimulatorService:
             simulator_context=simulator_context,
             profile_context=profile_context,
         )
-        answer = self._generator.render(expression_context)
+        answer = self._generate_validated_answer(expression_context)
         warnings, debug_trace_available = self._apply_debug_trace_preview_options(
             warnings=warnings,
             request=request,
@@ -122,6 +142,27 @@ class SimulatorService:
             warnings=warnings,
             debug_trace_available=debug_trace_available,
         )
+
+    def _generate_validated_answer(
+        self,
+        expression_context: SimulatorExpressionContext,
+    ) -> VisibleSimulatorAnswer:
+        try:
+            candidate_answer = self._generator.render(expression_context)
+        except (ModelClientError, TimeoutError):
+            return simulator_safe_fallback()
+
+        try:
+            validation = self._validator.validate(
+                candidate_answer=candidate_answer,
+                expression_context=expression_context,
+            )
+        except (ModelClientError, TimeoutError):
+            return simulator_safe_fallback()
+
+        if not validation.passed:
+            return simulator_safe_fallback()
+        return candidate_answer
 
     def _apply_debug_trace_preview_options(
         self,

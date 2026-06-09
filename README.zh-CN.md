@@ -284,7 +284,7 @@ V1 实现已经从 schema 与 validation spine 开始：
 - `backend/knowact/validation/`：用于 graph 引用、map coverage/evidence support 和 episode manifest 约束的跨对象 validator。
 - `backend/knowact/authoring/`：Phase 2 graph authoring workflow spine，包含 node extraction、node rubric authoring、edge proposal、candidate file export 边界，以及分离的 `templates/` 和 `parsers/` 模块来管理 agent prompts 与 raw model outputs。
 - `backend/knowact/simulator/`：Phase 5 user simulator contract，当前从 development-only preview DTO 开始，保持 request 与 response 字段只暴露 tested-agent-visible 信息。
-- `backend/knowact/llm/`：model-client interface，以及基于 OpenAI 和 DeepSeek SDK 的 clients，用于 text-based authoring steps。
+- `backend/knowact/llm/`：model-client interface，以及基于 OpenAI 和 DeepSeek SDK 的 clients，用于 text-based authoring steps 和 LLM-backed simulator preview。
 - `backend/knowact/storage/`：local artifact、material path 与 reviewed graph/map promotion helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
 - `backend/knowact/api/` 与 `backend/main.py`：FastAPI 入口，以及可从本地教材 PDF 运行真实 graph authoring workflow 的 authoring API。
 - `frontend/`：React/Vite research workbench，包含顶层 Knowledge Graph 与 User Profile 模块。它支持 candidate graph review，以及 Profile Context generation、编辑、保存与不可变 confirmation gate。
@@ -296,6 +296,7 @@ V1 实现已经从 schema 与 validation spine 开始：
 ```bash
 OPENAI_API_KEY=...
 KNOWACT_OPENAI_MODEL=gpt-4.1-mini
+KNOWACT_SIMULATOR_CLIENT_PROVIDER=openai
 ```
 
 DeepSeek 可以在单次 authoring 请求中通过 `client_provider="deepseek"` 选择，API key 与模型默认值通过环境变量配置，不放入 request body：
@@ -306,6 +307,8 @@ KNOWACT_DEEPSEEK_MODEL=deepseek-v4-flash
 KNOWACT_DEEPSEEK_BASE_URL=https://api.deepseek.com
 KNOWACT_DEEPSEEK_TIMEOUT_SECONDS=120
 ```
+
+Simulator preview endpoint `/api/simulator/preview` 会使用配置好的 LLM provider 同时进行 answer generation 和 answer validation。设置 `KNOWACT_SIMULATOR_CLIENT_PROVIDER=deepseek` 可以让 preview 使用 DeepSeek，而不是默认的 OpenAI path。如果 provider 没有配置好，preview endpoint 会返回不泄露内部细节的配置错误，而不是暴露未验证的模型输出。
 
 当前测试使用 deterministic fixtures 和 fake clients，不会调用 OpenAI 或 DeepSeek API。
 

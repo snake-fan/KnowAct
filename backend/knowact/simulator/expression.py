@@ -14,12 +14,23 @@ class NodeExpressionContext(BaseModel):
     unknown_cues: tuple[str, ...] = Field(default_factory=tuple)
 
 
+class VisibleDialogueExpressionTurn(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    question_text: str
+    answer_text: str
+    observation_kind: str
+
+
 class SimulatorExpressionContext(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     question_text: str
     primary_stance: SimulatorAnswerStance
     nodes: tuple[NodeExpressionContext, ...]
+    visible_dialogue_turns: tuple[VisibleDialogueExpressionTurn, ...] = Field(
+        default_factory=tuple
+    )
     style_hint: str | None = None
 
 
@@ -44,6 +55,7 @@ class SimulatorExpressionContextBuilder:
                 )
                 for node_intent in intent.node_intents
             ),
+            visible_dialogue_turns=_visible_dialogue_turns(simulator_context),
             style_hint=_style_hint(profile_context),
         )
 
@@ -55,3 +67,18 @@ def _style_hint(profile_context: object | None) -> str | None:
     if any("concrete" in preference.lower() for preference in preferences):
         return "Use plain wording with a concrete phrasing preference."
     return "Use neutral first-person wording."
+
+
+def _visible_dialogue_turns(
+    simulator_context: SimulatorTurnContext,
+) -> tuple[VisibleDialogueExpressionTurn, ...]:
+    if simulator_context.visible_dialogue_context is None:
+        return ()
+    return tuple(
+        VisibleDialogueExpressionTurn(
+            question_text=turn.question.text,
+            answer_text=turn.answer.text,
+            observation_kind=turn.observation.kind.value,
+        )
+        for turn in simulator_context.visible_dialogue_context.turns
+    )
