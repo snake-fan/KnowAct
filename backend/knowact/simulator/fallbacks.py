@@ -11,3 +11,9 @@ def multiple_question_clarification() -> VisibleSimulatorAnswer:
     return VisibleSimulatorAnswer(
         text="Please ask one specific question at a time so I can answer it directly."
     )
+
+
+def simulator_safe_fallback() -> VisibleSimulatorAnswer:
+    return VisibleSimulatorAnswer(
+        text="I am not confident I can answer that cleanly right now."
+    )

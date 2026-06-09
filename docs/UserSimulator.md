@@ -194,7 +194,7 @@ The LLM generator is the naturalness-oriented path for simulator preview. A rule
 
 This is a soft implementation preference, not a permanent architectural ban. Any generator must respect the same **Simulator Expression Context** and validation contract.
 
-LLM-backed answer prompt/message construction belongs inside the answer-generation component. Do not introduce a standalone simulator prompt module in the initial Phase 5 design; prompt helpers that are only used by answer generation should live with the generator, while validator-specific prompt helpers should live with answer validation.
+LLM-backed answer prompt/message construction lives in step-specific simulator templates under `backend/knowact/simulator/templates/`. Answer generation uses `templates/answer_generation.py`, answer validation uses `templates/answer_validation.py`, and shared prompt sections live in `templates/common.py`. Do not introduce a catch-all simulator prompt module; each LLM step should keep its own prompt/message builder and output contract.
 
 ## Profile Context
 
@@ -222,7 +222,7 @@ Label-seeking questions should still use the normal Answer Intent to generator t
 
 **Simulator Answer Validation** checks both safety and usefulness.
 
-The validation mechanism should be behind an explicit interface. The initial implementation may use an LLM-backed validator because semantic leakage and intent coverage are not reliably captured by simple string matching. The interface should allow later replacement with heuristic, rule-based, or hybrid validators without changing simulator policy.
+The validation mechanism should be behind an explicit interface. The initial implementation may use an LLM-backed validator because semantic leakage and intent coverage are not reliably captured by simple string matching. Validator-specific prompt/message construction lives in `backend/knowact/simulator/templates/answer_validation.py`. The interface should allow later replacement with heuristic, rule-based, or hybrid validators without changing simulator policy.
 
 Validator output should be structured, such as pass/fail decisions, blocking safety reasons, intent-coverage notes, and retry/fallback guidance. It should not become a benchmark score or primary evaluation signal.
 
@@ -265,6 +265,21 @@ This trace may include grounding, grounding confidence, grounded node ids, answe
 No-grounding and multiple-question flags belong in this hidden debug trace, not in the visible observation text.
 
 **Simulator Answer Intent** may be retained in hidden debug artifacts for audit, but it should not be stored as part of the formal visible episode run artifacts. Formal run artifacts should center on visible transcript data, tested-agent outputs, and scoring reports.
+
+## Runtime Logging
+
+The simulator implementation should emit operator-facing logger `info` messages at
+workflow boundaries so terminal output shows which step is running: reviewed
+artifact loading, question grounding, simulator context construction, answer
+intent derivation, expression-context construction, answer generation, answer
+validation, fallback, and final preview completion.
+
+Runtime logs are not **Simulator Debug Trace** artifacts and are not visible
+transcript data. They should record only progress metadata such as artifact
+identities, component names, counts, flags, result status, and output lengths.
+They must not record full hidden map payloads, hidden evidence ids, hidden
+evidence signals, profile-context prose, raw model output, prompt payloads, or
+visible answer text.
 
 ## Preview Boundary
 
