@@ -102,6 +102,8 @@ Question Grounding is a contract, not a required implementation mechanism. It ma
 
 Grounding confidence may be recorded for simulator debugging, but it must not be exposed to the **Tested Agent** or used as a scoring signal. Low confidence may lead the simulator to ask for clarification and should be reflected in hidden debug trace.
 
+Grounding identifies no-grounding, multiple-question, label-seeking, and integrated-question conditions, but it does not decide the final response mode. The **Simulator Answer Policy** decides how the simulator should respond to those grounded conditions.
+
 ## Turn Boundary
 
 A turn may contain one ordinary **Diagnostic Question** or one **Integrated Diagnostic Question**.
@@ -123,7 +125,7 @@ It should include:
 
 It should not include hidden mastery or evidence from neighboring nodes merely because of graph edges.
 
-If a question grounds to no nodes, the simulator should give a natural clarification or non-answer without using hidden map content.
+If a question grounds to no nodes, the **Simulator Answer Policy** should choose a natural clarification or non-answer without using hidden map content.
 
 No-grounding answers and multiple-question clarifications are still visible simulator answers. They should be recorded as visible observations when used inside an episode, because the tested agent spent a turn.
 
@@ -133,7 +135,7 @@ The answer policy reads grounded hidden state and evidence, then derives one **S
 
 Input:
 
-- simulator-only context for the grounded turn
+- simulator-only context for the grounded turn, including directly grounded node rubrics, simulator behavior, hidden state, and grounded simulator-only evidence
 - grounding result and diagnostic-question flags
 - current diagnostic question text
 
@@ -141,9 +143,13 @@ Output:
 
 - one **Simulator Answer Intent**
 
+The policy is the simulator reasoning boundary. It may be rule-based, LLM-backed, or hybrid, but analysis, inference, judgement, and answer-content decisions belong here rather than in the expression or generation layers.
+
+The policy is also the single owner of response-mode decisions. No-grounding, multiple-question, label-seeking, safe non-answer, and ordinary diagnostic answer modes should be represented in the **Simulator Answer Intent** and executed by service orchestration, rather than bypassing the policy with pre-policy fallback answers.
+
 The simulator assumes reviewed map state and grounded evidence have already passed upstream map-authoring validation and benchmark-author review. It should not reconcile contradictions between a reviewed **User Knowledge State** and its **Ground-Truth Evidence** at answer time; that is a map-authoring quality issue, not a simulator policy responsibility.
 
-The intent is the knowledge-content stance for this answer. It may represent:
+The intent is a structured answer-content decision for this answer. A coarse stance may be one field inside the intent, but it is not the whole intent. The intent may represent:
 
 - confident correct understanding
 - partial or fragile understanding
@@ -153,11 +159,28 @@ The intent is the knowledge-content stance for this answer. It may represent:
 - an ability boundary
 - whether a concrete example is appropriate based on grounded evidence
 
+The structured intent should separate at least:
+
+- response mode, such as answering, refusing a label request, asking for clarification, or using a safe non-answer
+- grounded node answer decisions, including expressible capabilities, limitations, misconceptions, and unknown boundaries
+- evidence selection, including which de-identified evidence signals may shape visible content
+- rubric alignment, including which level-specific capabilities may be expressed without exposing mastery labels
+- generation directives, including allowed answer form, example use, formula use, confidence, and first-person wording
+- visibility guards, including hidden labels, evidence ids, state tables, map references, and unsupported facts that must not appear
+
+LLM-backed policy output must be parsed into a strict schema. Freeform policy prose may appear only inside bounded content fields such as concise directives, capability summaries, limitations, and selected de-identified signals. The expression layer should compile the structured intent into generation material rather than forwarding a policy-authored prompt.
+
+The policy may select, combine, compress, and paraphrase grounded node rubrics, simulator behavior, hidden map state, and grounded evidence signals. It must not author new user facts, new prior experiences, new worked examples, new evidence, or new abilities that are not supported by the grounded inputs.
+
 The policy should not collapse mastery into a binary know/do-not-know stance. Intermediate states should remain diagnostically visible through uncertainty, fragile explanation, boundary statements, or misconception-led answers.
 
 The intent may retain grounded evidence refs internally for audit and debug trace. Those refs must be removed before building the **Simulator Expression Context**.
 
+The implementation should distinguish the downstream **Simulator Answer Intent** from a hidden **Simulator Policy Decision Trace**. The trace may record node ids, mastery labels, hidden evidence refs, selected rubric text, and policy reasoning metadata for benchmark-author audit. The intent consumed by expression and generation must not contain mastery labels, hidden evidence ids, map ids, user ids, or other hidden artifact identifiers.
+
 For an **Integrated Diagnostic Question**, the policy should produce one integrated intent. It may preserve per-node stance internally, but the answer should not merely concatenate separate per-node answers.
+
+The policy must not read hidden map state, hidden evidence, or mastery labels for nodes that were not directly grounded by the current question. Cross-node reasoning is allowed only for nodes grounded by one integrated diagnostic question.
 
 ## Expression Context Builder
 
@@ -172,6 +195,8 @@ Input:
 Output:
 
 - one de-identified **Simulator Expression Context**
+
+The expression context builder does not decide what the user knows, what misconception to express, or which evidence matters. It packages the policy's decisions into de-identified generation material.
 
 The expression context may include:
 
@@ -228,7 +253,16 @@ Validator output should be structured, such as pass/fail decisions, blocking saf
 
 The validator input should be de-identified. It may see the generated answer, **Simulator Answer Intent**, de-identified evidence signals, grounding metadata, and leakage rules. It must not receive raw full map data or hidden evidence ids.
 
-If the validator fails, times out, or is otherwise unavailable, the simulator should fail closed: do not expose the unvalidated generated answer, return a **Simulator Safe Fallback**, and record the validator failure in hidden debug trace.
+If the validator service fails, times out, or is otherwise unavailable, the simulator should fail closed: do not expose the unvalidated generated answer, return a **Simulator Safe Fallback**, and record the validator failure in hidden debug trace.
+
+If the validator is available and rejects a candidate answer, it must return structured rejection reasons. The simulator should use those reasons for a bounded regeneration loop before falling back. Regeneration must preserve the same **Simulator Answer Intent** unless the rejection shows that the intent itself is underspecified or unsafe.
+
+Validation retry routing should preserve layer boundaries:
+
+- expression leakage, unsupported wording, or weak intent coverage should retry answer generation with the same **Simulator Answer Intent**
+- generator timeout, invalid JSON, or empty output may retry answer generation briefly before terminal fallback
+- policy-schema failure, unsafe intent fields, contradictory intent, or an impossible intent should retry or fall back at the **Simulator Answer Policy** layer before answer generation
+- validator unavailability should not trigger regeneration from an unvalidated answer; it should fail closed
 
 Blocking safety checks include:
 
@@ -240,6 +274,8 @@ Blocking safety checks include:
 Intent coverage checks are quality checks. The answer should carry the core stance of the **Simulator Answer Intent**, such as uncertainty, partial knowledge, misconception, or ability boundary. Weak coverage should be recorded in debug trace and may trigger regeneration or fallback.
 
 A generated answer that violates the **Visibility Boundary** must not become visible to the **Tested Agent**.
+
+Regeneration feedback may include concise blocking safety reasons, intent-coverage gaps, and retry guidance. It must not include hidden evidence ids, mastery labels, full hidden state, raw maps, or benchmark-author debug details in the material sent to the generator.
 
 ## Safe Fallback
 
@@ -255,6 +291,8 @@ Initial fallback categories should include:
 - generator, validator, or system failure
 
 If the LLM generator fails, times out, or returns no usable answer, the simulator should use a safe fallback rather than asking the validator to generate replacement content. The validator judges candidate answers; it does not serve as a backup generator.
+
+Policy and answer fallback paths should still produce or consume the same **Simulator Answer Intent** schema where possible. Safe fallback is the terminal visible response after policy fallback, generation failure, validator unavailability, or bounded regeneration exhaustion.
 
 ## Debug Trace
 
@@ -288,6 +326,8 @@ Phase 5 may expose a development-only simulator preview before formal **Evaluati
 Current initial route: `POST /api/simulator/preview`.
 
 The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Intent** derivation, de-identified **Simulator Expression Context** construction, LLM-backed visible answer generation, LLM-backed answer validation, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement retries, persistent debug trace artifacts, or formal episode persistence yet.
+
+The next simulator-policy implementation slice should stabilize the structured intent boundary before adding an LLM-backed policy. Recommended order: define the richer **Simulator Answer Intent** and hidden **Simulator Policy Decision Trace** schemas, make the rule-based policy emit that schema as deterministic fallback, make expression consume only downstream-safe intent, update generator prompts around structured intent, route no-grounding/multiple/label-seeking modes through policy, add bounded validation-regeneration, and then add an LLM-backed policy behind the same interface.
 
 The preview should:
 
