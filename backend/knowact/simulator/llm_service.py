@@ -1,6 +1,4 @@
-import os
 from pathlib import Path
-from typing import Literal
 
 from backend.knowact.llm.client import ModelClient, ModelClientError
 from backend.knowact.llm.config import (
@@ -14,11 +12,13 @@ from backend.knowact.llm.openai_client import OpenAIChatModelClient
 from backend.knowact.logging_config import get_knowact_logger
 from backend.knowact.simulator.checks import ModelClientAnswerValidator
 from backend.knowact.simulator.generators import ModelClientAnswerGenerator
+from backend.knowact.simulator.providers import (
+    DEFAULT_SIMULATOR_CLIENT_PROVIDER,
+    SimulatorClientProvider,
+)
 from backend.knowact.simulator.service import SimulatorService
 
 
-SimulatorClientProvider = Literal["openai", "deepseek"]
-DEFAULT_SIMULATOR_CLIENT_PROVIDER: SimulatorClientProvider = "openai"
 _LOGGER = get_knowact_logger("simulator.llm_service")
 
 
@@ -48,11 +48,11 @@ def build_simulator_service(
 def build_simulator_service_for_provider(
     *,
     workspace_root: Path,
-    client_provider: SimulatorClientProvider | None = None,
+    client_provider: SimulatorClientProvider | None = DEFAULT_SIMULATOR_CLIENT_PROVIDER,
     openai_config: OpenAIModelConfig | None = None,
     deepseek_config: DeepSeekModelConfig | None = None,
 ) -> SimulatorService:
-    provider = client_provider or _simulator_client_provider_from_env()
+    provider = client_provider or DEFAULT_SIMULATOR_CLIENT_PROVIDER
     _LOGGER.info("Simulator provider configuration started client_provider=%s", provider)
     try:
         if provider == "openai":
@@ -81,23 +81,6 @@ def build_simulator_service_for_provider(
             "Simulator LLM service is not configured."
         ) from exc
 
-    _LOGGER.error(
-        "Simulator provider configuration failed client_provider=%s error_type=%s",
-        provider,
-        "UnsupportedProvider",
-    )
-    raise SimulatorServiceConfigurationError(
-        f"Unsupported simulator client provider: {provider}"
-    )
-
-
-def _simulator_client_provider_from_env() -> SimulatorClientProvider:
-    provider = os.environ.get(
-        "KNOWACT_SIMULATOR_CLIENT_PROVIDER",
-        DEFAULT_SIMULATOR_CLIENT_PROVIDER,
-    )
-    if provider in ("openai", "deepseek"):
-        return provider
     _LOGGER.error(
         "Simulator provider configuration failed client_provider=%s error_type=%s",
         provider,

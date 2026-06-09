@@ -287,11 +287,12 @@ Phase 5 may expose a development-only simulator preview before formal **Evaluati
 
 Current initial route: `POST /api/simulator/preview`.
 
-The initial implementation supports a conservative rule-based pipeline: visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Intent** derivation, de-identified **Simulator Expression Context** construction, and rule-based visible answer rendering. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement LLM answer generation, semantic validation, retries, full fallback orchestration, persistent debug trace artifacts, or formal episode persistence yet.
+The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Intent** derivation, de-identified **Simulator Expression Context** construction, LLM-backed visible answer generation, LLM-backed answer validation, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement retries, persistent debug trace artifacts, or formal episode persistence yet.
 
 The preview should:
 
 - select reviewed artifacts by identity, such as `benchmark_domain` and `map_id`
+- accept request-level `client_provider`, using the same `openai` / `deepseek` provider vocabulary as authoring and defaulting to `openai`
 - derive `graph_version` from the reviewed map's `map_manifest.json`
 - derive `user_id` from the reviewed map's `map_manifest.json` and load the confirmed **Profile Context** when available
 - use reviewed graphs and reviewed maps, not candidate artifacts

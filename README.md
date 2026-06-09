@@ -296,10 +296,9 @@ Configure local OpenAI API access by copying `.env.example` to `.env` and fillin
 ```bash
 OPENAI_API_KEY=...
 KNOWACT_OPENAI_MODEL=gpt-4.1-mini
-KNOWACT_SIMULATOR_CLIENT_PROVIDER=openai
 ```
 
-DeepSeek can be selected per authoring request with `client_provider="deepseek"` and is configured through environment variables rather than request-body secrets:
+DeepSeek can be selected per authoring or simulator preview request with `client_provider="deepseek"` and is configured through environment variables rather than request-body secrets:
 
 ```bash
 DEEPSEEK_API_KEY=...
@@ -308,7 +307,7 @@ KNOWACT_DEEPSEEK_BASE_URL=https://api.deepseek.com
 KNOWACT_DEEPSEEK_TIMEOUT_SECONDS=120
 ```
 
-The simulator preview endpoint `/api/simulator/preview` uses the configured LLM provider for both answer generation and answer validation. Set `KNOWACT_SIMULATOR_CLIENT_PROVIDER=deepseek` to use DeepSeek instead of the default OpenAI path. If the provider is not configured, the preview endpoint returns a non-leaking configuration error rather than falling back to unvalidated model text.
+The simulator preview endpoint `/api/simulator/preview` accepts request-level `client_provider`, defaulting to `openai`, and uses the selected provider for both answer generation and answer validation. If the selected provider is not configured, the preview endpoint returns a non-leaking configuration error rather than falling back to unvalidated model text.
 
 The current tests use deterministic fixtures and fake clients; they do not call the OpenAI or DeepSeek APIs.
 
@@ -351,7 +350,7 @@ If the backend is running on a non-default port, set `VITE_API_PROXY_TARGET`, fo
 VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 ```
 
-Then open the frontend URL printed by Vite, or open the local Swagger UI at `http://127.0.0.1:8000/docs`. The current authoring API includes:
+Then open the frontend URL printed by Vite, or open the local Swagger UI at `http://127.0.0.1:8000/docs`. The current API includes:
 
 - `POST /api/authoring/source-materials` and `GET /api/authoring/source-materials`, which upload PDF source materials into `storage/source_materials/{source_id}/original.pdf`, write `metadata.json`, and list registered source materials for the workbench.
 - `GET /api/authoring/benchmark-domains`, which lists existing benchmark-domain directories for workbench selectors without creating or mutating benchmark data.
@@ -369,6 +368,7 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`, which returns generation-time edge-consistency warnings for candidate-map review.
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`, which revalidates one saved Candidate Knowledge Map with its reviewed graph and confirmed Profile Context, converts `kind` to `ground_truth`, and publishes immutable `maps/{map_id}/map.json` plus `map_manifest.json`. Existing `map_id` values return `409 Conflict`, generation-time `consistency_warnings.json` is not copied into reviewed data, and a successfully published run is removed from `candidate_maps/`.
 - `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`, which list and read reviewed Knowledge Map snapshots for read-only workbench previews. These are inspection endpoints, not simulator runtime endpoints.
+- `POST /api/simulator/preview`, which previews one reviewed-map-grounded simulator answer. It accepts `benchmark_domain`, reviewed `map_id`, request-level `client_provider` (`openai` or `deepseek`, default `openai`), one diagnostic `question`, optional visible dialogue context, and optional debug-trace availability request metadata.
 
 ```json
 {

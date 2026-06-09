@@ -69,9 +69,10 @@ class SimulatorService:
     def answer_preview(self, request: SimulatorPreviewRequest) -> SimulatorPreviewResponse:
         visible_turns = _visible_dialogue_turn_count(request)
         _LOGGER.info(
-            "Simulator preview workflow started benchmark_domain=%s map_id=%s question_id=%s visible_dialogue_turns=%d include_debug_trace=%s",
+            "Simulator preview workflow started benchmark_domain=%s map_id=%s client_provider=%s question_id=%s visible_dialogue_turns=%d include_debug_trace=%s",
             request.benchmark_domain,
             request.map_id,
+            request.client_provider,
             request.question.question_id,
             visible_turns,
             request.preview_options.include_debug_trace,

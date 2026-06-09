@@ -140,6 +140,33 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertNotIn("graph_version", payload)
             self.assertNotIn("user_id", payload)
 
+    def test_preview_api_selects_simulator_client_provider_per_request(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            service_factory = RecordingSimulatorServiceFactory()
+            client = TestClient(
+                create_app(
+                    workspace_root=workspace_root,
+                    simulator_service_factory=service_factory,
+                )
+            )
+
+            response = client.post(
+                "/api/simulator/preview",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "map_id": "gt_map_001",
+                    "client_provider": "deepseek",
+                    "question": {
+                        "text": "How would you decide whether a train/test split is appropriate?"
+                    },
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            self.assertEqual(["deepseek"], service_factory.client_providers)
+
     def test_preview_api_reports_debug_trace_availability_without_inline_trace(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -1100,10 +1127,19 @@ def _simulator_preview_test_client(
     return TestClient(
         create_app(
             workspace_root=workspace_root,
-            simulator_service_factory=lambda root: service
+            simulator_service_factory=lambda _client_provider, root: service
             or SimulatorService(workspace_root=root),
         )
     )
+
+
+class RecordingSimulatorServiceFactory:
+    def __init__(self) -> None:
+        self.client_providers: list[str] = []
+
+    def __call__(self, client_provider, workspace_root):
+        self.client_providers.append(client_provider)
+        return SimulatorService(workspace_root=workspace_root)
 
 
 def _write_reviewed_simulator_fixture(

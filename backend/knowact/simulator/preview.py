@@ -9,6 +9,10 @@ from backend.knowact.core.interaction import (
     VisibleDialogueContext,
     VisibleSimulatorAnswer,
 )
+from backend.knowact.simulator.providers import (
+    DEFAULT_SIMULATOR_CLIENT_PROVIDER,
+    SimulatorClientProvider,
+)
 
 
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
@@ -25,6 +29,7 @@ class SimulatorPreviewRequest(BaseModel):
 
     benchmark_domain: str
     map_id: str
+    client_provider: SimulatorClientProvider = DEFAULT_SIMULATOR_CLIENT_PROVIDER
     question: DiagnosticQuestion
     visible_dialogue_context: VisibleDialogueContext | None = None
     preview_options: SimulatorPreviewOptions = Field(default_factory=SimulatorPreviewOptions)

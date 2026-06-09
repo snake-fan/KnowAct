@@ -296,10 +296,9 @@ V1 实现已经从 schema 与 validation spine 开始：
 ```bash
 OPENAI_API_KEY=...
 KNOWACT_OPENAI_MODEL=gpt-4.1-mini
-KNOWACT_SIMULATOR_CLIENT_PROVIDER=openai
 ```
 
-DeepSeek 可以在单次 authoring 请求中通过 `client_provider="deepseek"` 选择，API key 与模型默认值通过环境变量配置，不放入 request body：
+DeepSeek 可以在单次 authoring 或 simulator preview 请求中通过 `client_provider="deepseek"` 选择，API key 与模型默认值通过环境变量配置，不放入 request body：
 
 ```bash
 DEEPSEEK_API_KEY=...
@@ -308,7 +307,7 @@ KNOWACT_DEEPSEEK_BASE_URL=https://api.deepseek.com
 KNOWACT_DEEPSEEK_TIMEOUT_SECONDS=120
 ```
 
-Simulator preview endpoint `/api/simulator/preview` 会使用配置好的 LLM provider 同时进行 answer generation 和 answer validation。设置 `KNOWACT_SIMULATOR_CLIENT_PROVIDER=deepseek` 可以让 preview 使用 DeepSeek，而不是默认的 OpenAI path。如果 provider 没有配置好，preview endpoint 会返回不泄露内部细节的配置错误，而不是暴露未验证的模型输出。
+Simulator preview endpoint `/api/simulator/preview` 接受 request-level `client_provider`，默认值为 `openai`，并用选中的 provider 同时进行 answer generation 和 answer validation。如果选中的 provider 没有配置好，preview endpoint 会返回不泄露内部细节的配置错误，而不是暴露未验证的模型输出。
 
 当前测试使用 deterministic fixtures 和 fake clients，不会调用 OpenAI 或 DeepSeek API。
 
@@ -351,7 +350,7 @@ npm --prefix frontend run test:candidate-graph-workbench
 VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 ```
 
-然后打开 Vite 输出的前端地址，或打开本地 Swagger UI：`http://127.0.0.1:8000/docs`。当前 authoring API 包含：
+然后打开 Vite 输出的前端地址，或打开本地 Swagger UI：`http://127.0.0.1:8000/docs`。当前 API 包含：
 
 - `POST /api/authoring/source-materials` 和 `GET /api/authoring/source-materials`：把 PDF source material 上传到 `storage/source_materials/{source_id}/original.pdf`，写出 `metadata.json`，并为 workbench 列出已登记 source materials。
 - `GET /api/authoring/benchmark-domains`：为 workbench selector 列出现有 benchmark-domain 目录，不创建或修改 benchmark data。
@@ -369,6 +368,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`：返回 candidate-map review 用的 generation-time edge-consistency warnings。
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`：用 reviewed graph 与 confirmed Profile Context 重新校验一份已保存的 Candidate Knowledge Map，将 `kind` 转换为 `ground_truth`，并发布不可变的 `maps/{map_id}/map.json` 与 `map_manifest.json`。已有 `map_id` 返回 `409 Conflict`，generation-time `consistency_warnings.json` 不会复制到 reviewed data，成功发布后的 run 会从 `candidate_maps/` 移除。
 - `GET /api/authoring/maps/{benchmark_domain}` 和 `GET /api/authoring/maps/{benchmark_domain}/{map_id}`：列出和读取 reviewed Knowledge Map snapshots，用于只读 workbench preview。这些是 inspection endpoints，不是 simulator runtime endpoints。
+- `POST /api/simulator/preview`：预览一个由 reviewed map grounding 的 simulator answer。它接受 `benchmark_domain`、reviewed `map_id`、request-level `client_provider`（`openai` 或 `deepseek`，默认 `openai`）、一个 diagnostic `question`、可选 visible dialogue context，以及可选 debug-trace availability 请求元数据。
 
 ```json
 {
