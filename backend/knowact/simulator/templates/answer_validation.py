@@ -1,12 +1,15 @@
 from textwrap import dedent
 
-from backend.knowact.core.interaction import VisibleSimulatorAnswer
+from backend.knowact.core.interaction import (
+    VisibleDialogueContext,
+    VisibleSimulatorAnswer,
+)
 from backend.knowact.llm.messages import (
     ModelMessage,
     ModelMessageProfile,
     OPENAI_MESSAGE_PROFILE,
 )
-from backend.knowact.simulator.expression import SimulatorExpressionContext
+from backend.knowact.simulator.policy import SimulatorAnswerIntent
 from backend.knowact.simulator.templates.common import (
     SIMULATOR_CONTEXT,
     SIMULATOR_JSON_ONLY_RULES,
@@ -20,12 +23,18 @@ from backend.knowact.simulator.templates.common import (
 def build_answer_validation_messages(
     *,
     candidate_answer: VisibleSimulatorAnswer,
-    expression_context: SimulatorExpressionContext,
+    intent: SimulatorAnswerIntent,
+    visible_dialogue_context: VisibleDialogueContext | None = None,
+    style_hint: str | None = None,
+    regeneration_guidance: tuple[str, ...] = (),
     message_profile: ModelMessageProfile = OPENAI_MESSAGE_PROFILE,
 ) -> tuple[ModelMessage, ...]:
     payload = {
         "candidate_answer": candidate_answer.model_dump(mode="json"),
-        "simulator_expression_context": expression_context.model_dump(mode="json"),
+        "answer_intent": intent.model_dump(mode="json"),
+        "visible_dialogue_turns": _visible_dialogue_payload(visible_dialogue_context),
+        "style_hint": style_hint,
+        "regeneration_guidance": regeneration_guidance,
         "blocking_safety_checks": (
             "benchmark mastery labels",
             "hidden evidence identifiers or reference fields",
@@ -35,7 +44,7 @@ def build_answer_validation_messages(
         ),
         "intent_coverage_checks": (
             "answer preserves response mode, primary stance, and node decisions",
-            "answer uses only de-identified capability, limitation, evidence, and cue fields",
+            "answer uses only de-identified answer focus, boundary focus, and supporting signals",
             "answer remains natural first-person self-report",
             "answer uses visible dialogue only for continuity",
             "answer follows regeneration guidance when present",
@@ -69,9 +78,9 @@ def build_answer_validation_messages(
                     """
                     Inputs:
                     - candidate_answer.text: the proposed visible answer.
-                    - simulator_expression_context: de-identified expected
-                      response mode, stance, node decisions, evidence signals,
-                      cues, directives, visible dialogue, and style hint.
+                    - answer_intent: de-identified expected answer plan.
+                    - visible_dialogue_turns, style_hint, and
+                      regeneration_guidance: runtime wording context.
                     - blocking_safety_checks: safety categories that must fail.
                     - intent_coverage_checks: usefulness categories to inspect.
                     """
@@ -82,8 +91,8 @@ def build_answer_validation_messages(
                     1. Inspect candidate_answer for benchmark leakage, hidden
                        artifacts, unsupported claims, and schema/internal language.
                     2. Compare candidate_answer to response_mode,
-                       overall_directive, primary_stance, node decisions,
-                       evidence_signals, misconception_cues, and unknown_cues.
+                       answer_strategy, primary_stance, node decisions,
+                       answer_focus, boundary_focus, and supporting_signals.
                     3. Check whether visible dialogue was used only for continuity.
                     4. Set passed=false if any blocking safety issue appears.
                     5. Set passed=false if the answer does not preserve the core
@@ -165,4 +174,19 @@ def build_answer_validation_messages(
             role="user",
             content=dump_json_payload(payload),
         ),
+    )
+
+
+def _visible_dialogue_payload(
+    visible_dialogue_context: VisibleDialogueContext | None,
+) -> tuple[dict[str, str], ...]:
+    if visible_dialogue_context is None:
+        return ()
+    return tuple(
+        {
+            "question_text": turn.question.text,
+            "answer_text": turn.answer.text,
+            "observation_kind": turn.observation.kind.value,
+        }
+        for turn in visible_dialogue_context.turns
     )

@@ -1,13 +1,11 @@
 import unittest
 
 from backend.knowact.core.interaction import VisibleSimulatorAnswer
-from backend.knowact.simulator.expression import (
-    NodeExpressionContext,
-    SimulatorExpressionContext,
-)
 from backend.knowact.simulator.grounding import QuestionGroundingResult
 from backend.knowact.simulator.policy import (
+    GroundedNodeAnswerDecision,
     RuleBasedAnswerPolicy,
+    SimulatorAnswerIntent,
     SimulatorAnswerStance,
     SimulatorResponseMode,
 )
@@ -50,13 +48,14 @@ class V1SimulatorPromptTemplatesTest(unittest.TestCase):
             with self.subTest(section=section):
                 self.assertIn(section, developer_prompt)
         self.assertIn("strict JSON", developer_prompt)
-        self.assertIn("response_mode", developer_prompt)
+        self.assertIn("answer_strategy", developer_prompt)
+        self.assertNotIn('"visibility_guards"', developer_prompt)
 
     def test_answer_generation_template_is_structured_and_deidentified(self):
-        expression_context = _expression_context()
+        intent = _answer_intent()
 
         messages = build_answer_generation_messages(
-            expression_context=expression_context,
+            intent=intent,
         )
 
         self.assertEqual(2, len(messages))
@@ -75,7 +74,7 @@ class V1SimulatorPromptTemplatesTest(unittest.TestCase):
                 self.assertIn(section, developer_prompt)
 
         user_payload = messages[1].content
-        self.assertIn("simulator_expression_context", user_payload)
+        self.assertIn("answer_intent", user_payload)
         self.assertIn("held-out evaluation", user_payload)
         for hidden_fragment in (
             "mastery_level",
@@ -88,13 +87,13 @@ class V1SimulatorPromptTemplatesTest(unittest.TestCase):
                 self.assertNotIn(hidden_fragment, user_payload)
 
     def test_answer_validation_template_is_structured_and_deidentified(self):
-        expression_context = _expression_context()
+        intent = _answer_intent()
 
         messages = build_answer_validation_messages(
             candidate_answer=VisibleSimulatorAnswer(
                 text="I understand held-out evaluation but mix up validation details."
             ),
-            expression_context=expression_context,
+            intent=intent,
         )
 
         self.assertEqual(2, len(messages))
@@ -115,7 +114,7 @@ class V1SimulatorPromptTemplatesTest(unittest.TestCase):
 
         user_payload = messages[1].content
         self.assertIn("candidate_answer", user_payload)
-        self.assertIn("simulator_expression_context", user_payload)
+        self.assertIn("answer_intent", user_payload)
         self.assertIn("held-out evaluation", user_payload)
         for hidden_fragment in (
             "mastery_level",
@@ -128,31 +127,24 @@ class V1SimulatorPromptTemplatesTest(unittest.TestCase):
                 self.assertNotIn(hidden_fragment, user_payload)
 
 
-def _expression_context() -> SimulatorExpressionContext:
-    return SimulatorExpressionContext(
+def _answer_intent() -> SimulatorAnswerIntent:
+    return SimulatorAnswerIntent(
         question_text="How would you use a train/test split?",
         response_mode=SimulatorResponseMode.ANSWER,
         primary_stance=SimulatorAnswerStance.PARTIAL_UNDERSTANDING,
-        overall_directive="Answer the diagnostic question as the synthetic user.",
-        nodes=(
-            NodeExpressionContext(
+        answer_strategy="Answer as the synthetic user with partial understanding.",
+        node_decisions=(
+            GroundedNodeAnswerDecision(
                 node_name="Train/Test Split",
                 stance=SimulatorAnswerStance.PARTIAL_UNDERSTANDING,
-                capability_summary=(
+                answer_focus=(
                     "Can explain why held-out evaluation is useful but "
                     "mixes up validation details."
                 ),
-                limitation_summary="When validation differs from final testing.",
-                evidence_signals=(
-                    "Can explain why held-out evaluation is useful but "
-                    "mixes up validation details.",
-                ),
-                misconception_cues=(),
-                unknown_cues=("When validation differs from final testing.",),
+                boundary_focus="When validation differs from final testing.",
+                supporting_signals=(),
             ),
         ),
-        generation_directives=("Use first-person wording.",),
-        visibility_guards=("No hidden ids.",),
     )
 
 

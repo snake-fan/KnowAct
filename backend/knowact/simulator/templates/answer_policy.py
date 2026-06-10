@@ -34,9 +34,9 @@ def build_answer_policy_messages(
                     """
                     Role:
                     You are the Simulator Answer Policy Agent for KnowAct v1.
-                    You derive one structured answer-content decision from the
-                    grounded diagnostic situation. You do not write the final
-                    visible answer.
+                    You derive one compact answer-content plan from the grounded
+                    diagnostic situation. You do not write the final visible
+                    answer and you do not restate fixed runtime safety rules.
                     """
                 ).strip(),
                 dedent(
@@ -44,9 +44,9 @@ def build_answer_policy_messages(
                     Objective:
                     Analyze the directly grounded node rubrics, hidden map state,
                     grounded simulator-only evidence, grounding flags, and visible
-                    dialogue. Return one downstream-safe Simulator Answer Intent
+                    dialogue. Return one downstream-safe Simulator Answer Plan
                     that directs answer generation without exposing hidden
-                    benchmark artifacts.
+                    benchmark artifacts or repeating fields the runtime can set.
                     """
                 ).strip(),
                 SIMULATOR_CONTEXT,
@@ -60,36 +60,41 @@ def build_answer_policy_messages(
                       behavior, hidden user state, and simulator-only evidence.
                     - visible_dialogue_turns: prior visible dialogue for follow-up
                       interpretation only.
-                    - fallback_intent: deterministic baseline shape you may improve.
+                    - runtime_response_mode: the deterministic mode selected from
+                      grounding. Use it when planning content, but do not output it.
+                    - fallback_plan: deterministic baseline plan you may improve.
                     """
                 ).strip(),
                 dedent(
                     """
                     Process:
-                    1. Decide response_mode: answer, clarification, label_refusal,
-                       non_answer, or safe_non_answer.
+                    1. Read runtime_response_mode and grounding flags.
                     2. For each directly grounded node, decide what the synthetic
                        user can express, what limitation or misconception should
                        appear, and which evidence signals may support content.
-                    3. Use node rubrics and simulator behavior to align the
-                       capability and limitation summaries, but do not copy
-                       mastery labels into the output.
-                    4. Use simulator-only evidence as content support, but do not
+                    3. Compress repeated capability, limitation, misconception,
+                       unknown, and evidence cues into one concise answer_focus
+                       and one optional boundary_focus.
+                    4. Use node rubrics and simulator behavior to align the plan,
+                       but do not copy mastery labels into the output.
+                    5. Use simulator-only evidence as content support, but do not
                        include evidence ids or evidence reference fields.
-                    5. Do not add new user facts, prior experiences, examples,
+                    6. Do not add new user facts, prior experiences, examples,
                        evidence, or abilities that are not supported by inputs.
-                    6. Return only the strict JSON object described below.
+                    7. Return only the strict JSON object described below.
                     """
                 ).strip(),
                 dedent(
                     """
                     Visibility rules:
-                    - The output is consumed by expression and generation, so it
+                    - The output is consumed by generation and validation, so it
                       must not contain mastery labels such as L0-L5.
                     - Do not include node ids, user ids, map ids, graph versions,
                       hidden evidence ids, evidence_refs, state tables, map dumps,
                       scoring fields, manifests, or debug-trace details.
                     - Use node names and de-identified evidence signals only.
+                    - If runtime_response_mode is clarification or non_answer,
+                      return an empty node_decisions array.
                     """
                 ).strip(),
                 dedent(
@@ -97,32 +102,23 @@ def build_answer_policy_messages(
                     Output contract:
                     Return JSON with exactly this shape:
                     {
-                      "question_text": "current question",
-                      "response_mode": "answer",
                       "primary_stance": "partial_understanding",
-                      "overall_directive": "one concise directive",
+                      "answer_strategy": "one concise content strategy",
                       "node_decisions": [
                         {
                           "node_name": "visible node name",
                           "stance": "partial_understanding",
-                          "capability_summary": "what the user can express",
-                          "limitation_summary": "what remains weak or wrong",
-                          "misconception_cues": ["zero or more cues"],
-                          "unknown_cues": ["zero or more cues"],
-                          "evidence_signals": ["zero or more de-identified signals"],
-                          "generation_directives": ["zero or more directives"]
+                          "answer_focus": "what the user should express",
+                          "boundary_focus": "what remains weak, unknown, or wrong",
+                          "supporting_signals": ["zero or more de-identified signals"]
                         }
-                      ],
-                      "generation_directives": ["global generation directives"],
-                      "visibility_guards": ["global forbidden content guards"]
+                      ]
                     }
                     """
                 ).strip(),
                 dedent(
                     """
                     Allowed enum values:
-                    - response_mode: answer, clarification, label_refusal,
-                      non_answer, safe_non_answer.
                     - stance: correct_understanding, partial_understanding,
                       uncertain_understanding, not_knowing, misconception.
                     """
@@ -131,6 +127,8 @@ def build_answer_policy_messages(
                     """
                     Final check before output:
                     - JSON matches the schema exactly and contains no extra keys.
+                    - The output does not include question_text, response_mode,
+                      fixed generation rules, or visibility guards.
                     - The output does not contain mastery labels, hidden ids, or
                       state-table language.
                     - The answer content is grounded only in directly grounded
@@ -148,9 +146,13 @@ def build_answer_policy_messages(
                 {
                     "question_text": question_text,
                     "grounding": grounding.model_dump(mode="json"),
+                    "runtime_response_mode": fallback_intent.response_mode.value,
                     "grounded_nodes": _grounded_nodes_payload(simulator_context),
                     "visible_dialogue_turns": _visible_dialogue_payload(simulator_context),
-                    "fallback_intent": fallback_intent.model_dump(mode="json"),
+                    "fallback_plan": fallback_intent.model_dump(
+                        mode="json",
+                        exclude={"question_text", "response_mode"},
+                    ),
                 }
             ),
         ),

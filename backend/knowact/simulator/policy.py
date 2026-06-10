@@ -48,37 +48,44 @@ class GroundedNodeAnswerDecision(BaseModel):
 
     node_name: str
     stance: SimulatorAnswerStance
-    capability_summary: str
-    limitation_summary: str | None = None
-    misconception_cues: tuple[str, ...] = Field(default_factory=tuple)
-    unknown_cues: tuple[str, ...] = Field(default_factory=tuple)
-    evidence_signals: tuple[str, ...] = Field(default_factory=tuple)
-    generation_directives: tuple[str, ...] = Field(default_factory=tuple)
+    answer_focus: str
+    boundary_focus: str | None = None
+    supporting_signals: tuple[str, ...] = Field(default_factory=tuple)
 
-    @field_validator("node_name", "capability_summary")
+    @field_validator("node_name", "answer_focus")
     @classmethod
     def _required_values_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("must not be blank")
         return value
 
-    @field_validator("limitation_summary")
+    @field_validator("boundary_focus")
     @classmethod
     def _optional_value_must_not_be_blank(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
             raise ValueError("must not be blank")
         return value
 
-    @field_validator(
-        "misconception_cues",
-        "unknown_cues",
-        "evidence_signals",
-        "generation_directives",
-    )
+    @field_validator("supporting_signals")
     @classmethod
     def _items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         if any(not item.strip() for item in value):
             raise ValueError("must not contain blank items")
+        return value
+
+
+class SimulatorAnswerPlan(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    primary_stance: SimulatorAnswerStance
+    answer_strategy: str
+    node_decisions: tuple[GroundedNodeAnswerDecision, ...] = Field(default_factory=tuple)
+
+    @field_validator("answer_strategy")
+    @classmethod
+    def _required_values_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
         return value
 
 
@@ -88,23 +95,14 @@ class SimulatorAnswerIntent(BaseModel):
     question_text: str
     response_mode: SimulatorResponseMode
     primary_stance: SimulatorAnswerStance
-    overall_directive: str
+    answer_strategy: str
     node_decisions: tuple[GroundedNodeAnswerDecision, ...] = Field(default_factory=tuple)
-    generation_directives: tuple[str, ...] = Field(default_factory=tuple)
-    visibility_guards: tuple[str, ...] = Field(default_factory=tuple)
 
-    @field_validator("question_text", "overall_directive")
+    @field_validator("question_text", "answer_strategy")
     @classmethod
     def _required_values_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("must not be blank")
-        return value
-
-    @field_validator("generation_directives", "visibility_guards")
-    @classmethod
-    def _items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        if any(not item.strip() for item in value):
-            raise ValueError("must not contain blank items")
         return value
 
 
@@ -177,10 +175,12 @@ class RuleBasedAnswerPolicy:
             question_text=question_text,
             response_mode=response_mode,
             primary_stance=primary_stance,
-            overall_directive=_overall_directive(response_mode),
+            answer_strategy=_answer_strategy(
+                response_mode=response_mode,
+                primary_stance=primary_stance,
+                node_decisions=node_decisions,
+            ),
             node_decisions=node_decisions,
-            generation_directives=_generation_directives(response_mode),
-            visibility_guards=_visibility_guards(),
         )
         return SimulatorPolicyResult(
             intent=intent,
@@ -265,7 +265,12 @@ class ModelClientAnswerPolicy:
             len(raw_output),
         )
         try:
-            intent = _parse_policy_intent(raw_output)
+            plan = _parse_policy_plan(raw_output)
+            intent = _intent_from_plan(
+                question_text=question_text,
+                response_mode=fallback_result.intent.response_mode,
+                plan=plan,
+            )
             _reject_unsafe_intent(
                 intent,
                 simulator_context=simulator_context,
@@ -274,7 +279,7 @@ class ModelClientAnswerPolicy:
         except ModelClientError as exc:
             record_parser_failure(exc)
             raise
-        record_parser_success({"intent": intent.model_dump(mode="json")})
+        record_parser_success({"plan": plan.model_dump(mode="json")})
         _LOGGER.info(
             "Simulator answer policy parser succeeded response_mode=%s node_decisions=%d",
             intent.response_mode.value,
@@ -310,24 +315,27 @@ def _decision_for_grounded_node(
     stance = _stance_for_state(state.mastery_level, state.misconceptions, state.unknowns)
     evidence_signals = tuple(evidence.signal for evidence in context.simulator_only_evidence)
     selected_rubric = context.node.levels.get(state.mastery_level.value)
+    answer_focus = _answer_focus(
+        mastery_level=state.mastery_level,
+        selected_rubric=selected_rubric,
+        evidence_signals=evidence_signals,
+    )
+    boundary_focus = _boundary_focus(
+        stance=stance,
+        misconceptions=state.misconceptions,
+        unknowns=state.unknowns,
+        selected_rubric=selected_rubric,
+    )
     return GroundedNodeAnswerDecision(
         node_name=context.node.name,
         stance=stance,
-        capability_summary=_capability_summary(
-            mastery_level=state.mastery_level,
-            selected_rubric=selected_rubric,
+        answer_focus=answer_focus,
+        boundary_focus=boundary_focus,
+        supporting_signals=_supporting_signals(
             evidence_signals=evidence_signals,
+            answer_focus=answer_focus,
+            boundary_focus=boundary_focus,
         ),
-        limitation_summary=_limitation_summary(
-            stance=stance,
-            misconceptions=state.misconceptions,
-            unknowns=state.unknowns,
-            selected_rubric=selected_rubric,
-        ),
-        misconception_cues=state.misconceptions,
-        unknown_cues=state.unknowns,
-        evidence_signals=evidence_signals,
-        generation_directives=_node_generation_directives(stance),
     )
 
 
@@ -341,7 +349,10 @@ def _trace_for_grounded_node(
         mastery_level=state.mastery_level,
         selected_rubric=context.node.levels.get(state.mastery_level.value),
         evidence_refs=state.evidence_refs,
-        evidence_kinds=tuple(evidence.evidence_kind.value for evidence in context.simulator_only_evidence),
+        evidence_kinds=tuple(
+            evidence.evidence_kind.value
+            for evidence in context.simulator_only_evidence
+        ),
     )
 
 
@@ -361,7 +372,7 @@ def _stance_for_state(
     return SimulatorAnswerStance.NOT_KNOWING
 
 
-def _capability_summary(
+def _answer_focus(
     *,
     mastery_level: MasteryLevel,
     selected_rubric: str | None,
@@ -380,7 +391,7 @@ def _capability_summary(
     return "Does not have a reliable answer for this concept."
 
 
-def _limitation_summary(
+def _boundary_focus(
     *,
     stance: SimulatorAnswerStance,
     misconceptions: tuple[str, ...],
@@ -400,55 +411,46 @@ def _limitation_summary(
     return None
 
 
-def _overall_directive(response_mode: SimulatorResponseMode) -> str:
+def _supporting_signals(
+    *,
+    evidence_signals: tuple[str, ...],
+    answer_focus: str,
+    boundary_focus: str | None,
+) -> tuple[str, ...]:
+    repeated_values = {answer_focus.strip()}
+    if boundary_focus is not None:
+        repeated_values.add(boundary_focus.strip())
+    return tuple(
+        signal for signal in evidence_signals
+        if signal.strip() not in repeated_values
+    )
+
+
+def _answer_strategy(
+    *,
+    response_mode: SimulatorResponseMode,
+    primary_stance: SimulatorAnswerStance,
+    node_decisions: tuple[GroundedNodeAnswerDecision, ...],
+) -> str:
     if response_mode == SimulatorResponseMode.CLARIFICATION:
         return "Ask the tested agent for one specific diagnostic question."
     if response_mode == SimulatorResponseMode.NON_ANSWER:
         return "State that the target concept is unclear and ask which concept to answer about."
     if response_mode == SimulatorResponseMode.LABEL_REFUSAL:
-        return "Do not reveal benchmark labels or evidence identifiers; answer as a natural self-report."
+        return (
+            "Answer as a natural self-report instead of revealing benchmark "
+            "labels or evidence identifiers."
+        )
     if response_mode == SimulatorResponseMode.SAFE_NON_ANSWER:
         return "Return a natural, non-leaking safe non-answer."
-    return "Answer the diagnostic question as the synthetic user."
-
-
-def _generation_directives(
-    response_mode: SimulatorResponseMode,
-) -> tuple[str, ...]:
-    directives = [
-        "Use first-person wording.",
-        "Do not expose benchmark labels, hidden ids, maps, or state tables.",
-        "Use only the supplied capability, limitation, misconception, unknown, and evidence cues.",
-    ]
-    if response_mode == SimulatorResponseMode.LABEL_REFUSAL:
-        directives.append("Avoid the words mastery level, evidence id, state table, and scoring.")
-    if response_mode == SimulatorResponseMode.CLARIFICATION:
-        directives.append("Ask for one specific question instead of answering knowledge content.")
-    if response_mode == SimulatorResponseMode.NON_ANSWER:
-        directives.append("Ask which concept the tested agent wants to discuss.")
-    return tuple(directives)
-
-
-def _node_generation_directives(
-    stance: SimulatorAnswerStance,
-) -> tuple[str, ...]:
-    if stance == SimulatorAnswerStance.CORRECT_UNDERSTANDING:
-        return ("Express confident understanding without overexplaining beyond supplied cues.",)
-    if stance == SimulatorAnswerStance.PARTIAL_UNDERSTANDING:
-        return ("Express partial or fragile understanding.",)
-    if stance == SimulatorAnswerStance.UNCERTAIN_UNDERSTANDING:
-        return ("Express uncertainty or hesitation.",)
-    if stance == SimulatorAnswerStance.MISCONCEPTION:
-        return ("Express the misconception as the user's own tentative belief.",)
-    return ("Express not knowing without inventing content.",)
-
-
-def _visibility_guards() -> tuple[str, ...]:
+    if len(node_decisions) > 1:
+        return (
+            "Give one integrated first-person answer that preserves the "
+            f"{primary_stance.value.replace('_', ' ')} stance across the grounded concepts."
+        )
     return (
-        "No benchmark mastery labels.",
-        "No hidden evidence identifiers or evidence reference fields.",
-        "No map ids, user ids, graph versions, manifests, state tables, or scoring fields.",
-        "No unsupported facts, examples, prior experiences, or abilities.",
+        "Give a first-person answer that preserves the "
+        f"{primary_stance.value.replace('_', ' ')} stance."
     )
 
 
@@ -467,7 +469,7 @@ def _grounding_flags(
     return tuple(flags)
 
 
-def _parse_policy_intent(raw_output: str) -> SimulatorAnswerIntent:
+def _parse_policy_plan(raw_output: str) -> SimulatorAnswerPlan:
     try:
         payload = json.loads(raw_output)
     except json.JSONDecodeError as exc:
@@ -475,9 +477,24 @@ def _parse_policy_intent(raw_output: str) -> SimulatorAnswerIntent:
     if not isinstance(payload, dict):
         raise ModelClientError("Simulator answer policy returned a non-object payload")
     try:
-        return SimulatorAnswerIntent.model_validate(payload)
+        return SimulatorAnswerPlan.model_validate(payload)
     except ValueError as exc:
-        raise ModelClientError("Simulator answer policy returned an invalid intent") from exc
+        raise ModelClientError("Simulator answer policy returned an invalid plan") from exc
+
+
+def _intent_from_plan(
+    *,
+    question_text: str,
+    response_mode: SimulatorResponseMode,
+    plan: SimulatorAnswerPlan,
+) -> SimulatorAnswerIntent:
+    return SimulatorAnswerIntent(
+        question_text=question_text,
+        response_mode=response_mode,
+        primary_stance=plan.primary_stance,
+        answer_strategy=plan.answer_strategy,
+        node_decisions=plan.node_decisions,
+    )
 
 
 def _reject_unsafe_intent(
@@ -488,6 +505,17 @@ def _reject_unsafe_intent(
 ) -> None:
     if intent.response_mode != _response_mode_for_grounding(grounding):
         raise ModelClientError("Simulator answer policy returned an invalid response mode")
+    expected_node_names = tuple(context.node.name for context in simulator_context.grounded_nodes)
+    actual_node_names = tuple(decision.node_name for decision in intent.node_decisions)
+    if intent.response_mode in (
+        SimulatorResponseMode.CLARIFICATION,
+        SimulatorResponseMode.NON_ANSWER,
+    ) and actual_node_names:
+        raise ModelClientError(
+            "Simulator answer policy returned node content for a non-content mode"
+        )
+    if expected_node_names and actual_node_names != expected_node_names:
+        raise ModelClientError("Simulator answer policy returned decisions for unexpected nodes")
     payload = intent.model_dump_json()
     lower_payload = payload.lower()
     forbidden_fragments = (

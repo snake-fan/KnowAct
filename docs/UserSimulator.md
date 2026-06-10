@@ -15,8 +15,8 @@ It is not a state-query API, a scoring component, or a tested-agent question-sel
 - The simulator answers one **Diagnostic Question** per turn, including one **Integrated Diagnostic Question** when the question is genuinely a single multi-node probe.
 - **Question Grounding** is a replaceable contract over the visible graph and dialogue context; it does not use hidden map state or select questions for the tested agent.
 - Hidden map state and evidence enter only after grounding, and only for directly grounded nodes.
-- **Answer Policy** first decides answer content and produces a **Simulator Answer Intent**. The **Expression Context Builder** then converts that intent into a de-identified **Simulator Expression Context** before generation.
-- **Profile Context** can only shape expression style and must preserve the content determined by the intent.
+- **Answer Policy** first decides answer content and produces a de-identified **Simulator Answer Intent** that generation and validation consume directly.
+- **Profile Context** can only shape wording style and must preserve the content determined by the intent.
 - LLM generation and LLM-backed validation are allowed, but both must sit behind interfaces and respect de-identified context boundaries.
 - Unsafe or unvalidated answers fail closed into a **Simulator Safe Fallback**.
 - Debug traces are hidden benchmark-author artifacts, separate from visible transcript and scoring outputs.
@@ -39,14 +39,8 @@ Simulator Context Builder
 Answer Policy
         |
         v
-Expression Context Builder
-        |
-        v
 Answer Generator
   (LLM-backed or rule-based)
-        |
-        v
-Content-Preserving Style Pass
         |
         v
 Simulator Answer Validation
@@ -55,7 +49,7 @@ Simulator Answer Validation
 Simulator Answer
 ```
 
-This diagram shows workflow components only. Intermediate artifacts such as **Simulator Answer Intent** and **Simulator Expression Context** are module outputs, not separate workflow steps.
+This diagram shows workflow components only. **Simulator Answer Intent** is the structured intermediate artifact between policy, generation, and validation.
 
 The implementation may collapse or split these components, but it should preserve their information boundaries.
 
@@ -70,17 +64,11 @@ Component contracts:
 - **Answer Policy**
   - Input: simulator-only context, grounding result, and the current diagnostic question.
   - Output: **Simulator Answer Intent**, the structured content stance for the answer.
-- **Expression Context Builder**
-  - Input: **Simulator Answer Intent**, de-identified evidence signals derived from grounded evidence, and visible dialogue needed for continuity.
-  - Output: de-identified **Simulator Expression Context** for generation and validation.
 - **Answer Generator**
-  - Input: **Simulator Expression Context**.
+  - Input: **Simulator Answer Intent**, visible dialogue needed for continuity, optional style hint, and optional regeneration guidance.
   - Output: candidate natural-language answer.
-- **Content-Preserving Style Pass**
-  - Input: candidate answer, **Simulator Answer Intent** or expression context, and optional confirmed **Profile Context** for style only.
-  - Output: styled candidate answer with the same content.
 - **Simulator Answer Validation**
-  - Input: styled candidate answer, de-identified expression context, intent-coverage expectations, grounding metadata, and leakage rules.
+  - Input: candidate answer, **Simulator Answer Intent**, visible dialogue, style hint, intent-coverage expectations, and leakage rules.
   - Output: pass/fail validation result with blocking reasons and fallback guidance.
 
 ## Question Grounding
@@ -143,7 +131,7 @@ Output:
 
 - one **Simulator Answer Intent**
 
-The policy is the simulator reasoning boundary. It may be rule-based, LLM-backed, or hybrid, but analysis, inference, judgement, and answer-content decisions belong here rather than in the expression or generation layers.
+The policy is the simulator reasoning boundary. It may be rule-based, LLM-backed, or hybrid, but analysis, inference, judgement, and answer-content decisions belong here rather than in generation.
 
 The policy is also the single owner of response-mode decisions. No-grounding, multiple-question, label-seeking, safe non-answer, and ordinary diagnostic answer modes should be represented in the **Simulator Answer Intent** and executed by service orchestration, rather than bypassing the policy with pre-policy fallback answers.
 
@@ -162,70 +150,39 @@ The intent is a structured answer-content decision for this answer. A coarse sta
 The structured intent should separate at least:
 
 - response mode, such as answering, refusing a label request, asking for clarification, or using a safe non-answer
-- grounded node answer decisions, including expressible capabilities, limitations, misconceptions, and unknown boundaries
-- evidence selection, including which de-identified evidence signals may shape visible content
+- grounded node answer decisions, including each node's stance, concise answer focus, optional boundary focus, and selected de-identified supporting signals
 - rubric alignment, including which level-specific capabilities may be expressed without exposing mastery labels
-- generation directives, including allowed answer form, example use, formula use, confidence, and first-person wording
-- visibility guards, including hidden labels, evidence ids, state tables, map references, and unsupported facts that must not appear
+- an answer strategy that tells generation how to preserve the policy decision without restating fixed runtime rules
 
-LLM-backed policy output must be parsed into a strict schema. Freeform policy prose may appear only inside bounded content fields such as concise directives, capability summaries, limitations, and selected de-identified signals. The expression layer should compile the structured intent into generation material rather than forwarding a policy-authored prompt.
+Fixed generation rules and visibility guards, such as first-person wording, benchmark-label refusal, hidden-id blocking, state-table blocking, and unsupported-fact blocking, belong in the generator and validator runtime contract. They should not be repeated as LLM-authored policy output fields.
+
+LLM-backed policy output must be parsed into a strict schema. Freeform policy prose may appear only inside bounded content-plan fields such as `answer_strategy`, `answer_focus`, `boundary_focus`, and selected de-identified `supporting_signals`. Generation should receive the structured intent directly rather than a policy-authored prompt.
 
 The policy may select, combine, compress, and paraphrase grounded node rubrics, simulator behavior, hidden map state, and grounded evidence signals. It must not author new user facts, new prior experiences, new worked examples, new evidence, or new abilities that are not supported by the grounded inputs.
 
 The policy should not collapse mastery into a binary know/do-not-know stance. Intermediate states should remain diagnostically visible through uncertainty, fragile explanation, boundary statements, or misconception-led answers.
 
-The intent may retain grounded evidence refs internally for audit and debug trace. Those refs must be removed before building the **Simulator Expression Context**.
+The intent must not contain grounded evidence refs. Those refs may appear only in hidden audit trace.
 
-The implementation should distinguish the downstream **Simulator Answer Intent** from a hidden **Simulator Policy Decision Trace**. The trace may record node ids, mastery labels, hidden evidence refs, selected rubric text, and policy reasoning metadata for benchmark-author audit. The intent consumed by expression and generation must not contain mastery labels, hidden evidence ids, map ids, user ids, or other hidden artifact identifiers.
+The implementation should distinguish the downstream **Simulator Answer Intent** from a hidden **Simulator Policy Decision Trace**. The trace may record node ids, mastery labels, hidden evidence refs, selected rubric text, and policy reasoning metadata for benchmark-author audit. The intent consumed by generation and validation must not contain mastery labels, hidden evidence ids, map ids, user ids, or other hidden artifact identifiers.
 
 For an **Integrated Diagnostic Question**, the policy should produce one integrated intent. It may preserve per-node stance internally, but the answer should not merely concatenate separate per-node answers.
 
 The policy must not read hidden map state, hidden evidence, or mastery labels for nodes that were not directly grounded by the current question. Cross-node reasoning is allowed only for nodes grounded by one integrated diagnostic question.
 
-## Expression Context Builder
-
-The expression context builder converts the **Simulator Answer Intent** into a generator-safe **Simulator Expression Context**. The generator should receive this context, not the raw **Reviewed Map**.
-
-Input:
-
-- **Simulator Answer Intent**
-- grounded evidence signals after removing hidden evidence ids
-- visible dialogue needed for natural continuity
-
-Output:
-
-- one de-identified **Simulator Expression Context**
-
-The expression context builder does not decide what the user knows, what misconception to express, or which evidence matters. It packages the policy's decisions into de-identified generation material.
-
-The expression context may include:
-
-- the **Simulator Answer Intent**
-- de-identified evidence signals
-- visible dialogue needed for natural continuity
-
-It must not include:
-
-- raw full map data
-- mastery labels such as `L2`
-- hidden evidence ids
-- state-table language
-
-Evidence refs used by policy may appear in hidden debug trace, but the generator should receive only evidence signals or paraphrased cues.
-
 ## Generators
 
 The LLM generator is the naturalness-oriented path for simulator preview. A rule-based generator is useful as a soft fallback and for regression fixtures.
 
-This is a soft implementation preference, not a permanent architectural ban. Any generator must respect the same **Simulator Expression Context** and validation contract.
+This is a soft implementation preference, not a permanent architectural ban. Any generator must respect the same **Simulator Answer Intent** and validation contract.
 
 LLM-backed answer prompt/message construction lives in step-specific simulator templates under `backend/knowact/simulator/templates/`. Answer generation uses `templates/answer_generation.py`, answer validation uses `templates/answer_validation.py`, and shared prompt sections live in `templates/common.py`. Do not introduce a catch-all simulator prompt module; each LLM step should keep its own prompt/message builder and output contract.
 
 ## Profile Context
 
-During simulator answer generation, **Profile Context** may shape expression style only.
+During simulator answer generation, **Profile Context** may shape wording style only.
 
-The answer content should first be determined from grounded **User Knowledge States**, **Ground-Truth Evidence**, and the **Simulator Answer Intent**. A Profile Context style pass may adjust tone, brevity, or wording, but it must preserve the content already determined by the intent.
+The answer content should first be determined from grounded **User Knowledge States**, **Ground-Truth Evidence**, and the **Simulator Answer Intent**. Profile Context may adjust tone, brevity, or wording, but it must preserve the content already determined by the intent.
 
 The style pass must not add profile-derived facts, new examples, prior-experience claims, or ability claims. If profile-derived facts are needed as content, they must already exist as grounded **Ground-Truth Evidence** for the grounded nodes.
 
@@ -259,7 +216,7 @@ If the validator is available and rejects a candidate answer, it must return str
 
 Validation retry routing should preserve layer boundaries:
 
-- expression leakage, unsupported wording, or weak intent coverage should retry answer generation with the same **Simulator Answer Intent**
+- unsupported wording or weak intent coverage should retry answer generation with the same **Simulator Answer Intent**
 - generator timeout, invalid JSON, or empty output may retry answer generation briefly before terminal fallback
 - policy-schema failure, unsafe intent fields, contradictory intent, or an impossible intent should retry or fall back at the **Simulator Answer Policy** layer before answer generation
 - validator unavailability should not trigger regeneration from an unvalidated answer; it should fail closed
@@ -334,7 +291,7 @@ stores artifact identities and directly grounded turn details instead.
 The simulator implementation should emit operator-facing logger `info` messages at
 workflow boundaries so terminal output shows which step is running: reviewed
 artifact loading, question grounding, simulator context construction, answer
-intent derivation, expression-context construction, answer generation, answer
+intent derivation, answer generation, answer
 validation, fallback, and final preview completion.
 
 Runtime logs are not **Simulator Debug Trace** artifacts and are not visible
@@ -350,9 +307,9 @@ Phase 5 may expose a development-only simulator preview before formal **Evaluati
 
 Current initial route: `POST /api/simulator/preview`.
 
-The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Intent** derivation, de-identified **Simulator Expression Context** construction, LLM-backed visible answer generation, LLM-backed answer validation, bounded answer regeneration, persistent local preview debug trace artifacts, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement formal episode persistence yet.
+The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Intent** derivation, LLM-backed visible answer generation, LLM-backed answer validation, bounded answer regeneration, persistent local preview debug trace artifacts, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement formal episode persistence yet.
 
-The next simulator-policy implementation slice should stabilize the structured intent boundary before adding an LLM-backed policy. Recommended order: define the richer **Simulator Answer Intent** and hidden **Simulator Policy Decision Trace** schemas, make the rule-based policy emit that schema as deterministic fallback, make expression consume only downstream-safe intent, update generator prompts around structured intent, route no-grounding/multiple/label-seeking modes through policy, add bounded validation-regeneration, and then add an LLM-backed policy behind the same interface.
+The next simulator-policy implementation slice should stabilize the structured intent boundary before adding an LLM-backed policy. Recommended order: define the richer **Simulator Answer Intent** and hidden **Simulator Policy Decision Trace** schemas, make the rule-based policy emit that schema as deterministic fallback, update generator prompts around structured intent, route no-grounding/multiple/label-seeking modes through policy, add bounded validation-regeneration, and then add an LLM-backed policy behind the same interface.
 
 The preview should:
 
