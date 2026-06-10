@@ -8,9 +8,9 @@ This document turns the current `CONTEXT.md` glossary and v1 ADRs into an execut
 
 KnowAct v1 is an active knowledge-state diagnosis benchmark. The tested agent asks diagnostic questions to infer a fixed hidden reviewed `Knowledge Map` over a visible `Authored Knowledge Graph`; it does not teach, tutor, or update the user's hidden state during an episode.
 
-The first benchmark domain is `classical_supervised_ml_algorithms`, grounded primarily in *An Introduction to Statistical Learning with Applications in Python*. The formal v1 graph targets 30-50 reviewed `Knowledge Nodes`, with reviewed `Knowledge Edges`, reviewed `Knowledge Maps`, explicit `Evaluation Episode Manifests`, and one fixed scoring profile: `squared_mastery_distance_v1`.
+The first benchmark domain is `classical_supervised_ml_algorithms`, grounded primarily in *An Introduction to Statistical Learning with Applications in Python*. The current formal v1 graph basis is the reviewed generated graph version promoted for that domain, with reviewed `Knowledge Edges`, reviewed `Knowledge Maps`, explicit `Evaluation Episode Manifests`, and one fixed scoring profile: `squared_mastery_distance_v1`.
 
-The implementation should prioritize a narrow vertical slice first, but any small graph used before the 30-50 node graph must be treated as a development fixture, not as the formal v1 benchmark graph.
+The implementation should prioritize a narrow vertical slice first, but any small graph used before a reviewed graph exists must be treated as a development fixture, not as the formal v1 benchmark graph.
 
 ## Phase Overview
 
@@ -42,7 +42,7 @@ Current opened endpoint:
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`: returns one saved Candidate Knowledge Map and its debug artifact references for benchmark-author inspection.
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`: revalidates one saved Candidate Knowledge Map with its reviewed graph version and confirmed Profile Context, converts lifecycle `kind` from `candidate` to `ground_truth`, and publishes immutable `map.json` plus minimal `map_manifest.json` under `maps/{map_id}/`. Existing map ids return conflicts; generation-time consistency warnings are ignored, and successful promotion removes the originating run from `candidate_maps/`.
 - `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`: list and read reviewed Knowledge Map snapshots for read-only workbench preview. These endpoints do not create simulator episodes or expose simulator runtime behavior.
-- `POST /api/simulator/preview`: development-only single-turn simulator preview. It accepts `benchmark_domain`, reviewed `map_id`, request-level `client_provider` (`openai` or `deepseek`, defaulting to `openai`), one `DiagnosticQuestion`, optional `Visible Dialogue Context`, and optional `preview_options.include_debug_trace`; derives `graph_version` and `user_id` from the reviewed `map_manifest.json`; loads only reviewed graph/map artifacts; loads confirmed Profile Context when available; emits non-leaking preview warnings when Profile Context is unavailable; derives a de-identified `Simulator Answer Blueprint` from directly grounded nodes only; writes a hidden local debug trace under `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/`; and uses the selected LLM provider for visible-answer generation and answer validation before returning a visible answer. `preview_options.include_debug_trace` only controls whether the response includes `debug_trace_id` and `debug_trace_available`. Unsafe, invalid, unavailable, or unvalidated model output fails closed into a Simulator Safe Fallback. It does not require or load an `Evaluation Episode Manifest`.
+- `POST /api/simulator/preview`: development-only single-turn simulator preview. It accepts `benchmark_domain`, reviewed `map_id`, request-level `client_provider` (`openai` or `deepseek`, defaulting to `openai`), one `DiagnosticQuestion`, optional `Visible Dialogue Context`, and optional `preview_options.include_debug_trace`; derives `graph_version` and `user_id` from the reviewed `map_manifest.json`; loads reviewed graph artifacts for visible grounding; loads hidden reviewed map content only after grounding and only for directly grounded nodes; loads confirmed Profile Context when available; emits non-leaking preview warnings when Profile Context is unavailable; derives a de-identified `Simulator Answer Blueprint` from directly grounded nodes only; writes a hidden local debug trace under `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/`; and uses the selected LLM provider for visible-answer generation and answer validation before returning a visible answer. No-grounding and multiple-question paths return policy fallbacks without loading hidden map content. `preview_options.include_debug_trace` only controls whether the response includes `debug_trace_id` and `debug_trace_available`. Unsafe, invalid, unavailable, or unvalidated model output fails closed into a Simulator Safe Fallback. It does not require or load an `Evaluation Episode Manifest`.
 
 Guardrails:
 
@@ -114,7 +114,7 @@ Milestone M2:
 Recommended milestone split:
 
 - M2a: run the workflow on a small development fixture of roughly 5-8 nodes.
-- M2b: run the workflow on the formal candidate graph target of 30-50 nodes.
+- M2b: run the workflow on the current formal candidate graph target and accept the promoted reviewed generated artifact as the source of truth.
 
 Guardrails:
 
@@ -130,7 +130,7 @@ Implementation note:
 - PDF source-material graph authoring runs use MinerU to prepare same-directory same-stem Markdown under local `storage/`; MinerU standard mode receives a short-lived signed URL for a private Aliyun OSS staging object rather than a base64 payload or public-read bucket object. Large PDFs are split by page count before MinerU submission and their Markdown chunks are concatenated in source page order. The LLM receives Markdown text through the ordinary text `ModelClient` path, not PDF base64 `input_file` or OpenAI `file_id`.
 - Development and test runs should use deterministic or fake model clients unless the author explicitly chooses to run a provider-backed workflow.
 - Structures to implement: `backend/knowact/authoring/schemas.py`, `workflow.py`, `steps.py`, `templates/graph_authoring.py`, `parsers/graph_authoring.py`, `validation.py`, `output.py`, `sources.py`, and `openai_workflow.py`; `backend/knowact/llm/` supplies the model completion boundary.
-- Opened authoring interface: `POST /api/authoring/graph-candidates`. It accepts `pdf_path`, optional `benchmark_domain`, optional `source_id`, optional `source_title`, optional `run_id`, `client_provider`, `force_reparse`, and `write_artifacts`; it returns workflow outputs plus Markdown cache metadata and compact run log summary and, by default, writes `candidate_nodes.json`, `candidate_edges.json`, sidecar `workflow_log.json`, validation-passed `intermediate/` artifacts, and agent traces under `benchmark/domains/{benchmark_domain}/candidate_graphs/api/{run_id}/`.
+- Opened authoring interface: `POST /api/authoring/graph-candidates`. It accepts `pdf_path`, optional `benchmark_domain`, optional `source_id`, optional `source_title`, optional `run_id`, `client_provider`, `force_reparse`, and `write_artifacts`; it returns workflow outputs plus Markdown cache metadata and compact run log summary and, by default, writes `candidate_nodes.json`, `candidate_edges.json`, sidecar `workflow_log.json`, validation-passed `intermediate/` artifacts, and agent traces under `benchmark/domains/{benchmark_domain}/candidate_graphs/{run_id}/`.
 - Stable workbench interface: defer formal authoring write APIs until candidate review and promotion semantics are clearer.
 
 ## Phase 3: Authored Graph Review and Promotion
@@ -217,7 +217,7 @@ Resolved initial workflow boundary:
 - Edge-consistency warnings are generation-time review hints only. Promotion does not read, validate, recompute, or copy them.
 - Keep `consistency_warnings.json` in the originating candidate-map run only.
 - `Knowledge-State Outline Agent Step` first drafts full-graph node-level `mastery_level`, `misconceptions`, and `unknowns` from the confirmed `Profile Context` and reviewed nodes with rubrics. It must not receive reviewed edges.
-- Initial outline authoring runs as one full-graph model call for the reviewed 30-50 node target. Do not split outline generation into node batches; defer batching and global reconciliation until graph scale requires them.
+- Initial outline authoring runs as one full-graph model call for the current reviewed graph scale. Do not split outline generation into node batches; defer batching and global reconciliation until graph scale requires them.
 - Knowledge-state-outline model output contains `node_id`, `mastery_level`, `misconceptions`, and `unknowns` only. It must not output `evidence_refs`, `user_id`, or lifecycle `kind`; workflow code supplies those during deterministic candidate-map assembly.
 - Outline output and assembled candidate maps must explicitly include `misconceptions` and `unknowns` arrays for every node state, even when empty. Missing arrays are invalid rather than interpreted as defaults.
 - Prompt outline authoring to avoid exact duplicate items within each state's `misconceptions` and `unknowns`. Validation rejects exact duplicates instead of silently deduplicating them. Do not add semantic-similarity merging.
@@ -301,7 +301,7 @@ Implementation note:
   - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`
   - `GET /api/authoring/maps/{benchmark_domain}`
   - `GET /api/authoring/maps/{benchmark_domain}/{map_id}`
-- Do not add candidate-profile or candidate-map browsing list endpoints in the initial Phase 4 slice. `GET /api/authoring/benchmark-domains` is a narrow read-only discovery exception for workbench selectors: it lists existing safe domain ids without creating or mutating benchmark data. Add wider browsing surfaces after the functional workflow is exercised end to end.
+- Keep candidate-profile and candidate-map browsing surfaces read-only in the initial Phase 4 slice. `GET /api/authoring/benchmark-domains`, candidate-map run listing, and reviewed-map listing exist to support workbench selectors and inspection without creating or mutating benchmark data. Defer wider orchestration surfaces until the functional workflow is exercised end to end.
 - Do not add a one-shot orchestration endpoint in the initial Phase 4 slice. Callers explicitly sequence the narrow endpoints so profile-context editing, confirmation, candidate-map inspection, and promotion remain visible gates.
 - Authoring API boundary: profile-context candidates may be edited before confirmation; candidate maps may be inspected and either promoted unchanged or rejected, but not edited through a map `PUT` endpoint.
 - `POST /api/authoring/profile-context-candidates` accepts required `benchmark_domain` and `rough_description`, optional limited `domain_summary`, optional `run_id`, and request-level `client_provider`. `domain_summary` may be supplied inline in the initial slice but must not contain node or rubric details; a later domain manifest may replace this temporary input.
@@ -503,7 +503,7 @@ M0 Domain decisions
 
 ## Review Points
 
-1. Should the first runnable implementation use a 5-8 node development fixture before the formal 30-50 node v1 graph?
+1. Should the first runnable implementation use a 5-8 node development fixture before the formal reviewed v1 graph?
    - Recommended answer: yes. It protects implementation speed while keeping the fixture clearly outside formal v1 evaluation.
 
 2. Resolved: `Graph File Layout` is lightweight and versioned under `benchmark/domains/{benchmark_domain}/graphs/{version}/`.

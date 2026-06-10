@@ -28,7 +28,7 @@ Authoritative Source
 - candidate authoring data 与 reviewed benchmark data 必须分离。
 - evaluation runtime 只能使用 reviewed graph 和 reviewed maps。
 - `Visibility Boundary` 必须由 runtime 和数据访问层共同保证，而不是只靠 prompt 约束。
-- v1 的正式 benchmark graph 目标是 30-50 nodes；小图只能作为 development fixture。
+- v1 的正式 benchmark graph 以已经 promotion 的 reviewed graph version 为准；小图只能作为 development fixture。
 
 ## Recommended Repository Layout
 
@@ -78,7 +78,7 @@ Authoritative Source
 说明：
 
 - `backend/knowact/` 是 benchmark 的 Python package 主体。
-- `benchmark/` 存放可版本化的 benchmark data，包括 development fixtures、candidate review data、reviewed graph/map/episode manifests。
+- `benchmark/` 存放 benchmark artifacts，包括 development fixtures、candidate review data、reviewed graph/map/episode manifests。`benchmark/domains/` 可以继续被默认 ignore；只有明确要发布或保留的 reviewed artifacts 才应有意加入版本库。
 - `experiments/` 存放 episode run outputs、agent outputs、scoring reports 和分析结果。是否全部提交到版本库后续再定；默认应避免提交大体积或敏感实验输出。
 - `Reference/` 中的 PDF 或源材料可以作为本地工作资料，但正式 benchmark data 应通过 `Source Locator` 和 source metadata 保持可审计，不依赖把大型原始 PDF 强绑定进 runtime。
 
@@ -206,7 +206,7 @@ core
 - Candidate-map generation has two agent steps. `Knowledge-State Outline Agent Step` drafts full-graph node-level `mastery_level`, `misconceptions`, and `unknowns` from confirmed `Profile Context` and reviewed nodes with rubrics; it does not receive reviewed edges. `Ground-Truth Evidence Authoring Agent Step` then drafts hidden evidence from that outline, confirmed `Profile Context`, and reviewed node rubrics; it may batch nodes internally.
 - Each evidence-authoring batch receives confirmed `Profile Context`, reviewed rubrics for its batch nodes, and state outlines for its batch nodes only. It does not receive other node states, reviewed edges, or the complete graph. Deterministically reject batch output that references nodes outside the batch or fails mastery-sensitive evidence minimums for batch nodes.
 - Partition evidence-authoring batches as contiguous windows in stable reviewed `authored_nodes.json` order. Do not shuffle nodes or cluster batches by graph edges.
-- Initial knowledge-state outline authoring uses one full-graph model call for the reviewed 30-50 node target. Do not batch this step until larger graphs justify a separate global reconciliation design.
+- Initial knowledge-state outline authoring uses one full-graph model call for the current reviewed graph scale. Do not batch this step until larger graphs justify a separate global reconciliation design.
 - Knowledge-state-outline model output contains `node_id`, `mastery_level`, `misconceptions`, and `unknowns` only. It does not output `evidence_refs`, `user_id`, or lifecycle `kind`; workflow code supplies those during deterministic candidate-map assembly.
 - Outline output and assembled maps explicitly include `misconceptions` and `unknowns` arrays for every node state, even when empty. Missing arrays are invalid rather than defaulted.
 - Prompt outline authoring to avoid exact duplicate misconception or unknown items within one state. Validation rejects exact duplicates rather than silently rewriting generated samples. Do not add semantic-similarity merging.
@@ -493,7 +493,7 @@ Artifact policy:
 
 - `fixtures/` 可以小而稳定，用于 tests 和 local development。
 - `candidate_graphs/` 和 `candidate_maps/` 是 review input，不进入 formal evaluation。
-- `graphs/v1/` 和 `maps/` 是 reviewed benchmark data。
+- `graphs/{version}/` 和 `maps/` 是 reviewed benchmark data；只有明确要发布或保留时才应加入版本库。
 - Phase 3 graph promotion 将重新校验后的 candidate snapshot 复制到 `graphs/{version}/`，保留原 candidate run，并生成只绑定 metadata 与 node/edge 文件引用的 `graph_manifest.json`。Reviewed graph version 不允许覆盖；修订必须发布新的 version。
 - `experiments/runs/` 是 generated output，应避免混入人工 authored ground truth。
 - 大型 source PDFs 可以本地保存，正式数据只引用 source metadata 和 `Source Locator`。

@@ -69,7 +69,7 @@ The ground-truth user profile is hidden from the tested agent. The agent must in
 
 KnowAct uses a semi-synthetic benchmark construction process:
 
-V1 starts with a single benchmark domain, `classical_supervised_ml_algorithms`, so the first implementation can validate data authoring, simulation, active diagnosis, final reconstruction, and scoring before adding cross-domain calibration. The first graph targets 30-50 knowledge nodes grounded in *An Introduction to Statistical Learning with Applications in Python*, enough to distinguish different user knowledge structures while keeping authoring and review feasible. Deep learning, reinforcement learning, and unsupervised learning stay outside the first slice.
+V1 starts with a single benchmark domain, `classical_supervised_ml_algorithms`, so the first implementation can validate data authoring, simulation, active diagnosis, final reconstruction, and scoring before adding cross-domain calibration. The current V1 working graph is the reviewed generated graph version promoted for that domain under `benchmark/domains/classical_supervised_ml_algorithms/graphs/{version}/`; the earlier 30-50 node target is no longer a hard constraint. Scope follows the reviewed graph artifact and can be narrowed later by publishing a new graph version.
 
 1. **Benchmark Data Authoring**
 
@@ -146,7 +146,7 @@ A possible user map structure is:
 ```json
 {
   "user_id": "u_001",
-  "userstate": [
+  "states": [
     {
       "node_id": "active_learning",
       "mastery_level": "L2",
@@ -288,7 +288,7 @@ The V1 implementation has started with the schema and validation spine:
 - `backend/knowact/storage/`: local artifact, material path, and reviewed graph/map promotion helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
 - `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
 - `frontend/`: a React/Vite research workbench with top-level Knowledge Graph and User Profile modules. It supports candidate graph review and the Profile Context generation, editing, save, and immutable-confirmation gate.
-- `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`: a 5-node development fixture for schema and validator checks, not the formal 30-50 node v1 graph.
+- `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`: a 5-node development fixture for schema and validator checks, not the formal reviewed v1 graph.
 - `test/`: `unittest` coverage for the public schema and validation APIs.
 
 Configure local OpenAI API access by copying `.env.example` to `.env` and filling in:
