@@ -264,7 +264,7 @@ core
 - prompt templates 输入输出尽量结构化，并优先放在调用方所属 workflow 的 `templates/` 目录中。
 - model client 返回原始模型文本；workflow-specific parser 负责把输出解析成 domain schema。
 - hidden map、hidden evidence、visible transcript 的边界在调用前显式构造。
-- Phase 2 初始实现使用 OpenAI Python SDK-compatible adapters，通过 `.env.example` 中记录的环境变量配置 OpenAI 或 DeepSeek API key、model、base URL 和 timeout；`POST /api/authoring/graph-candidates` 和 `POST /api/simulator/preview` 通过 `client_provider` 在请求级选择 provider，默认 `openai`。
+- Phase 2 初始实现使用 OpenAI Python SDK-compatible adapters，通过 `.env.example` 中记录的环境变量配置 OpenAI 或 DeepSeek API key、model、base URL 和 timeout；`POST /api/authoring/graph-candidates` 和 `POST /api/simulator/turn` 通过 `client_provider` 在请求级选择 provider，默认 `openai`。
 - 测试阶段的 PDF source material 可以放在仓库根目录 `storage/` 下，由 `/api/authoring` 按相对路径选择；authoring source preparation 先复用或生成同目录同 stem 的 `Parsed Source Markdown`，再通过普通 text `ModelClient` 发送给 LLM。
 - v1 graph authoring 不使用 PDF base64 `input_file`、OpenAI Files API `file_id` 或 PDF-specific LLM client path；MinerU 解析属于 `authoring/sources.py` 的 source preparation。
 - MinerU standard mode 通过私有阿里云 OSS bucket 的临时 staging object 生成短期 signed URL，再将 URL 提交给 MinerU v4；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会先在本地拆分为多个 chunk，逐块解析后按页码顺序拼接为一个 `Parsed Source Markdown`；OSS object 默认 best-effort 删除，signed URL 不进入 API response、workflow log 或 candidate graph artifacts。
@@ -285,20 +285,21 @@ core
 - `style.py`: optional content-preserving style pass using confirmed `Profile Context` for tone, brevity, and wording only. It must not introduce profile-derived facts, examples, prior-experience claims, or ability claims unless those are already present as grounded evidence.
 - `checks.py`: `Simulator Answer Validation`, including leakage checks, blueprint-coverage checks, consistency checks, fallback guidance, and validator-specific prompt/message helpers when using an LLM-backed validator. Validator inputs should be de-identified and should not become scoring signals.
 - `fallbacks.py`: natural non-leaking safe fallback construction for no grounding, multiple independent questions, hidden-label requests, generator failure, validator failure, and system failure.
-- `debug_trace.py`: local hidden preview trace writing, filesystem-safe trace ids, preview question-directory overwrite behavior, and request-scoped raw/parser artifact capture for LLM-backed simulator steps.
+- `debug_trace.py`: local hidden turn trace writing, filesystem-safe trace ids, repeated question-directory overwrite behavior, and request-scoped raw/parser artifact capture for LLM-backed simulator steps.
 - `service.py`: simulator turn orchestration; wires grounding, context building, answer policy, generation, validation, fallback, and hidden debug trace production.
-- `preview.py`: development-only stateless preview DTO/API boundary. It selects reviewed artifacts by identity and exposes only visible answer data, coarse preview metadata, non-leaking warnings, and optional debug trace handles.
+- `turn.py`: stateless single-turn DTO/API boundary. It selects reviewed artifacts by identity and exposes only visible answer data, coarse turn metadata, non-leaking warnings, and optional debug trace handles.
+- `preview.py`: deprecated compatibility re-export for old preview DTO imports.
 
 边界：
 
 - simulator 可以看到 hidden reviewed map。
 - simulator 不把 mastery labels、hidden evidence ids、full state table 暴露给 tested agent。
 - simulator answer 进入 transcript 后成为 tested-agent-visible `Interaction Observation`。
-- simulator 可以在 formal episode manifest 存在前，通过 development-only preview flow 直接绑定 reviewed graph、reviewed map 和 optional confirmed profile context 来进行人工对话测试。
-- simulator preview 不是 benchmark run，也不产生 scoring report；它用于检查回答自然度、泄漏风险和 hidden-map 一致性。
-- simulator preview 通过 request-level `client_provider` 选择 LLM provider，使用与 authoring 相同的 `openai` / `deepseek` provider vocabulary，默认 `openai`。
-- simulator preview 每次请求都会写出隐藏的本地 **Simulator Debug Trace** 到 `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/`；重复的 `question_id` 会清空并覆盖该 question 目录，只保留最后一次 preview trace。
-- simulator preview debug trace 可以保存 LLM-backed simulator steps 的 raw model output 和 parser output，但不保存完整 prompt/messages、完整 reviewed graph、完整 reviewed map 或完整 confirmed profile context payload。
+- simulator 可以在 formal episode manifest 存在前，通过 stateless single-turn flow 直接绑定 reviewed graph、reviewed map 和 optional confirmed profile context 来进行人工对话测试。
+- simulator single-turn API 不是 benchmark run，也不产生 scoring report；它用于检查回答自然度、泄漏风险和 hidden-map 一致性。
+- simulator single-turn API 通过 request-level `client_provider` 选择 LLM provider，使用与 authoring 相同的 `openai` / `deepseek` provider vocabulary，默认 `openai`。
+- simulator single-turn API 每次请求都会写出隐藏的本地 **Simulator Debug Trace** 到 `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/`；重复的 `question_id` 会清空并覆盖该 question 目录，只保留最后一次 turn trace。
+- simulator turn debug trace 可以保存 LLM-backed simulator steps 的 raw model output 和 parser output，但不保存完整 prompt/messages、完整 reviewed graph、完整 reviewed map 或完整 confirmed profile context payload。
 - `Question Grounding` 只解释被测 agent 已提出的问题；它不是 tested-agent question selection policy。
 - hidden map state 和 hidden evidence 只能在 grounding 之后、针对 directly grounded nodes 进入 simulator-only context。
 - `Simulator Answer Blueprint` 可以进入 hidden debug trace，但正式 visible transcript 和 scoring artifacts 不应存储 blueprint、grounded node ids、hidden evidence ids 或 validator internals。
@@ -545,7 +546,7 @@ UI 边界：
 | M2 graph authoring | `authoring/`, `llm/`, `storage/` | 产出 candidate node/edge JSON lists |
 | M3 graph review promotion | `storage/`, `validation/`, optional review UI | reviewed graph 才能进入 runtime |
 | M4 maps | `authoring/`, `core/`, `validation/`, `storage/` | map coverage 和 evidence visibility 是重点 |
-| M5 simulator | `simulator/`, `llm/`, `storage/`, `validation/` | reviewed-map grounded preview 和 leakage guard 是关键风险 |
+| M5 simulator | `simulator/`, `llm/`, `storage/`, `validation/` | reviewed-map grounded turns 和 leakage guard 是关键风险 |
 | M6 episode contract | `core/episode.py`, `runtime/episode_loader.py`, `runtime/visibility.py`, `validation/` | manifest 绑定 graph/map/simulator/rules/scoring |
 | M7 baselines | `agents/`, `runtime/turn_loop.py` | fixed/random/simple LLM 共用协议 |
 | M8 scoring reports | `scoring/`, `reports/`, `storage/` | 不调用 LLM，不读取 persona 作主分数 |

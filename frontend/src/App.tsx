@@ -64,7 +64,7 @@ export function App() {
             <span className="module-nav-icon" aria-hidden="true">&#9655;</span>
             <span>
               <strong>Simulator</strong>
-              <small>Reviewed map preview</small>
+              <small>Single-turn answers</small>
             </span>
           </button>
         </nav>

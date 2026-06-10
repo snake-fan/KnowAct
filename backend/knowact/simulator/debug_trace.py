@@ -63,7 +63,7 @@ class SimulatorDebugTraceRecorder:
             / self.trace_id
         )
         self._payload: dict[str, Any] = {
-            "trace_kind": "simulator_preview",
+            "trace_kind": "simulator_turn",
             "trace_id": self.trace_id,
             "started_at": _isoformat(self._started_at),
             "request": {},

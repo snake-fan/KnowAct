@@ -84,7 +84,7 @@ V1 starts with a single benchmark domain, `classical_supervised_ml_algorithms`, 
 3. **User Simulation**
 
    An LLM-based user simulator is conditioned on the hidden knowledge map and evidence, then answers diagnostic questions naturally without revealing mastery labels, hidden evidence ids, or the full map. It may be uncertain, partially correct, or reveal misconceptions, but its answers should remain consistent with the hidden map and evidence.
-   See `docs/UserSimulator.md` for the Phase 5 simulator workflow, grounding, validation, fallback, and preview boundaries.
+   See `docs/UserSimulator.md` for the Phase 5 simulator workflow, grounding, validation, fallback, and single-turn boundaries.
 
 4. **Agent Interaction**
 
@@ -283,8 +283,8 @@ The V1 implementation has started with the schema and validation spine:
 - `backend/knowact/core/`: Pydantic schemas for knowledge graphs, evidence records, knowledge maps, visible interaction contracts, episode manifests, and scoring reports.
 - `backend/knowact/validation/`: cross-object validators for graph references, map coverage/evidence support, and episode manifest constraints.
 - `backend/knowact/authoring/`: the Phase 2 graph authoring workflow spine, with node extraction, node rubric authoring, edge proposal, candidate file export boundaries, and separate `templates/` and `parsers/` modules for agent prompts and raw model outputs.
-- `backend/knowact/simulator/`: Phase 5 user simulator contracts, starting with development-only preview DTOs that keep request and response fields tested-agent-visible.
-- `backend/knowact/llm/`: a model-client interface plus OpenAI and DeepSeek SDK-backed clients for text-based authoring steps and LLM-backed simulator preview.
+- `backend/knowact/simulator/`: Phase 5 user simulator contracts with a usable stateless single-turn API that keeps request and response fields tested-agent-visible.
+- `backend/knowact/llm/`: a model-client interface plus OpenAI and DeepSeek SDK-backed clients for text-based authoring steps and LLM-backed simulator turns.
 - `backend/knowact/storage/`: local artifact, material path, and reviewed graph/map promotion helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
 - `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
 - `frontend/`: a React/Vite research workbench with top-level Knowledge Graph and User Profile modules. It supports candidate graph review and the Profile Context generation, editing, save, and immutable-confirmation gate.
@@ -298,7 +298,7 @@ OPENAI_API_KEY=...
 KNOWACT_OPENAI_MODEL=gpt-4.1-mini
 ```
 
-DeepSeek can be selected per authoring or simulator preview request with `client_provider="deepseek"` and is configured through environment variables rather than request-body secrets:
+DeepSeek can be selected per authoring or simulator turn request with `client_provider="deepseek"` and is configured through environment variables rather than request-body secrets:
 
 ```bash
 DEEPSEEK_API_KEY=...
@@ -307,7 +307,7 @@ KNOWACT_DEEPSEEK_BASE_URL=https://api.deepseek.com
 KNOWACT_DEEPSEEK_TIMEOUT_SECONDS=120
 ```
 
-The simulator preview endpoint `/api/simulator/preview` accepts request-level `client_provider`, defaulting to `openai`, and uses the selected provider for both answer generation and answer validation. If the selected provider is not configured, the preview endpoint returns a non-leaking configuration error rather than falling back to unvalidated model text.
+The simulator turn endpoint `/api/simulator/turn` accepts request-level `client_provider`, defaulting to `openai`, and uses the selected provider for both answer generation and answer validation. If the selected provider is not configured, the turn endpoint returns a non-leaking configuration error rather than falling back to unvalidated model text. `/api/simulator/preview` remains a deprecated compatibility alias.
 
 The current tests use deterministic fixtures and fake clients; they do not call the OpenAI or DeepSeek APIs.
 
@@ -342,7 +342,7 @@ Run the Candidate Graph Review Workbench model checks with:
 npm --prefix frontend run test:candidate-graph-workbench
 ```
 
-The frontend currently exposes authoring modules for Knowledge Graph review, Profile Context confirmation, and User Map generation/review/promotion, plus a Simulator entry that previews reviewed maps without starting simulator episodes.
+The frontend currently exposes authoring modules for Knowledge Graph review, Profile Context confirmation, and User Map generation/review/promotion, plus a Simulator entry that runs reviewed-map-grounded single-turn answers without starting simulator episodes.
 
 If the backend is running on a non-default port, set `VITE_API_PROXY_TARGET`, for example:
 
@@ -367,8 +367,8 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`, which returns one saved Candidate Knowledge Map and its artifact references for inspection.
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`, which returns generation-time edge-consistency warnings for candidate-map review.
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`, which revalidates one saved Candidate Knowledge Map with its reviewed graph and confirmed Profile Context, converts `kind` to `ground_truth`, and publishes immutable `maps/{map_id}/map.json` plus `map_manifest.json`. Existing `map_id` values return `409 Conflict`, generation-time `consistency_warnings.json` is not copied into reviewed data, and a successfully published run is removed from `candidate_maps/`.
-- `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`, which list and read reviewed Knowledge Map snapshots for read-only workbench previews. These are inspection endpoints, not simulator runtime endpoints.
-- `POST /api/simulator/preview`, which previews one reviewed-map-grounded simulator answer. It accepts `benchmark_domain`, reviewed `map_id`, request-level `client_provider` (`openai` or `deepseek`, default `openai`), one diagnostic `question`, optional visible dialogue context, and optional debug-trace availability request metadata. Every preview writes a hidden local debug trace under `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/`; `preview_options.include_debug_trace` only controls whether the response returns `debug_trace_id` and `debug_trace_available`.
+- `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`, which list and read reviewed Knowledge Map snapshots for read-only workbench inspection.
+- `POST /api/simulator/turn`, which returns one reviewed-map-grounded simulator answer. It accepts `benchmark_domain`, reviewed `map_id`, request-level `client_provider` (`openai` or `deepseek`, default `openai`), one diagnostic `question`, optional visible dialogue context, and optional debug-trace availability request metadata. Every turn writes a hidden local debug trace under `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/`; `turn_options.include_debug_trace` only controls whether the response returns `debug_trace_id` and `debug_trace_available`. `/api/simulator/preview` remains a deprecated compatibility alias.
 
 ```json
 {
@@ -390,14 +390,14 @@ Implemented / planned components include:
 - [x] FastAPI authoring API for real source-backed graph candidate runs
 - [x] Candidate Graph Review Workbench frontend
 - [x] User Map Authoring Workbench frontend
-- [x] Simulator reviewed-map preview entry
+- [x] Simulator reviewed-map turn API and workbench entry
 - [x] Phase 3 review-gated authored graph promotion with generated manifests
 - [x] LLM-based Profile Context generation and immutable confirmation gate
 - [x] Single-batch Candidate Knowledge Map generation tracer bullet
 - [x] Reviewed map promotion with map manifests
 - [ ] Ground-truth map authoring
 - [ ] Human verification protocol
-- [ ] User simulator
+- [x] User simulator
 - [ ] Tested agent interface
 - [ ] ToM-aware agent loop
 - [ ] Baseline agents

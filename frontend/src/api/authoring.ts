@@ -579,7 +579,7 @@ export async function promoteCandidateMap(input: {
   );
 }
 
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+export async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   if (!response.ok) {
     const detail = await readError(response);

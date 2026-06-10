@@ -2,11 +2,11 @@ import unittest
 
 from pydantic import ValidationError
 
-from backend.knowact.simulator.preview import SimulatorPreviewRequest, SimulatorPreviewResponse
+from backend.knowact.simulator.turn import SimulatorTurnRequest, SimulatorTurnResponse
 
 
-class V1SimulatorPreviewContractsTest(unittest.TestCase):
-    def test_preview_request_rejects_hidden_state_payload_fields(self):
+class V1SimulatorTurnContractsTest(unittest.TestCase):
+    def test_turn_request_rejects_hidden_state_payload_fields(self):
         base_payload = {
             "benchmark_domain": "classical_supervised_ml_algorithms",
             "map_id": "dev_map_001",
@@ -34,9 +34,9 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
                 payload[field] = value
 
                 with self.assertRaises(ValidationError):
-                    SimulatorPreviewRequest.model_validate(payload)
+                    SimulatorTurnRequest.model_validate(payload)
 
-    def test_preview_request_accepts_only_structured_visible_dialogue_context(self):
+    def test_turn_request_accepts_only_structured_visible_dialogue_context(self):
         payload = {
             "benchmark_domain": "classical_supervised_ml_algorithms",
             "map_id": "dev_map_001",
@@ -53,7 +53,7 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
             },
         }
 
-        request = SimulatorPreviewRequest.model_validate(payload)
+        request = SimulatorTurnRequest.model_validate(payload)
 
         self.assertEqual("turn_01", request.visible_dialogue_context.turns[0].turn_id)
         self.assertEqual("answer", request.visible_dialogue_context.turns[0].observation.kind)
@@ -64,7 +64,7 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
             "mastery_level": "L4",
         }
         with self.assertRaises(ValidationError):
-            SimulatorPreviewRequest.model_validate(hidden_question_payload)
+            SimulatorTurnRequest.model_validate(hidden_question_payload)
 
         hidden_context_payload = dict(payload)
         hidden_context_payload["visible_dialogue_context"] = {
@@ -82,12 +82,12 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
             "states": [{"node_id": "linear_regression"}],
         }
         with self.assertRaises(ValidationError):
-            SimulatorPreviewRequest.model_validate(hidden_context_payload)
+            SimulatorTurnRequest.model_validate(hidden_context_payload)
 
         candidate_path_payload = dict(payload)
         candidate_path_payload["map_id"] = "candidate_maps/dev_map_001"
         with self.assertRaises(ValidationError):
-            SimulatorPreviewRequest.model_validate(candidate_path_payload)
+            SimulatorTurnRequest.model_validate(candidate_path_payload)
 
         invalid_question_id_payload = dict(payload)
         invalid_question_id_payload["question"] = {
@@ -95,30 +95,45 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
             "text": payload["question"]["text"],
         }
         with self.assertRaises(ValidationError):
-            SimulatorPreviewRequest.model_validate(invalid_question_id_payload)
+            SimulatorTurnRequest.model_validate(invalid_question_id_payload)
 
-    def test_preview_request_accepts_debug_trace_availability_option_only(self):
+    def test_turn_request_accepts_debug_trace_availability_option_only(self):
         payload = {
             "benchmark_domain": "classical_supervised_ml_algorithms",
             "map_id": "dev_map_001",
             "question": {"text": "How would you decide whether linear regression is appropriate?"},
-            "preview_options": {"include_debug_trace": True},
+            "turn_options": {"include_debug_trace": True},
         }
 
-        request = SimulatorPreviewRequest.model_validate(payload)
+        request = SimulatorTurnRequest.model_validate(payload)
 
         self.assertEqual("openai", request.client_provider)
-        self.assertTrue(request.preview_options.include_debug_trace)
+        self.assertTrue(request.turn_options.include_debug_trace)
 
         hidden_options_payload = dict(payload)
-        hidden_options_payload["preview_options"] = {
+        hidden_options_payload["turn_options"] = {
             "include_debug_trace": True,
             "raw_debug_trace": {"grounding": "hidden internals"},
         }
         with self.assertRaises(ValidationError):
-            SimulatorPreviewRequest.model_validate(hidden_options_payload)
+            SimulatorTurnRequest.model_validate(hidden_options_payload)
 
-    def test_preview_request_accepts_client_provider_like_authoring_requests(self):
+    def test_turn_request_accepts_legacy_preview_options_alias(self):
+        request = SimulatorTurnRequest.model_validate(
+            {
+                "benchmark_domain": "classical_supervised_ml_algorithms",
+                "map_id": "dev_map_001",
+                "question": {
+                    "text": "How would you decide whether linear regression is appropriate?"
+                },
+                "preview_options": {"include_debug_trace": True},
+            }
+        )
+
+        self.assertTrue(request.turn_options.include_debug_trace)
+        self.assertTrue(request.preview_options.include_debug_trace)
+
+    def test_turn_request_accepts_client_provider_like_authoring_requests(self):
         payload = {
             "benchmark_domain": "classical_supervised_ml_algorithms",
             "map_id": "dev_map_001",
@@ -126,33 +141,33 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
             "question": {"text": "How would you decide whether linear regression is appropriate?"},
         }
 
-        request = SimulatorPreviewRequest.model_validate(payload)
+        request = SimulatorTurnRequest.model_validate(payload)
 
         self.assertEqual("deepseek", request.client_provider)
 
         unsupported_provider_payload = dict(payload)
         unsupported_provider_payload["client_provider"] = "unknown"
         with self.assertRaises(ValidationError):
-            SimulatorPreviewRequest.model_validate(unsupported_provider_payload)
+            SimulatorTurnRequest.model_validate(unsupported_provider_payload)
 
-    def test_preview_response_exposes_only_visible_answer_metadata_and_trace_handle(self):
+    def test_turn_response_exposes_only_visible_answer_metadata_and_trace_handle(self):
         payload = {
             "answer": {"text": "I can explain the slope, but I am less sure about the assumptions."},
             "observation": {"kind": "answer"},
             "warnings": [
                 {
                     "code": "missing_profile_context",
-                    "message": "Profile context is unavailable; preview used neutral wording.",
+                    "message": "Profile context is unavailable; simulator used neutral wording.",
                 }
             ],
-            "debug_trace_id": "trace_preview_001",
+            "debug_trace_id": "trace_turn_001",
             "debug_trace_available": True,
         }
 
-        response = SimulatorPreviewResponse.model_validate(payload)
+        response = SimulatorTurnResponse.model_validate(payload)
 
         self.assertEqual("answer", response.observation.kind)
-        self.assertEqual("trace_preview_001", response.debug_trace_id)
+        self.assertEqual("trace_turn_001", response.debug_trace_id)
 
         forbidden_fields = {
             "mastery_level": "L3",
@@ -173,7 +188,7 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
                 hidden_payload[field] = value
 
                 with self.assertRaises(ValidationError):
-                    SimulatorPreviewResponse.model_validate(hidden_payload)
+                    SimulatorTurnResponse.model_validate(hidden_payload)
 
         hidden_answer_payload = dict(payload)
         hidden_answer_payload["answer"] = {
@@ -181,7 +196,7 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
             "evidence_refs": ["ev_hidden"],
         }
         with self.assertRaises(ValidationError):
-            SimulatorPreviewResponse.model_validate(hidden_answer_payload)
+            SimulatorTurnResponse.model_validate(hidden_answer_payload)
 
 
 if __name__ == "__main__":

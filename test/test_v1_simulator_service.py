@@ -36,9 +36,9 @@ from backend.knowact.simulator.policy import (
     SimulatorAnswerStance,
     SimulatorResponseMode,
 )
-from backend.knowact.simulator.preview import (
-    SimulatorPreviewRequest,
-    SimulatorPreviewWarningCode,
+from backend.knowact.simulator.turn import (
+    SimulatorTurnRequest,
+    SimulatorTurnWarningCode,
 )
 from backend.knowact.simulator.service import SimulatorService
 
@@ -49,7 +49,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
             service = SimulatorService(workspace_root=workspace_root)
-            request = SimulatorPreviewRequest.model_validate(
+            request = SimulatorTurnRequest.model_validate(
                 {
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -59,7 +59,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 }
             )
 
-            response = service.answer_preview(request)
+            response = service.answer_turn(request)
 
             self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
             self.assertEqual((), response.warnings)
@@ -69,12 +69,12 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertNotIn("ev_gt_map_001_train_test_split_001", response.answer.text)
             self.assertNotIn("synthetic_user_001", response.answer.text)
 
-    def test_service_logs_preview_workflow_steps_without_hidden_payloads(self):
+    def test_service_logs_turn_workflow_steps_without_hidden_payloads(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
             service = SimulatorService(workspace_root=workspace_root)
-            request = SimulatorPreviewRequest.model_validate(
+            request = SimulatorTurnRequest.model_validate(
                 {
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -85,16 +85,16 @@ class V1SimulatorServiceTest(unittest.TestCase):
             )
 
             with self.assertLogs("knowact.simulator", level="INFO") as captured_logs:
-                response = service.answer_preview(request)
+                response = service.answer_turn(request)
 
             self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
             log_text = "\n".join(captured_logs.output)
             for expected_fragment in (
-                "Simulator preview workflow started",
-                "Simulator preview map manifest loaded",
-                "Simulator preview reviewed graph loaded",
+                "Simulator turn workflow started",
+                "Simulator turn map manifest loaded",
+                "Simulator turn reviewed graph loaded",
                 "Question grounding succeeded",
-                "Simulator preview reviewed map loaded",
+                "Simulator turn reviewed map loaded",
                 "Simulator profile context loaded",
                 "Simulator context built",
                 "Answer blueprint derived",
@@ -102,7 +102,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 "Simulator answer generation started",
                 "Rule-based simulator answer generation succeeded",
                 "Simulator answer validation completed",
-                "Simulator preview workflow succeeded",
+                "Simulator turn workflow succeeded",
             ):
                 with self.subTest(expected_fragment=expected_fragment):
                     self.assertIn(expected_fragment, log_text)
@@ -119,14 +119,14 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 with self.subTest(hidden_fragment=hidden_fragment):
                     self.assertNotIn(hidden_fragment, log_text)
 
-    def test_preview_api_answers_reviewed_map_request_without_episode_manifest(self):
+    def test_turn_api_answers_reviewed_map_request_without_episode_manifest(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
-            client = _simulator_preview_test_client(workspace_root)
+            client = _simulator_turn_test_client(workspace_root)
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -145,7 +145,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertNotIn("graph_version", payload)
             self.assertNotIn("user_id", payload)
 
-    def test_preview_api_selects_simulator_client_provider_per_request(self):
+    def test_turn_api_selects_simulator_client_provider_per_request(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
@@ -158,7 +158,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             )
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -172,14 +172,14 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertEqual(200, response.status_code)
             self.assertEqual(["deepseek"], service_factory.client_providers)
 
-    def test_preview_api_reports_debug_trace_availability_without_inline_trace(self):
+    def test_turn_api_reports_debug_trace_availability_without_inline_trace(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
-            client = _simulator_preview_test_client(workspace_root)
+            client = _simulator_turn_test_client(workspace_root)
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -187,7 +187,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                         "question_id": "q_train_test_split",
                         "text": "How would you decide whether a train/test split is appropriate?"
                     },
-                    "preview_options": {"include_debug_trace": True},
+                    "turn_options": {"include_debug_trace": True},
                 },
             )
 
@@ -240,14 +240,14 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertFalse((trace_dir / "map.json").exists())
             self.assertFalse((trace_dir / "profile_context.json").exists())
 
-    def test_preview_api_persists_debug_trace_even_when_handle_is_not_requested(self):
+    def test_turn_api_persists_debug_trace_even_when_handle_is_not_requested(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
-            client = _simulator_preview_test_client(workspace_root)
+            client = _simulator_turn_test_client(workspace_root)
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -275,21 +275,21 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 ).exists()
             )
 
-    def test_preview_api_generates_question_trace_id_when_question_id_is_missing(self):
+    def test_turn_api_generates_question_trace_id_when_question_id_is_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
-            client = _simulator_preview_test_client(workspace_root)
+            client = _simulator_turn_test_client(workspace_root)
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
                     "question": {
                         "text": "How would you decide whether a train/test split is appropriate?",
                     },
-                    "preview_options": {"include_debug_trace": True},
+                    "turn_options": {"include_debug_trace": True},
                 },
             )
 
@@ -309,7 +309,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 ).exists()
             )
 
-    def test_preview_api_rewrites_existing_question_debug_trace_directory(self):
+    def test_turn_api_rewrites_existing_question_debug_trace_directory(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
@@ -331,10 +331,10 @@ class V1SimulatorServiceTest(unittest.TestCase):
             )
             stale_path.parent.mkdir(parents=True)
             stale_path.write_text("stale", encoding="utf-8")
-            client = _simulator_preview_test_client(workspace_root)
+            client = _simulator_turn_test_client(workspace_root)
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -342,7 +342,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                         "question_id": "q_rewrite",
                         "text": "How would you decide whether a train/test split is appropriate?",
                     },
-                    "preview_options": {"include_debug_trace": True},
+                    "turn_options": {"include_debug_trace": True},
                 },
             )
 
@@ -350,7 +350,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertFalse(stale_path.exists())
             self.assertTrue((trace_dir / "debug_trace.json").exists())
 
-    def test_preview_api_returns_no_grounding_non_answer_without_hidden_map_content(self):
+    def test_turn_api_returns_no_grounding_non_answer_without_hidden_map_content(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(
@@ -358,10 +358,10 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 include_profile_context=True,
                 include_map_artifact=False,
             )
-            client = _simulator_preview_test_client(workspace_root)
+            client = _simulator_turn_test_client(workspace_root)
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -377,7 +377,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertNotIn("ev_gt_map_001", response_payload)
             self.assertNotIn("held-out", response_payload.lower())
 
-    def test_preview_api_returns_multi_question_clarification_without_hidden_map_content(self):
+    def test_turn_api_returns_multi_question_clarification_without_hidden_map_content(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(
@@ -385,10 +385,10 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 include_profile_context=True,
                 include_map_artifact=False,
             )
-            client = _simulator_preview_test_client(workspace_root)
+            client = _simulator_turn_test_client(workspace_root)
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -409,14 +409,14 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertNotIn("ev_gt_map_001", response_payload)
             self.assertNotIn("final test", response_payload.lower())
 
-    def test_preview_api_returns_missing_profile_context_warning(self):
+    def test_turn_api_returns_missing_profile_context_warning(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=False)
-            client = _simulator_preview_test_client(workspace_root)
+            client = _simulator_turn_test_client(workspace_root)
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -441,8 +441,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=False)
             service = SimulatorService(workspace_root=workspace_root)
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -457,7 +457,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertIn("held-out", response.answer.text.lower())
             self.assertEqual(1, len(response.warnings))
             self.assertEqual(
-                SimulatorPreviewWarningCode.MISSING_PROFILE_CONTEXT,
+                SimulatorTurnWarningCode.MISSING_PROFILE_CONTEXT,
                 response.warnings[0].code,
             )
             self.assertNotIn("synthetic_user_001", response.warnings[0].message)
@@ -469,8 +469,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
             service = SimulatorService(workspace_root=workspace_root)
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -493,8 +493,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
             service = SimulatorService(workspace_root=workspace_root)
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -507,7 +507,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertNotIn("fold", response.answer.text.lower())
             self.assertNotIn("validation", response.answer.text.lower())
 
-    def test_no_grounding_preview_does_not_load_hidden_reviewed_map_content(self):
+    def test_no_grounding_turn_does_not_load_hidden_reviewed_map_content(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(
@@ -517,8 +517,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
             )
             service = SimulatorService(workspace_root=workspace_root)
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -547,8 +547,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
             )
             service = SimulatorService(workspace_root=workspace_root)
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -588,8 +588,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
             service = SimulatorService(workspace_root=workspace_root)
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -616,8 +616,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
             service = SimulatorService(workspace_root=workspace_root)
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -648,7 +648,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 with self.subTest(fragment=fragment):
                     self.assertNotIn(fragment, response_payload)
 
-    def test_preview_api_does_not_load_candidate_map_runs_as_simulator_inputs(self):
+    def test_turn_api_does_not_load_candidate_map_runs_as_simulator_inputs(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             candidate_dir = (
@@ -661,10 +661,10 @@ class V1SimulatorServiceTest(unittest.TestCase):
             )
             candidate_dir.mkdir(parents=True)
             _write_json(candidate_dir / "candidate_map.json", {"states": []})
-            client = _simulator_preview_test_client(workspace_root)
+            client = _simulator_turn_test_client(workspace_root)
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "candidate_only",
@@ -675,7 +675,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertEqual(404, response.status_code)
             self.assertIn("Reviewed map candidate_only does not exist", response.json()["detail"])
 
-    def test_preview_api_malformed_reviewed_map_error_does_not_echo_hidden_map_payload(self):
+    def test_turn_api_malformed_reviewed_map_error_does_not_echo_hidden_map_payload(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
@@ -693,10 +693,10 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 map_payload = json.load(handle)
             map_payload["states"][0]["mastery_level"] = secret_hidden_value
             _write_json(map_path, map_payload)
-            client = _simulator_preview_test_client(workspace_root)
+            client = _simulator_turn_test_client(workspace_root)
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -711,7 +711,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertIn("reviewed map artifact", response_payload.lower())
             self.assertNotIn(secret_hidden_value, response_payload)
 
-    def test_preview_api_returns_configuration_error_when_llm_provider_is_missing(self):
+    def test_turn_api_returns_configuration_error_when_llm_provider_is_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
@@ -719,7 +719,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
 
             with patch.dict("os.environ", {}, clear=True):
                 response = client.post(
-                    "/api/simulator/preview",
+                    "/api/simulator/turn",
                     json={
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -861,8 +861,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 validator=fake_validator,
             )
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -918,8 +918,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 validator=PassingSimulatorAnswerValidator(),
             )
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -970,8 +970,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 validator=PassingSimulatorAnswerValidator(),
             )
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -1013,8 +1013,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 validator=UnavailableSimulatorAnswerValidator(),
             )
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -1061,8 +1061,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 ),
             )
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -1117,8 +1117,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 generator=ModelClientAnswerGenerator(model_client=fake_model_client),
             )
 
-            response = service.answer_preview(
-                SimulatorPreviewRequest.model_validate(
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
                     {
                         "benchmark_domain": "classical_supervised_ml_algorithms",
                         "map_id": "gt_map_001",
@@ -1336,7 +1336,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 grounding=QuestionGroundingResult(grounded_node_ids=("train_test_split",)),
             )
 
-    def test_preview_api_uses_llm_generator_and_llm_validator(self):
+    def test_turn_api_uses_llm_generator_and_llm_validator(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
@@ -1353,7 +1353,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                     ),
                 )
             )
-            client = _simulator_preview_test_client(
+            client = _simulator_turn_test_client(
                 workspace_root,
                 service=SimulatorService(
                     workspace_root=workspace_root,
@@ -1363,7 +1363,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             )
 
             response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "map_id": "gt_map_001",
@@ -1371,7 +1371,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                         "question_id": "q_llm_trace",
                         "text": "How would you decide whether a train/test split is appropriate?"
                     },
-                    "preview_options": {"include_debug_trace": True},
+                    "turn_options": {"include_debug_trace": True},
                 },
             )
 
@@ -1486,7 +1486,7 @@ class SequenceSimulatorModelClient(FixtureSimulatorAnswerModelClient):
         return self._raw_outputs.pop(0)
 
 
-def _simulator_preview_test_client(
+def _simulator_turn_test_client(
     workspace_root: Path,
     *,
     service: SimulatorService | None = None,

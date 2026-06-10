@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from "react";
 import {
   ReviewedGraphPayload,
   ReviewedMapPayload,
@@ -8,6 +16,11 @@ import {
   readReviewedGraph,
   readReviewedMap
 } from "../../api/authoring";
+import {
+  SimulatorClientProvider,
+  VisibleDialogueTurn,
+  answerSimulatorTurn
+} from "../../api/simulator";
 import { MapPreviewCanvas } from "../mapAuthoring/MapPreviewCanvas";
 import {
   MapLegend,
@@ -15,19 +28,22 @@ import {
   MapNodeInspectionCard
 } from "../mapAuthoring/MapPreviewDetails";
 
-type SimulatorMapPreviewContext = {
+type SimulatorMapContext = {
   benchmarkDomain: string;
   graph: ReviewedGraphPayload;
   reviewedMap: ReviewedMapPayload;
 };
+
+type RunTask = (label: string, task: () => Promise<void>) => Promise<void>;
 
 export function SimulatorWorkbench() {
   const [benchmarkDomains, setBenchmarkDomains] = useState<string[]>([]);
   const [benchmarkDomain, setBenchmarkDomain] = useState("");
   const [reviewedMaps, setReviewedMaps] = useState<ReviewedMapSummary[]>([]);
   const [selectedMapId, setSelectedMapId] = useState("");
-  const [previewContext, setPreviewContext] = useState<SimulatorMapPreviewContext | null>(null);
+  const [simulatorContext, setSimulatorContext] = useState<SimulatorMapContext | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [conversationResetKey, setConversationResetKey] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,10 +57,9 @@ export function SimulatorWorkbench() {
     void refreshReviewedMapList(benchmarkDomain);
   }, [benchmarkDomain]);
 
-  const selectedNode = useMemo(() => {
-    if (!previewContext || !selectedNodeId) return null;
-    return previewContext.graph.authored_nodes.find((node) => node.id === selectedNodeId) ?? null;
-  }, [previewContext, selectedNodeId]);
+  const handleSelectNode = useCallback((nodeId: string | null) => {
+    setSelectedNodeId(nodeId);
+  }, []);
 
   async function refreshBenchmarkDomains() {
     await runTask("domains", async () => {
@@ -63,27 +78,29 @@ export function SimulatorWorkbench() {
       setReviewedMaps(nextMaps);
       setSelectedMapId(nextSelectedMapId);
       setSelectedNodeId(null);
+      resetSimulatorConversation();
       if (!nextSelectedMapId) {
-        setPreviewContext(null);
+        setSimulatorContext(null);
         return;
       }
-      setPreviewContext(await loadPreviewContext(domain, nextSelectedMapId));
+      setSimulatorContext(await loadSimulatorContext(domain, nextSelectedMapId));
     });
   }
 
   async function handleLoadReviewedMap(summary: ReviewedMapSummary) {
-    await runTask("preview map", async () => {
+    await runTask("load map", async () => {
       setSelectedMapId(summary.map_id);
       setSelectedNodeId(null);
-      setPreviewContext(await loadPreviewContext(benchmarkDomain, summary.map_id));
+      resetSimulatorConversation();
+      setSimulatorContext(await loadSimulatorContext(benchmarkDomain, summary.map_id));
       setNotice(`Loaded Reviewed Map ${summary.map_id}.`);
     });
   }
 
-  async function loadPreviewContext(
+  async function loadSimulatorContext(
     domain: string,
     mapId: string
-  ): Promise<SimulatorMapPreviewContext> {
+  ): Promise<SimulatorMapContext> {
     const reviewedMap = await readReviewedMap(domain, mapId);
     const graph = await readReviewedGraph(domain, reviewedMap.map_manifest.graph_version);
     return {
@@ -91,6 +108,10 @@ export function SimulatorWorkbench() {
       graph,
       reviewedMap
     };
+  }
+
+  function resetSimulatorConversation() {
+    setConversationResetKey((current) => current + 1);
   }
 
   async function runTask(label: string, task: () => Promise<void>) {
@@ -111,8 +132,8 @@ export function SimulatorWorkbench() {
       <section className="topbar simulator-topbar">
         <div>
           <p className="eyebrow">Simulator</p>
-          <h1>Simulation Preview</h1>
-          <p>Select a reviewed Knowledge Map to inspect the hidden user state basis that future simulator episodes will use.</p>
+          <h1>Simulator</h1>
+          <p>Select a reviewed Knowledge Map and run diagnostic turns against the hidden user state.</p>
         </div>
         <div className="status-strip" aria-live="polite">
           {busy && <span className="status busy">Working: {busy}</span>}
@@ -166,54 +187,27 @@ export function SimulatorWorkbench() {
               ))}
             </div>
           )}
+
+          <SimulatorTurnPanel
+            key={conversationResetKey}
+            simulatorContext={simulatorContext}
+            selectedMapId={selectedMapId}
+            busy={busy}
+            runTask={runTask}
+            setNotice={setNotice}
+            setError={setError}
+          />
         </section>
 
-        {previewContext ? (
-          <section className="map-review-stage simulator-preview-panel">
-            <div className="map-review-header">
-              <div>
-                <p className="eyebrow">Reviewed Knowledge Map</p>
-                <h2>{previewContext.reviewedMap.map_manifest.map_id}</h2>
-                <p>
-                  {previewContext.benchmarkDomain} / {previewContext.reviewedMap.map_manifest.graph_version} / {previewContext.reviewedMap.map_manifest.user_id}
-                </p>
-              </div>
-              <div className="map-review-actions">
-                <span className="lifecycle-badge confirmed">Reviewed</span>
-                <span className="warning-count">Runtime pending</span>
-              </div>
-            </div>
-
-            <div className="simulator-map-summary">
-              <MapMeta label="States" value={String(previewContext.reviewedMap.map.states.length)} />
-              <MapMeta label="Evidence" value={String(previewContext.reviewedMap.map.evidence.length)} />
-              <MapMeta label="Promoted From" value={previewContext.reviewedMap.map_manifest.promoted_from_candidate_run} />
-            </div>
-
-            <MapLegend />
-
-            <div className="map-review-canvas-shell">
-              <div className="map-preview-canvas-frame">
-                <MapPreviewCanvas
-                  graph={previewContext.graph}
-                  knowledgeMap={previewContext.reviewedMap.map}
-                  selectedNodeId={selectedNodeId}
-                  onSelectNode={setSelectedNodeId}
-                  ariaLabel="Reviewed knowledge map simulator preview graph"
-                />
-                {selectedNode && (
-                  <MapNodeInspectionCard
-                    node={selectedNode}
-                    knowledgeMap={previewContext.reviewedMap.map}
-                    onClose={() => setSelectedNodeId(null)}
-                  />
-                )}
-              </div>
-            </div>
-          </section>
+        {simulatorContext ? (
+          <SimulatorMapPreviewPanel
+            simulatorContext={simulatorContext}
+            selectedNodeId={selectedNodeId}
+            onSelectNode={handleSelectNode}
+          />
         ) : (
           <section className="simulator-empty-panel">
-            <p className="eyebrow">Reviewed Map Preview</p>
+            <p className="eyebrow">Simulator</p>
             <h2>Select a map</h2>
             <p>Reviewed maps published from User Map authoring will appear in the list when available.</p>
           </section>
@@ -222,3 +216,220 @@ export function SimulatorWorkbench() {
     </main>
   );
 }
+
+function SimulatorTurnPanel({
+  simulatorContext,
+  selectedMapId,
+  busy,
+  runTask,
+  setNotice,
+  setError
+}: {
+  simulatorContext: SimulatorMapContext | null;
+  selectedMapId: string;
+  busy: string | null;
+  runTask: RunTask;
+  setNotice: Dispatch<SetStateAction<string | null>>;
+  setError: Dispatch<SetStateAction<string | null>>;
+}) {
+  const [clientProvider, setClientProvider] = useState<SimulatorClientProvider>("openai");
+  const [questionText, setQuestionText] = useState("");
+  const [includeDebugTrace, setIncludeDebugTrace] = useState(false);
+  const [dialogueTurns, setDialogueTurns] = useState<VisibleDialogueTurn[]>([]);
+  const [latestTrace, setLatestTrace] = useState<{ id: string; available: boolean } | null>(null);
+  const hasQuestion = questionText.trim().length > 0;
+
+  async function handleAskSimulator() {
+    const question = questionText.trim();
+    if (!simulatorContext || !selectedMapId) {
+      setError("Select a reviewed map before asking the simulator.");
+      return;
+    }
+    if (!question) {
+      setError("Enter one diagnostic question.");
+      return;
+    }
+
+    const visibleDialogueContext = dialogueTurns.length > 0
+      ? { turns: dialogueTurns }
+      : null;
+    const turnIndex = dialogueTurns.length + 1;
+
+    await runTask("simulator turn", async () => {
+      const response = await answerSimulatorTurn({
+        benchmarkDomain: simulatorContext.benchmarkDomain,
+        mapId: selectedMapId,
+        clientProvider,
+        question: { text: question },
+        visibleDialogueContext,
+        includeDebugTrace
+      });
+      const turnId = response.debug_trace_id || `turn_${String(turnIndex).padStart(2, "0")}`;
+      setDialogueTurns((currentTurns) => [
+        ...currentTurns,
+        {
+          turn_id: turnId,
+          question: { text: question },
+          answer: response.answer,
+          observation: response.observation
+        }
+      ]);
+      setLatestTrace(
+        response.debug_trace_id && response.debug_trace_available !== null
+          ? {
+              id: response.debug_trace_id,
+              available: response.debug_trace_available === true
+            }
+          : null
+      );
+      setQuestionText("");
+      const warningSuffix = response.warnings.length > 0
+        ? ` ${response.warnings.map((warning) => warning.message).join(" ")}`
+        : "";
+      setNotice(`Simulator returned ${response.observation.kind}.${warningSuffix}`);
+    });
+  }
+
+  function clearSimulatorConversation() {
+    setDialogueTurns([]);
+    setLatestTrace(null);
+  }
+
+  return (
+    <>
+      <div className="simulator-turn-form">
+        <div>
+          <p className="eyebrow">Turn</p>
+          <h2>Ask Simulator</h2>
+        </div>
+        <label>
+          Provider
+          <select value={clientProvider} onChange={(event) => setClientProvider(event.target.value as SimulatorClientProvider)} disabled={busy !== null}>
+            <option value="openai">OpenAI</option>
+            <option value="deepseek">DeepSeek</option>
+          </select>
+        </label>
+        <label>
+          Diagnostic Question
+          <textarea
+            value={questionText}
+            onChange={(event) => setQuestionText(event.target.value)}
+            disabled={busy !== null || !simulatorContext}
+            placeholder="How would you decide whether a train/test split is appropriate?"
+          />
+        </label>
+        <label className="simulator-debug-toggle">
+          <input
+            type="checkbox"
+            checked={includeDebugTrace}
+            onChange={(event) => setIncludeDebugTrace(event.target.checked)}
+            disabled={busy !== null}
+          />
+          <span>Return debug trace handle</span>
+        </label>
+        <div className="button-row">
+          <button
+            type="button"
+            onClick={() => void handleAskSimulator()}
+            disabled={busy !== null || !simulatorContext || !hasQuestion}
+          >
+            Ask Simulator
+          </button>
+          <button
+            type="button"
+            onClick={clearSimulatorConversation}
+            disabled={busy !== null || dialogueTurns.length === 0}
+          >
+            Clear History
+          </button>
+        </div>
+        {latestTrace && (
+          <p className="simulator-trace-note">
+            Trace {latestTrace.id}: {latestTrace.available ? "available" : "unavailable"}
+          </p>
+        )}
+      </div>
+
+      <div className="simulator-transcript" aria-live="polite">
+        <div>
+          <p className="eyebrow">Visible Turns</p>
+          <h2>History</h2>
+        </div>
+        {dialogueTurns.length === 0 ? (
+          <p className="empty">No simulator turns yet.</p>
+        ) : (
+          dialogueTurns.map((turn, index) => (
+            <article key={`${turn.turn_id}-${index}`} className="simulator-turn-record">
+              <div>
+                <span>{turn.observation.kind}</span>
+                <strong>{turn.turn_id}</strong>
+              </div>
+              <p className="simulator-question">{turn.question.text}</p>
+              <p>{turn.answer.text}</p>
+            </article>
+          ))
+        )}
+      </div>
+    </>
+  );
+}
+
+const SimulatorMapPreviewPanel = memo(function SimulatorMapPreviewPanel({
+  simulatorContext,
+  selectedNodeId,
+  onSelectNode
+}: {
+  simulatorContext: SimulatorMapContext;
+  selectedNodeId: string | null;
+  onSelectNode: (nodeId: string | null) => void;
+}) {
+  const selectedNode = useMemo(() => {
+    if (!selectedNodeId) return null;
+    return simulatorContext.graph.authored_nodes.find((node) => node.id === selectedNodeId) ?? null;
+  }, [simulatorContext, selectedNodeId]);
+
+  return (
+    <section className="map-review-stage simulator-preview-panel">
+      <div className="map-review-header">
+        <div>
+          <p className="eyebrow">Reviewed Knowledge Map</p>
+          <h2>{simulatorContext.reviewedMap.map_manifest.map_id}</h2>
+          <p>
+            {simulatorContext.benchmarkDomain} / {simulatorContext.reviewedMap.map_manifest.graph_version} / {simulatorContext.reviewedMap.map_manifest.user_id}
+          </p>
+        </div>
+        <div className="map-review-actions">
+          <span className="lifecycle-badge confirmed">Reviewed</span>
+          <span className="warning-count">Turn API Ready</span>
+        </div>
+      </div>
+
+      <div className="simulator-map-summary">
+        <MapMeta label="States" value={String(simulatorContext.reviewedMap.map.states.length)} />
+        <MapMeta label="Evidence" value={String(simulatorContext.reviewedMap.map.evidence.length)} />
+        <MapMeta label="Promoted From" value={simulatorContext.reviewedMap.map_manifest.promoted_from_candidate_run} />
+      </div>
+
+      <MapLegend />
+
+      <div className="map-review-canvas-shell">
+        <div className="map-preview-canvas-frame">
+          <MapPreviewCanvas
+            graph={simulatorContext.graph}
+            knowledgeMap={simulatorContext.reviewedMap.map}
+            selectedNodeId={selectedNodeId}
+            onSelectNode={onSelectNode}
+            ariaLabel="Reviewed knowledge map simulator graph"
+          />
+          {selectedNode && (
+            <MapNodeInspectionCard
+              node={selectedNode}
+              knowledgeMap={simulatorContext.reviewedMap.map}
+              onClose={() => onSelectNode(null)}
+            />
+          )}
+        </div>
+      </div>
+    </section>
+  );
+});

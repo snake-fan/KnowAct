@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import {
   Graph as G6Graph,
   type EdgeData as G6EdgeData,
@@ -40,7 +40,7 @@ const MIN_NODES_PER_LAYER = 3;
 const TARGET_NODES_PER_LAYER = 5;
 const MAX_NODES_PER_LAYER = 6;
 
-export function MapPreviewCanvas({
+export const MapPreviewCanvas = memo(function MapPreviewCanvas({
   graph,
   knowledgeMap,
   warnings = [],
@@ -295,7 +295,7 @@ export function MapPreviewCanvas({
       aria-label={ariaLabel}
     />
   );
-}
+});
 
 function toG6Data(
   graph: ReviewedGraphPayload,
