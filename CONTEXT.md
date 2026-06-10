@@ -241,31 +241,27 @@ Natural uncertainty, partial correctness, hesitation, or misconception in a **Us
 _Avoid_: random behavior, evasive answer, state drift
 
 **Simulator Answer Policy**:
-The simulator reasoning boundary that turns a grounded diagnostic situation into a **Simulator Answer Intent**.
-_Avoid_: state label mapper, expression context, answer generator, tested-agent policy
+The simulator reasoning boundary that turns a grounded diagnostic situation into a **Simulator Answer Blueprint**.
+_Avoid_: state label mapper, answer generator, tested-agent policy
 
-**Simulator Answer Intent**:
-The structured answer-content decision that a **User Simulator** should express in one answer.
-_Avoid_: single state label, final answer text, style pass, freeform hidden rationale
+**Simulator Answer Blueprint**:
+The de-identified structured answer-content blueprint that a **User Simulator** should express in one answer.
+_Avoid_: raw hidden map, single state label, final answer text, style pass, freeform hidden rationale
 
 **Simulator Policy Decision Trace**:
-A hidden audit record of the reasoning inputs and decisions used to derive a **Simulator Answer Intent**.
-_Avoid_: visible transcript, expression context, generator prompt, scoring input
-
-**Simulator Expression Context**:
-The de-identified material used to render a **Simulator Answer Intent** as natural language.
-_Avoid_: raw reviewed map, mastery labels, hidden evidence ids
+A hidden audit record of the reasoning inputs and decisions used to derive a **Simulator Answer Blueprint**.
+_Avoid_: visible transcript, generator prompt, scoring input
 
 **Visible Dialogue Context**:
 The prior transcript and **Interaction Observations** already visible to the **Tested Agent**.
 _Avoid_: hidden evidence, simulator-only memory, updated user state
 
 **Simulator Debug Trace**:
-A hidden debug artifact recording simulator-internal grounding, intent, validation, and fallback decisions.
+A hidden debug artifact recording simulator-internal grounding, answer-blueprint, validation, and fallback decisions.
 _Avoid_: visible transcript, interaction observation, scoring input
 
 **Simulator Answer Validation**:
-The check that a generated simulator answer is safe to expose and consistent with its **Simulator Answer Intent**.
+The check that a generated simulator answer is safe to expose and consistent with its **Simulator Answer Blueprint**.
 _Avoid_: scorer, benchmark evaluation, primary metric
 
 **Simulator Safe Fallback**:
@@ -559,30 +555,27 @@ _Avoid_: ground-truth edge, authored edge
 - The **User Simulator** uses hidden map and evidence to generate natural answers, not structured benchmark labels.
 - The **User Simulator** bases answer content on the grounded **User Knowledge States** and their **Ground-Truth Evidence**.
 - The **User Simulator** must not directly reveal mastery labels, hidden evidence ids, or the full **Reviewed Map**.
-- **Profile Context** may shape simulator expression style but must not replace grounded **User Knowledge State** as the answer-content basis.
-- The **Simulator Answer Policy** is the reasoning boundary that derives a structured **Simulator Answer Intent** from a grounded diagnostic situation.
+- **Profile Context** may shape simulator wording style but must not replace grounded **User Knowledge State** as the answer-content basis.
+- The **Simulator Answer Policy** is the reasoning boundary that derives a structured **Simulator Answer Blueprint** from a grounded diagnostic situation.
 - The **Simulator Answer Policy** owns response-mode decisions such as ordinary answer, clarification, label refusal, and safe non-answer.
 - The **Simulator Answer Policy** may use only directly grounded node rubrics, simulator behavior, hidden state, and grounded evidence as answer-content sources.
 - The **Simulator Answer Policy** must not author new user facts, new prior experiences, new worked examples, new evidence, or new abilities.
-- Simulator expression styling from **Profile Context** must preserve the answer content determined by the **Simulator Answer Intent**.
-- A **Simulator Answer Intent** is derived from grounded **User Knowledge States** and **Ground-Truth Evidence** before natural-language answer generation.
-- A **Simulator Answer Intent** must not include raw mastery labels, hidden evidence ids, map ids, user ids, or raw **Reviewed Map** fields.
-- A **Simulator Policy Decision Trace** may retain hidden audit details that are not allowed in the downstream **Simulator Answer Intent**.
-- A **Simulator Policy Decision Trace** must not become visible transcript data, expression context, generator input, or primary scoring input.
-- An **Integrated Diagnostic Question** should produce one integrated **Simulator Answer Intent**, not merely concatenated per-node answers.
-- A **Simulator Answer Intent** may include grounded **Simulator Answer Ambiguity**.
-- A **Simulator Expression Context** may include a **Simulator Answer Intent** and de-identified evidence signals.
-- A **Simulator Expression Context** must not include raw **Reviewed Map** content, mastery labels, or hidden evidence ids.
-- A **Simulator Expression Context** packages **Simulator Answer Intent** decisions for generation; it must not decide what the user knows or which evidence matters.
+- Simulator wording style from **Profile Context** must preserve the answer content determined by the **Simulator Answer Blueprint**.
+- A **Simulator Answer Blueprint** is derived from grounded **User Knowledge States** and **Ground-Truth Evidence** before natural-language answer generation.
+- A **Simulator Answer Blueprint** must not include raw mastery labels, hidden evidence ids, map ids, user ids, or raw **Reviewed Map** fields.
+- A **Simulator Policy Decision Trace** may retain hidden audit details that are not allowed in the downstream **Simulator Answer Blueprint**.
+- A **Simulator Policy Decision Trace** must not become visible transcript data, generator input, or primary scoring input.
+- An **Integrated Diagnostic Question** should produce one integrated **Simulator Answer Blueprint**, not merely concatenated per-node answers.
+- A **Simulator Answer Blueprint** may include grounded **Simulator Answer Ambiguity**.
 - The **User Simulator** may use **Visible Dialogue Context** to resolve follow-up wording and keep conversational continuity.
 - **Visible Dialogue Context** must not update the **Static User Knowledge State**.
 - A **Simulator Debug Trace** must remain separate from visible transcript data.
 - A **Simulator Debug Trace** must not be visible to the **Tested Agent** or used as primary scoring input.
-- A **Simulator Answer Intent** and **Simulator Policy Decision Trace** may be retained in a **Simulator Debug Trace** but must not become visible transcript data or primary scoring input.
-- **Simulator Answer Validation** checks both **Visibility Boundary** safety and **Simulator Answer Intent** coverage.
+- A **Simulator Answer Blueprint** and **Simulator Policy Decision Trace** may be retained in a **Simulator Debug Trace** but must not become visible transcript data or primary scoring input.
+- **Simulator Answer Validation** checks both **Visibility Boundary** safety and **Simulator Answer Blueprint** coverage.
 - **Visibility Boundary** failures are blocking **Simulator Answer Validation** failures.
-- Weak **Simulator Answer Intent** coverage is a simulator quality issue rather than a primary scoring signal and may drive bounded answer regeneration.
-- When asked for hidden benchmark labels, the **User Simulator** may provide a natural self-report consistent with the **Simulator Answer Intent** but must not reveal the labels.
+- Weak **Simulator Answer Blueprint** coverage is a simulator quality issue rather than a primary scoring signal and may drive bounded answer regeneration.
+- When asked for hidden benchmark labels, the **User Simulator** may provide a natural self-report consistent with the **Simulator Answer Blueprint** but must not reveal the labels.
 - A **User Simulator** answer that violates the **Visibility Boundary** must not become visible to the **Tested Agent**.
 - A **Simulator Safe Fallback** is used when answer generation cannot safely produce a visible answer.
 - **Simulator Answer Ambiguity** is allowed when it is consistent with the hidden map and evidence.
@@ -733,16 +726,16 @@ _Avoid_: ground-truth edge, authored edge
 - "Grounding with hidden state" can mix question interpretation with user-state simulation; resolved: **Question Grounding** uses visible graph context, not hidden **Reviewed Map** state or hidden **Ground-Truth Evidence**.
 - "Context Builder" can sound like graph-neighbor expansion; resolved: simulator context uses directly grounded nodes, not hidden state from merely adjacent **Knowledge Nodes**.
 - "Unmatched question" can invite global fallback over the hidden map; resolved: no-grounding answers should ask for clarification or decline naturally without hidden map content.
-- "Profile Context" in simulator generation can blur style with knowledge content; resolved: answer content comes from grounded **User Knowledge States** and **Ground-Truth Evidence**, while profile context may shape expression style.
-- "Style pass" can accidentally add profile-derived facts; resolved: simulator expression styling must preserve **Simulator Answer Intent** content.
-- "Answer Policy" can sound like freeform answer generation or a simple state-label mapper; resolved: **Simulator Answer Policy** is the reasoning boundary that derives a structured **Simulator Answer Intent** before natural-language wording.
-- "Answer Intent" can sound like one coarse stance label; resolved: **Simulator Answer Intent** is a structured answer-content decision, not just a mastery-to-stance label.
-- "Policy trace" can sound like generator material; resolved: **Simulator Policy Decision Trace** is hidden audit data and must not become **Simulator Expression Context**.
-- "Integrated answer" can sound like concatenating per-node answers; resolved: an **Integrated Diagnostic Question** should produce one integrated **Simulator Answer Intent**.
-- "Generator context" can accidentally include raw hidden state; resolved: natural-language generation uses a **Simulator Expression Context** without raw maps, mastery labels, or hidden evidence ids.
+- "Profile Context" in simulator generation can blur style with knowledge content; resolved: answer content comes from grounded **User Knowledge States** and **Ground-Truth Evidence**, while profile context may shape wording style.
+- "Style pass" can accidentally add profile-derived facts; resolved: simulator wording style must preserve **Simulator Answer Blueprint** content.
+- "Answer Policy" can sound like freeform answer generation or a simple state-label mapper; resolved: **Simulator Answer Policy** is the reasoning boundary that derives a structured **Simulator Answer Blueprint** before natural-language wording.
+- "Answer Intent" can sound like one coarse stance label; resolved: the canonical term is **Simulator Answer Blueprint**, a structured answer-content blueprint rather than a mastery-to-stance label.
+- "Policy trace" can sound like generator material; resolved: **Simulator Policy Decision Trace** is hidden audit data and must not become generator input.
+- "Integrated answer" can sound like concatenating per-node answers; resolved: an **Integrated Diagnostic Question** should produce one integrated **Simulator Answer Blueprint**.
+- "Generator input" can accidentally include raw hidden state; resolved: natural-language generation uses a de-identified **Simulator Answer Blueprint** without raw maps, mastery labels, or hidden evidence ids.
 - "Dialogue history" can sound like hidden simulator memory; resolved: **Visible Dialogue Context** is prior transcript visible to the **Tested Agent** and cannot update the hidden user state.
 - "Simulator trace" can be confused with visible conversation evidence; resolved: **Simulator Debug Trace** is hidden debug data and separate from visible transcript data.
-- "Answer validation" can sound like scoring; resolved: **Simulator Answer Validation** checks simulator safety and intent coverage, not benchmark performance.
+- "Answer validation" can sound like scoring; resolved: **Simulator Answer Validation** checks simulator safety and blueprint coverage, not benchmark performance.
 - "Asking for mastery level" can bypass diagnosis; resolved: the **User Simulator** may answer with natural self-report but must not reveal hidden benchmark labels.
 - "Post Validator" can sound like an advisory lint; resolved: visibility-boundary failures block exposure and use a **Simulator Safe Fallback** if generation cannot be made safe.
 - "user simulator" can be mistaken for a state oracle; resolved: v1 **User Simulator** produces natural answers without exposing hidden labels or evidence ids.

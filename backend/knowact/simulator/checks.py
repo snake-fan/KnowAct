@@ -4,7 +4,10 @@ from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.knowact.core.interaction import VisibleSimulatorAnswer
+from backend.knowact.core.interaction import (
+    VisibleDialogueContext,
+    VisibleSimulatorAnswer,
+)
 from backend.knowact.llm.client import ModelClient, ModelClientError
 from backend.knowact.logging_config import get_knowact_logger
 from backend.knowact.simulator.debug_trace import (
@@ -12,7 +15,7 @@ from backend.knowact.simulator.debug_trace import (
     record_parser_failure,
     record_parser_success,
 )
-from backend.knowact.simulator.expression import SimulatorExpressionContext
+from backend.knowact.simulator.policy import SimulatorAnswerBlueprint
 from backend.knowact.simulator.templates.answer_validation import (
     build_answer_validation_messages,
 )
@@ -26,12 +29,18 @@ class SimulatorAnswerValidationDecision(BaseModel):
 
     passed: bool
     blocking_safety_reasons: tuple[str, ...] = Field(default_factory=tuple)
-    intent_coverage_notes: tuple[str, ...] = Field(default_factory=tuple)
+    blueprint_coverage_notes: tuple[str, ...] = Field(default_factory=tuple)
     fallback_guidance: str | None = None
+
+    @property
+    def intent_coverage_notes(self) -> tuple[str, ...]:
+        """Compatibility accessor for callers migrating to blueprint terminology."""
+
+        return self.blueprint_coverage_notes
 
     @field_validator(
         "blocking_safety_reasons",
-        "intent_coverage_notes",
+        "blueprint_coverage_notes",
     )
     @classmethod
     def _items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
@@ -52,9 +61,12 @@ class SimulatorAnswerValidator(Protocol):
         self,
         *,
         candidate_answer: VisibleSimulatorAnswer,
-        expression_context: SimulatorExpressionContext,
+        intent: SimulatorAnswerBlueprint,
+        visible_dialogue_context: VisibleDialogueContext | None = None,
+        style_hint: str | None = None,
+        regeneration_guidance: tuple[str, ...] = (),
     ) -> SimulatorAnswerValidationDecision:
-        """Check whether a generated simulator answer is safe and intent-covering."""
+        """Check whether a generated simulator answer is safe and blueprint-covering."""
 
 
 class HeuristicSimulatorAnswerValidator:
@@ -62,19 +74,22 @@ class HeuristicSimulatorAnswerValidator:
         self,
         *,
         candidate_answer: VisibleSimulatorAnswer,
-        expression_context: SimulatorExpressionContext,
+        intent: SimulatorAnswerBlueprint,
+        visible_dialogue_context: VisibleDialogueContext | None = None,
+        style_hint: str | None = None,
+        regeneration_guidance: tuple[str, ...] = (),
     ) -> SimulatorAnswerValidationDecision:
         _LOGGER.info(
-            "Heuristic simulator answer validation started answer_chars=%d expression_nodes=%d",
+            "Heuristic simulator answer validation started answer_chars=%d content_units=%d",
             len(candidate_answer.text),
-            len(expression_context.nodes),
+            len(intent.content_units),
         )
         blocking_reasons = _blocking_safety_reasons(candidate_answer.text)
         decision = SimulatorAnswerValidationDecision(
             passed=not blocking_reasons,
             blocking_safety_reasons=blocking_reasons,
-            intent_coverage_notes=(
-                f"Expected stance: {expression_context.primary_stance.value}.",
+            blueprint_coverage_notes=(
+                f"Expected stance: {intent.primary_stance.value}.",
             ),
             fallback_guidance=(
                 "Return a safe simulator fallback."
@@ -82,10 +97,10 @@ class HeuristicSimulatorAnswerValidator:
             ),
         )
         _LOGGER.info(
-            "Heuristic simulator answer validation completed passed=%s blocking_reasons=%d intent_coverage_notes=%d",
+            "Heuristic simulator answer validation completed passed=%s blocking_reasons=%d blueprint_coverage_notes=%d",
             decision.passed,
             len(decision.blocking_safety_reasons),
-            len(decision.intent_coverage_notes),
+            len(decision.blueprint_coverage_notes),
         )
         return decision
 
@@ -104,21 +119,27 @@ class ModelClientAnswerValidator:
         self,
         *,
         candidate_answer: VisibleSimulatorAnswer,
-        expression_context: SimulatorExpressionContext,
+        intent: SimulatorAnswerBlueprint,
+        visible_dialogue_context: VisibleDialogueContext | None = None,
+        style_hint: str | None = None,
+        regeneration_guidance: tuple[str, ...] = (),
     ) -> SimulatorAnswerValidationDecision:
         metadata = getattr(self._model_client, "metadata", None)
         _LOGGER.info(
-            "Simulator answer validation model call started provider=%s model_name=%s answer_chars=%d expression_nodes=%d temperature=%s",
+            "Simulator answer validation model call started provider=%s model_name=%s answer_chars=%d content_units=%d temperature=%s",
             metadata.provider if metadata is not None else None,
             metadata.model_name if metadata is not None else None,
             len(candidate_answer.text),
-            len(expression_context.nodes),
+            len(intent.content_units),
             self._temperature,
         )
         raw_output = self._model_client.complete(
             messages=build_answer_validation_messages(
                 candidate_answer=candidate_answer,
-                expression_context=expression_context,
+                intent=intent,
+                visible_dialogue_context=visible_dialogue_context,
+                style_hint=style_hint,
+                regeneration_guidance=regeneration_guidance,
                 message_profile=self._model_client.message_profile,
             ),
             temperature=self._temperature,
@@ -139,10 +160,10 @@ class ModelClientAnswerValidator:
         if not hard_block_reasons:
             record_parser_success(decision.model_dump(mode="json"))
             _LOGGER.info(
-                "Simulator answer validation parser succeeded passed=%s blocking_reasons=%d intent_coverage_notes=%d hard_blocking_reasons=0",
+                "Simulator answer validation parser succeeded passed=%s blocking_reasons=%d blueprint_coverage_notes=%d hard_blocking_reasons=0",
                 decision.passed,
                 len(decision.blocking_safety_reasons),
-                len(decision.intent_coverage_notes),
+                len(decision.blueprint_coverage_notes),
             )
             return decision
 
@@ -152,16 +173,16 @@ class ModelClientAnswerValidator:
         merged_decision = SimulatorAnswerValidationDecision(
             passed=False,
             blocking_safety_reasons=merged_reasons,
-            intent_coverage_notes=decision.intent_coverage_notes,
+            blueprint_coverage_notes=decision.blueprint_coverage_notes,
             fallback_guidance=decision.fallback_guidance
             or "Return a safe simulator fallback.",
         )
         record_parser_success(merged_decision.model_dump(mode="json"))
         _LOGGER.info(
-            "Simulator answer validation parser succeeded passed=%s blocking_reasons=%d intent_coverage_notes=%d hard_blocking_reasons=%d",
+            "Simulator answer validation parser succeeded passed=%s blocking_reasons=%d blueprint_coverage_notes=%d hard_blocking_reasons=%d",
             merged_decision.passed,
             len(merged_decision.blocking_safety_reasons),
-            len(merged_decision.intent_coverage_notes),
+            len(merged_decision.blueprint_coverage_notes),
             len(hard_block_reasons),
         )
         return merged_decision

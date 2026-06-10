@@ -2,6 +2,7 @@ from pathlib import Path
 
 from backend.knowact.core.interaction import (
     CoarseObservationMetadata,
+    VisibleDialogueContext,
     VisibleObservationKind,
     VisibleSimulatorAnswer,
 )
@@ -26,10 +27,6 @@ from backend.knowact.simulator.debug_trace import (
     question_trace_id_from_request,
     simulator_model_step,
 )
-from backend.knowact.simulator.expression import (
-    SimulatorExpressionContext,
-    SimulatorExpressionContextBuilder,
-)
 from backend.knowact.simulator.fallbacks import (
     simulator_safe_fallback,
 )
@@ -40,6 +37,7 @@ from backend.knowact.simulator.generators import (
 from backend.knowact.simulator.grounding import RuleBasedQuestionGrounder
 from backend.knowact.simulator.policy import (
     RuleBasedAnswerPolicy,
+    SimulatorAnswerBlueprint,
     SimulatorAnswerPolicy,
     SimulatorPolicyResult,
     SimulatorResponseMode,
@@ -79,7 +77,6 @@ class SimulatorService:
         self._context_builder = SimulatorContextBuilder()
         self._fallback_policy = RuleBasedAnswerPolicy()
         self._policy = policy or self._fallback_policy
-        self._expression_builder = SimulatorExpressionContextBuilder()
         self._generator = generator or RuleBasedAnswerGenerator()
         self._validator = validator or HeuristicSimulatorAnswerValidator()
 
@@ -219,16 +216,19 @@ class SimulatorService:
                         "policy",
                         _policy_result_trace_payload(policy_result),
                     )
-                    expression_context = self._expression_builder.build(
-                        intent=policy_result.intent,
-                        visible_dialogue_context=request.visible_dialogue_context,
-                    )
                     trace_recorder.set_workflow_section(
-                        "expression_context",
-                        expression_context.model_dump(mode="json"),
+                        "answer_generation_input",
+                        _answer_generation_input_trace_payload(
+                            intent=policy_result.intent,
+                            visible_dialogue_context=request.visible_dialogue_context,
+                            style_hint=None,
+                            regeneration_guidance=(),
+                        ),
                     )
                     answer = self._generate_validated_answer(
-                        expression_context,
+                        intent=policy_result.intent,
+                        visible_dialogue_context=request.visible_dialogue_context,
+                        style_hint=None,
                         benchmark_domain=manifest.benchmark_domain,
                         map_id=manifest.map_id,
                     )
@@ -332,7 +332,7 @@ class SimulatorService:
                 )
 
                 _LOGGER.info(
-                    "Answer intent derivation started benchmark_domain=%s map_id=%s grounded_nodes=%d",
+                    "Answer blueprint derivation started benchmark_domain=%s map_id=%s grounded_nodes=%d",
                     manifest.benchmark_domain,
                     manifest.map_id,
                     len(simulator_context.grounded_nodes),
@@ -347,41 +347,37 @@ class SimulatorService:
                     _policy_result_trace_payload(policy_result),
                 )
                 _LOGGER.info(
-                    "Answer intent derived benchmark_domain=%s map_id=%s response_mode=%s node_decisions=%d policy_source=%s",
+                    "Answer blueprint derived benchmark_domain=%s map_id=%s response_mode=%s content_units=%d policy_source=%s",
                     manifest.benchmark_domain,
                     manifest.map_id,
                     policy_result.intent.response_mode.value,
-                    len(policy_result.intent.node_decisions),
+                    len(policy_result.intent.content_units),
                     policy_result.trace.policy_source,
                 )
 
-                _LOGGER.info(
-                    "Expression context build started benchmark_domain=%s map_id=%s node_decisions=%d has_profile_context=%s",
-                    manifest.benchmark_domain,
-                    manifest.map_id,
-                    len(policy_result.intent.node_decisions),
-                    profile_context is not None,
-                )
-                expression_context = self._expression_builder.build(
-                    intent=policy_result.intent,
-                    visible_dialogue_context=request.visible_dialogue_context,
-                    profile_context=profile_context,
-                )
+                style_hint = _style_hint(profile_context)
                 trace_recorder.set_workflow_section(
-                    "expression_context",
-                    expression_context.model_dump(mode="json"),
+                    "answer_generation_input",
+                    _answer_generation_input_trace_payload(
+                        intent=policy_result.intent,
+                        visible_dialogue_context=request.visible_dialogue_context,
+                        style_hint=style_hint,
+                        regeneration_guidance=(),
+                    ),
                 )
                 _LOGGER.info(
-                    "Expression context built benchmark_domain=%s map_id=%s expression_nodes=%d evidence_signals=%d visible_dialogue_turns=%d has_style_hint=%s",
+                    "Answer generation input prepared benchmark_domain=%s map_id=%s content_units=%d supporting_cues=%d visible_dialogue_turns=%d has_style_hint=%s",
                     manifest.benchmark_domain,
                     manifest.map_id,
-                    len(expression_context.nodes),
-                    _expression_evidence_signal_count(expression_context),
-                    len(expression_context.visible_dialogue_turns),
-                    expression_context.style_hint is not None,
+                    len(policy_result.intent.content_units),
+                    _supporting_signal_count(policy_result.intent),
+                    _visible_dialogue_turn_count(request),
+                    style_hint is not None,
                 )
                 answer = self._generate_validated_answer(
-                    expression_context,
+                    intent=policy_result.intent,
+                    visible_dialogue_context=request.visible_dialogue_context,
+                    style_hint=style_hint,
                     benchmark_domain=manifest.benchmark_domain,
                     map_id=manifest.map_id,
                 )
@@ -488,20 +484,22 @@ class SimulatorService:
 
     def _generate_validated_answer(
         self,
-        expression_context: SimulatorExpressionContext,
         *,
+        intent: SimulatorAnswerBlueprint,
+        visible_dialogue_context: VisibleDialogueContext | None,
+        style_hint: str | None,
         benchmark_domain: str,
         map_id: str,
     ) -> VisibleSimulatorAnswer:
-        current_context = expression_context
+        regeneration_guidance: tuple[str, ...] = ()
         for attempt_index in range(_MAX_ANSWER_GENERATION_ATTEMPTS):
             attempt_number = attempt_index + 1
             _LOGGER.info(
-                "Simulator answer generation started benchmark_domain=%s map_id=%s generator=%s expression_nodes=%d attempt=%d",
+                "Simulator answer generation started benchmark_domain=%s map_id=%s generator=%s content_units=%d attempt=%d",
                 benchmark_domain,
                 map_id,
                 type(self._generator).__name__,
-                len(current_context.nodes),
+                len(intent.content_units),
                 attempt_number,
             )
             try:
@@ -509,7 +507,12 @@ class SimulatorService:
                     ANSWER_GENERATION_STEP,
                     attempt_index=attempt_number,
                 ):
-                    candidate_answer = self._generator.render(current_context)
+                    candidate_answer = self._generator.render(
+                        intent=intent,
+                        visible_dialogue_context=visible_dialogue_context,
+                        style_hint=style_hint,
+                        regeneration_guidance=regeneration_guidance,
+                    )
             except (ModelClientError, TimeoutError) as exc:
                 _append_generation_attempt(
                     {
@@ -527,8 +530,8 @@ class SimulatorService:
                         type(self._generator).__name__,
                         type(exc).__name__,
                     )
-                    current_context = _with_regeneration_guidance(
-                        current_context,
+                    regeneration_guidance = _merge_regeneration_guidance(
+                        regeneration_guidance,
                         (
                             "Previous generation returned unusable output. Return valid JSON with one safe visible answer.",
                         ),
@@ -565,7 +568,10 @@ class SimulatorService:
                 ):
                     validation = self._validator.validate(
                         candidate_answer=candidate_answer,
-                        expression_context=current_context,
+                        intent=intent,
+                        visible_dialogue_context=visible_dialogue_context,
+                        style_hint=style_hint,
+                        regeneration_guidance=regeneration_guidance,
                     )
             except (ModelClientError, TimeoutError) as exc:
                 _append_generation_attempt(
@@ -590,12 +596,12 @@ class SimulatorService:
                 return fallback
 
             _LOGGER.info(
-                "Simulator answer validation completed benchmark_domain=%s map_id=%s passed=%s blocking_reasons=%d intent_coverage_notes=%d",
+                "Simulator answer validation completed benchmark_domain=%s map_id=%s passed=%s blocking_reasons=%d blueprint_coverage_notes=%d",
                 benchmark_domain,
                 map_id,
                 validation.passed,
                 len(validation.blocking_safety_reasons),
-                len(validation.intent_coverage_notes),
+                len(validation.blueprint_coverage_notes),
             )
             if validation.passed:
                 _append_generation_attempt(
@@ -626,8 +632,8 @@ class SimulatorService:
                     map_id,
                     len(validation.blocking_safety_reasons),
                 )
-                current_context = _with_regeneration_guidance(
-                    current_context,
+                regeneration_guidance = _merge_regeneration_guidance(
+                    regeneration_guidance,
                     _regeneration_guidance(validation),
                 )
                 continue
@@ -701,8 +707,8 @@ def _simulator_only_evidence_count(simulator_context: SimulatorTurnContext) -> i
     )
 
 
-def _expression_evidence_signal_count(expression_context: SimulatorExpressionContext) -> int:
-    return sum(len(node.evidence_signals) for node in expression_context.nodes)
+def _supporting_signal_count(intent: SimulatorAnswerBlueprint) -> int:
+    return sum(len(unit.supporting_cues) for unit in intent.content_units)
 
 
 def _append_generation_attempt(payload: dict[str, object]) -> None:
@@ -761,8 +767,26 @@ def _policy_result_trace_payload(
     policy_result: SimulatorPolicyResult,
 ) -> dict[str, object]:
     return {
-        "intent": policy_result.intent.model_dump(mode="json"),
+        "answer_blueprint": policy_result.intent.model_dump(mode="json"),
         "decision_trace": policy_result.trace.model_dump(mode="json"),
+    }
+
+
+def _answer_generation_input_trace_payload(
+    *,
+    intent: SimulatorAnswerBlueprint,
+    visible_dialogue_context: VisibleDialogueContext | None,
+    style_hint: str | None,
+    regeneration_guidance: tuple[str, ...],
+) -> dict[str, object]:
+    return {
+        "content_units": len(intent.content_units),
+        "supporting_cues": _supporting_signal_count(intent),
+        "visible_dialogue_turns": _visible_dialogue_turn_count_for_context(
+            visible_dialogue_context
+        ),
+        "has_style_hint": style_hint is not None,
+        "regeneration_guidance": regeneration_guidance,
     }
 
 
@@ -814,17 +838,28 @@ def _confirmed_profile_context_uri(*, benchmark_domain: str, user_id: str) -> st
     )
 
 
-def _with_regeneration_guidance(
-    expression_context: SimulatorExpressionContext,
-    guidance: tuple[str, ...],
-) -> SimulatorExpressionContext:
-    return expression_context.model_copy(
-        update={
-            "regeneration_guidance": tuple(
-                dict.fromkeys((*expression_context.regeneration_guidance, *guidance))
-            )
-        }
-    )
+def _visible_dialogue_turn_count_for_context(
+    visible_dialogue_context: VisibleDialogueContext | None,
+) -> int:
+    if visible_dialogue_context is None:
+        return 0
+    return len(visible_dialogue_context.turns)
+
+
+def _style_hint(profile_context: object | None) -> str | None:
+    if profile_context is None:
+        return None
+    preferences = getattr(profile_context, "preferences", ())
+    if any("concrete" in preference.lower() for preference in preferences):
+        return "Use plain wording with a concrete phrasing preference."
+    return "Use neutral first-person wording."
+
+
+def _merge_regeneration_guidance(
+    existing_guidance: tuple[str, ...],
+    new_guidance: tuple[str, ...],
+) -> tuple[str, ...]:
+    return tuple(dict.fromkeys((*existing_guidance, *new_guidance)))
 
 
 def _regeneration_guidance(validation) -> tuple[str, ...]:
@@ -834,10 +869,12 @@ def _regeneration_guidance(validation) -> tuple[str, ...]:
             "Remove content flagged by validation: "
             + "; ".join(validation.blocking_safety_reasons)
         )
-    if validation.intent_coverage_notes:
+    if validation.blueprint_coverage_notes:
         guidance.append(
-            "Improve intent coverage: " + "; ".join(validation.intent_coverage_notes)
+            "Improve blueprint coverage: " + "; ".join(validation.blueprint_coverage_notes)
         )
     if validation.fallback_guidance:
         guidance.append(validation.fallback_guidance)
-    return tuple(guidance) or ("Regenerate a safe answer that follows the same intent.",)
+    return tuple(guidance) or (
+        "Regenerate a safe answer that follows the same answer blueprint.",
+    )

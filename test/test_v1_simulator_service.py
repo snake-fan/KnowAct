@@ -25,7 +25,6 @@ from backend.knowact.simulator.context_builder import (
     GroundedSimulatorNodeContext,
     SimulatorTurnContext,
 )
-from backend.knowact.simulator.expression import SimulatorExpressionContextBuilder
 from backend.knowact.simulator.generators import (
     ModelClientAnswerGenerator,
     RuleBasedAnswerGenerator,
@@ -98,8 +97,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 "Simulator preview reviewed map loaded",
                 "Simulator profile context loaded",
                 "Simulator context built",
-                "Answer intent derived",
-                "Expression context built",
+                "Answer blueprint derived",
+                "Answer generation input prepared",
                 "Simulator answer generation started",
                 "Rule-based simulator answer generation succeeded",
                 "Simulator answer validation completed",
@@ -739,7 +738,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 response.json()["detail"],
             )
 
-    def test_policy_expression_and_generator_do_not_expose_raw_hidden_state(self):
+    def test_policy_intent_and_generator_do_not_expose_raw_hidden_state(self):
         simulator_context = SimulatorTurnContext(
             benchmark_domain="classical_supervised_ml_algorithms",
             map_id="gt_map_001",
@@ -783,19 +782,16 @@ class V1SimulatorServiceTest(unittest.TestCase):
             grounding=QuestionGroundingResult(grounded_node_ids=("train_test_split",)),
         )
         intent = policy_result.intent
-        expression_context = SimulatorExpressionContextBuilder().build(
+        answer = RuleBasedAnswerGenerator().render(
             intent=intent,
-            simulator_context=simulator_context,
         )
-        answer = RuleBasedAnswerGenerator().render(expression_context)
 
         self.assertEqual(SimulatorAnswerStance.PARTIAL_UNDERSTANDING, intent.primary_stance)
         self.assertIn(
             "ev_hidden_partial",
             policy_result.trace.grounded_node_traces[0].evidence_refs,
         )
-        self.assertNotIn("ev_hidden_partial", intent.model_dump_json())
-        expression_payload = expression_context.model_dump_json()
+        intent_payload = intent.model_dump_json()
         for hidden_fragment in (
             "ev_hidden_partial",
             "L2",
@@ -804,7 +800,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             "synthetic_user_001",
         ):
             with self.subTest(hidden_fragment=hidden_fragment):
-                self.assertNotIn(hidden_fragment, expression_payload)
+                self.assertNotIn(hidden_fragment, intent_payload)
                 self.assertNotIn(hidden_fragment, answer.text)
         self.assertIn("partial", answer.text.lower())
         self.assertIn("held-out split", answer.text)
@@ -824,7 +820,6 @@ class V1SimulatorServiceTest(unittest.TestCase):
             ),
         )
         policy = RuleBasedAnswerPolicy()
-        expression_builder = SimulatorExpressionContextBuilder()
         generator = RuleBasedAnswerGenerator()
 
         for mastery_level, misconceptions, unknowns, stance, answer_fragment in cases:
@@ -839,12 +834,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                     question_text="How would you use a train/test split?",
                     simulator_context=simulator_context,
                 )
-                answer = generator.render(
-                    expression_builder.build(
-                        intent=intent,
-                        simulator_context=simulator_context,
-                    )
-                )
+                answer = generator.render(intent=intent)
 
                 self.assertEqual(stance, intent.primary_stance)
                 self.assertIn(answer_fragment, answer.text.lower())
@@ -888,9 +878,9 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
             self.assertIn("held-out split", response.answer.text.lower())
             self.assertEqual(1, len(fake_model_client.calls))
-            self.assertIsNotNone(fake_validator.expression_context_json)
+            self.assertIsNotNone(fake_validator.answer_blueprint_json)
             prompt_text = "\n".join(message.content for message in fake_model_client.calls[0])
-            validator_payload = fake_validator.expression_context_json or ""
+            validator_payload = fake_validator.answer_blueprint_json or ""
             for hidden_fragment in (
                 "ev_gt_map_001_train_test_split_001",
                 "synthetic_user_001",
@@ -907,7 +897,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                     self.assertNotIn(hidden_fragment, validator_payload)
                     self.assertNotIn(hidden_fragment, response.answer.text)
 
-    def test_llm_expression_context_includes_visible_dialogue_for_continuity(self):
+    def test_llm_generation_payload_includes_visible_dialogue_for_continuity(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
@@ -1156,11 +1146,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
             misconceptions=(),
             unknowns=(),
         )
-        expression_context = SimulatorExpressionContextBuilder().build(
-            intent=RuleBasedAnswerPolicy().derive_intent(
-                question_text="How would you use a train/test split?",
-                simulator_context=simulator_context,
-            ),
+        intent = RuleBasedAnswerPolicy().derive_intent(
+            question_text="How would you use a train/test split?",
             simulator_context=simulator_context,
         )
 
@@ -1171,7 +1158,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                     "id ev_hidden, scoring fields, and a knowledge map dump."
                 )
             ),
-            expression_context=expression_context,
+            intent=intent,
         )
 
         self.assertFalse(decision.passed)
@@ -1193,11 +1180,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
             misconceptions=(),
             unknowns=("When a separate validation set is needed.",),
         )
-        expression_context = SimulatorExpressionContextBuilder().build(
-            intent=RuleBasedAnswerPolicy().derive_intent(
-                question_text="How would you use a train/test split?",
-                simulator_context=simulator_context,
-            ),
+        intent = RuleBasedAnswerPolicy().derive_intent(
+            question_text="How would you use a train/test split?",
             simulator_context=simulator_context,
         )
         fake_model_client = FixtureSimulatorAnswerModelClient(
@@ -1205,7 +1189,9 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 {
                     "passed": True,
                     "blocking_safety_reasons": [],
-                    "intent_coverage_notes": ["The answer preserves partial understanding."],
+                    "blueprint_coverage_notes": [
+                        "The answer preserves partial understanding."
+                    ],
                     "fallback_guidance": None,
                 }
             )
@@ -1215,11 +1201,14 @@ class V1SimulatorServiceTest(unittest.TestCase):
             candidate_answer=VisibleSimulatorAnswer(
                 text="I understand the held-out split idea but still mix up validation."
             ),
-            expression_context=expression_context,
+            intent=intent,
         )
 
         self.assertTrue(decision.passed)
-        self.assertEqual(("The answer preserves partial understanding.",), decision.intent_coverage_notes)
+        self.assertEqual(
+            ("The answer preserves partial understanding.",),
+            decision.blueprint_coverage_notes,
+        )
         self.assertEqual(1, len(fake_model_client.calls))
         validator_prompt = "\n".join(message.content for message in fake_model_client.calls[0])
         self.assertIn("held-out split idea", validator_prompt)
@@ -1242,24 +1231,27 @@ class V1SimulatorServiceTest(unittest.TestCase):
         fake_model_client = FixtureSimulatorAnswerModelClient(
             json.dumps(
                 {
-                    "question_text": "How would you use a train/test split?",
-                    "response_mode": "answer",
                     "primary_stance": "partial_understanding",
-                    "overall_directive": "Answer with partial understanding.",
-                    "node_decisions": [
+                    "answer_shape": {
+                        "voice": "first_person",
+                        "integration_mode": "single_node",
+                        "max_sentences": 2,
+                    },
+                    "answer_strategy": "Answer with partial understanding.",
+                    "content_units": [
                         {
                             "node_name": "Train/Test Split",
                             "stance": "partial_understanding",
-                            "capability_summary": "Can explain the held-out split idea.",
-                            "limitation_summary": "Still checks validation details.",
-                            "misconception_cues": [],
-                            "unknown_cues": ["When a separate validation set is needed."],
-                            "evidence_signals": ["Can explain the held-out split idea."],
-                            "generation_directives": ["Express partial understanding."],
+                            "core_claim": "Can explain the held-out split idea.",
+                            "boundary": "Still checks validation details.",
+                            "mistaken_belief": None,
+                            "uncertainty": None,
+                            "supporting_cues": [],
+                            "avoid_overclaiming": [
+                                "full confidence about validation details"
+                            ],
                         }
                     ],
-                    "generation_directives": ["Use first-person wording."],
-                    "visibility_guards": ["No hidden benchmark labels."],
                 }
             )
         )
@@ -1284,7 +1276,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             with self.subTest(hidden_fragment=hidden_fragment):
                 self.assertNotIn(hidden_fragment, intent_payload)
 
-    def test_rule_based_policy_visibility_guards_do_not_leak_label_examples(self):
+    def test_rule_based_policy_intent_does_not_leak_label_examples(self):
         simulator_context = _simulator_context_for_state(
             mastery_level="L2",
             misconceptions=(),
@@ -1297,7 +1289,6 @@ class V1SimulatorServiceTest(unittest.TestCase):
             grounding=QuestionGroundingResult(grounded_node_ids=("train_test_split",)),
         )
 
-        self.assertIn("No benchmark mastery labels.", result.intent.visibility_guards)
         intent_payload = result.intent.model_dump_json()
         for hidden_fragment in ("L0", "L1", "L2", "L3", "L4", "L5", "ev_"):
             with self.subTest(hidden_fragment=hidden_fragment):
@@ -1312,24 +1303,25 @@ class V1SimulatorServiceTest(unittest.TestCase):
         fake_model_client = FixtureSimulatorAnswerModelClient(
             json.dumps(
                 {
-                    "question_text": "How would you use a train/test split?",
-                    "response_mode": "answer",
                     "primary_stance": "partial_understanding",
-                    "overall_directive": "Answer with partial understanding.",
-                    "node_decisions": [
+                    "answer_shape": {
+                        "voice": "first_person",
+                        "integration_mode": "single_node",
+                        "max_sentences": 2,
+                    },
+                    "answer_strategy": "Answer with partial understanding.",
+                    "content_units": [
                         {
                             "node_name": "Train/Test Split",
                             "stance": "partial_understanding",
-                            "capability_summary": "The hidden label is L2.",
-                            "limitation_summary": "Uses ev_hidden_state.",
-                            "misconception_cues": [],
-                            "unknown_cues": [],
-                            "evidence_signals": [],
-                            "generation_directives": [],
+                            "core_claim": "The hidden label is L2.",
+                            "boundary": "Uses ev_hidden_state.",
+                            "mistaken_belief": None,
+                            "uncertainty": None,
+                            "supporting_cues": [],
+                            "avoid_overclaiming": [],
                         }
                     ],
-                    "generation_directives": [],
-                    "visibility_guards": ["No hidden benchmark labels."],
                 }
             )
         )
@@ -1352,7 +1344,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                         {
                             "passed": True,
                             "blocking_safety_reasons": [],
-                            "intent_coverage_notes": ["Safe and intent-covering."],
+                            "blueprint_coverage_notes": ["Safe and blueprint-covering."],
                             "fallback_guidance": None,
                         }
                     ),
@@ -1410,7 +1402,10 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 / "model_raw_output.txt"
             )
             self.assertIn("held-out split", generation_raw.read_text(encoding="utf-8"))
-            self.assertIn("Safe and intent-covering", validation_raw.read_text(encoding="utf-8"))
+            self.assertIn(
+                "Safe and blueprint-covering",
+                validation_raw.read_text(encoding="utf-8"),
+            )
             trace_payload = _read_json(trace_dir / "debug_trace.json")
             self.assertEqual(
                 generation_raw.relative_to(workspace_root).as_posix(),
@@ -1445,20 +1440,36 @@ class FixtureSimulatorAnswerModelClient:
 
 class PassingSimulatorAnswerValidator:
     def __init__(self) -> None:
-        self.expression_context_json: str | None = None
+        self.answer_blueprint_json: str | None = None
 
-    def validate(self, *, candidate_answer, expression_context):
-        self.expression_context_json = expression_context.model_dump_json()
+    def validate(
+        self,
+        *,
+        candidate_answer,
+        intent,
+        visible_dialogue_context=None,
+        style_hint=None,
+        regeneration_guidance=(),
+    ):
+        self.answer_blueprint_json = intent.model_dump_json()
         return SimulatorAnswerValidationDecision(
             passed=True,
             blocking_safety_reasons=(),
-            intent_coverage_notes=("Core stance is covered.",),
+            blueprint_coverage_notes=("Core stance is covered.",),
             fallback_guidance=None,
         )
 
 
 class UnavailableSimulatorAnswerValidator:
-    def validate(self, *, candidate_answer, expression_context):
+    def validate(
+        self,
+        *,
+        candidate_answer,
+        intent,
+        visible_dialogue_context=None,
+        style_hint=None,
+        regeneration_guidance=(),
+    ):
         raise TimeoutError("validator timeout")
 
 

@@ -1,19 +1,23 @@
 import json
 from typing import Protocol
 
-from backend.knowact.core.interaction import VisibleSimulatorAnswer
+from backend.knowact.core.interaction import (
+    VisibleDialogueContext,
+    VisibleSimulatorAnswer,
+)
 from backend.knowact.llm.client import ModelClient, ModelClientError
 from backend.knowact.logging_config import get_knowact_logger
-from backend.knowact.simulator.expression import (
-    NodeExpressionContext,
-    SimulatorExpressionContext,
-)
 from backend.knowact.simulator.debug_trace import (
     record_model_raw_output,
     record_parser_failure,
     record_parser_success,
 )
-from backend.knowact.simulator.policy import SimulatorAnswerStance, SimulatorResponseMode
+from backend.knowact.simulator.policy import (
+    NodeAnswerBlueprint,
+    SimulatorAnswerBlueprint,
+    SimulatorAnswerStance,
+    SimulatorResponseMode,
+)
 from backend.knowact.simulator.templates.answer_generation import (
     build_answer_generation_messages,
 )
@@ -23,8 +27,15 @@ _LOGGER = get_knowact_logger("simulator.generators")
 
 
 class SimulatorAnswerGenerator(Protocol):
-    def render(self, expression_context: SimulatorExpressionContext) -> VisibleSimulatorAnswer:
-        """Render a candidate visible simulator answer from de-identified context."""
+    def render(
+        self,
+        *,
+        intent: SimulatorAnswerBlueprint,
+        visible_dialogue_context: VisibleDialogueContext | None = None,
+        style_hint: str | None = None,
+        regeneration_guidance: tuple[str, ...] = (),
+    ) -> VisibleSimulatorAnswer:
+        """Render a candidate visible simulator answer from an answer blueprint."""
 
 
 class ModelClientAnswerGenerator:
@@ -37,18 +48,28 @@ class ModelClientAnswerGenerator:
         self._model_client = model_client
         self._temperature = temperature
 
-    def render(self, expression_context: SimulatorExpressionContext) -> VisibleSimulatorAnswer:
+    def render(
+        self,
+        *,
+        intent: SimulatorAnswerBlueprint,
+        visible_dialogue_context: VisibleDialogueContext | None = None,
+        style_hint: str | None = None,
+        regeneration_guidance: tuple[str, ...] = (),
+    ) -> VisibleSimulatorAnswer:
         metadata = getattr(self._model_client, "metadata", None)
         _LOGGER.info(
-            "Simulator answer generation model call started provider=%s model_name=%s expression_nodes=%d temperature=%s",
+            "Simulator answer generation model call started provider=%s model_name=%s content_units=%d temperature=%s",
             metadata.provider if metadata is not None else None,
             metadata.model_name if metadata is not None else None,
-            len(expression_context.nodes),
+            len(intent.content_units),
             self._temperature,
         )
         raw_output = self._model_client.complete(
             messages=build_answer_generation_messages(
-                expression_context=expression_context,
+                intent=intent,
+                visible_dialogue_context=visible_dialogue_context,
+                style_hint=style_hint,
+                regeneration_guidance=regeneration_guidance,
                 message_profile=self._model_client.message_profile,
             ),
             temperature=self._temperature,
@@ -74,38 +95,45 @@ class ModelClientAnswerGenerator:
 
 
 class RuleBasedAnswerGenerator:
-    def render(self, expression_context: SimulatorExpressionContext) -> VisibleSimulatorAnswer:
+    def render(
+        self,
+        *,
+        intent: SimulatorAnswerBlueprint,
+        visible_dialogue_context: VisibleDialogueContext | None = None,
+        style_hint: str | None = None,
+        regeneration_guidance: tuple[str, ...] = (),
+    ) -> VisibleSimulatorAnswer:
         _LOGGER.info(
-            "Rule-based simulator answer generation started expression_nodes=%d",
-            len(expression_context.nodes),
+            "Rule-based simulator answer generation started content_units=%d",
+            len(intent.content_units),
         )
-        if expression_context.response_mode == SimulatorResponseMode.CLARIFICATION:
+        if intent.response_mode == SimulatorResponseMode.CLARIFICATION:
             answer = VisibleSimulatorAnswer(
                 text="Please ask one specific question at a time so I can answer it directly."
             )
-        elif expression_context.response_mode == SimulatorResponseMode.NON_ANSWER:
+        elif intent.response_mode == SimulatorResponseMode.NON_ANSWER:
             answer = VisibleSimulatorAnswer(
                 text="I am not sure which concept you want me to answer about."
             )
-        elif expression_context.response_mode == SimulatorResponseMode.SAFE_NON_ANSWER:
+        elif intent.response_mode == SimulatorResponseMode.SAFE_NON_ANSWER:
             answer = VisibleSimulatorAnswer(
                 text="I am not confident I can answer that cleanly right now."
             )
-        elif not expression_context.nodes:
+        elif not intent.content_units:
             answer = VisibleSimulatorAnswer(
                 text="I am not confident I can answer that cleanly right now."
             )
-        elif len(expression_context.nodes) == 1:
+        elif len(intent.content_units) == 1:
             answer = VisibleSimulatorAnswer(
                 text=_render_node_answer(
-                    expression_context.nodes[0],
-                    response_mode=expression_context.response_mode,
+                    intent.content_units[0],
+                    response_mode=intent.response_mode,
                 )
             )
         else:
             rendered_parts = [
-                _render_node_answer(node, response_mode=expression_context.response_mode)
-                for node in expression_context.nodes
+                _render_node_answer(node, response_mode=intent.response_mode)
+                for node in intent.content_units
             ]
             answer = VisibleSimulatorAnswer(text=" ".join(rendered_parts))
         _LOGGER.info(
@@ -116,55 +144,60 @@ class RuleBasedAnswerGenerator:
 
 
 def _render_node_answer(
-    node: NodeExpressionContext,
+    node: NodeAnswerBlueprint,
     *,
     response_mode: SimulatorResponseMode,
 ) -> str:
     node_name = node.node_name.lower()
-    evidence_text = " ".join(node.evidence_signals)
+    support_text = " ".join(node.supporting_cues)
     if response_mode == SimulatorResponseMode.LABEL_REFUSAL:
         return _render_label_refusal_node_answer(node)
     if node.stance == SimulatorAnswerStance.CORRECT_UNDERSTANDING:
-        if evidence_text:
-            return f"I can explain {node_name}: {evidence_text}"
-        if node.capability_summary:
-            return f"I can explain {node_name}: {node.capability_summary}"
+        if support_text:
+            return f"I can explain {node_name}: {node.core_claim} {support_text}"
+        if node.core_claim:
+            return f"I can explain {node_name}: {node.core_claim}"
         return f"I can explain {node_name} and apply it in concrete situations."
     if node.stance == SimulatorAnswerStance.PARTIAL_UNDERSTANDING:
-        if evidence_text:
-            return f"I have a partial handle on {node.node_name}: {evidence_text}"
-        if node.capability_summary:
-            return f"I have a partial handle on {node.node_name}: {node.capability_summary}"
+        if node.boundary:
+            return (
+                f"I have a partial handle on {node.node_name}: "
+                f"{node.core_claim} But {node.boundary}"
+            )
+        if support_text:
+            return (
+                f"I have a partial handle on {node.node_name}: "
+                f"{node.core_claim} {support_text}"
+            )
+        if node.core_claim:
+            return f"I have a partial handle on {node.node_name}: {node.core_claim}"
         return f"I have a partial handle on {node.node_name}, but I would check details."
     if node.stance == SimulatorAnswerStance.MISCONCEPTION:
-        cue = _first_nonblank(node.misconception_cues) or node.limitation_summary or evidence_text
+        cue = node.mistaken_belief or support_text or node.core_claim
         if cue:
             return f"I am shaky on {node.node_name}; I tend to think {cue}"
         return f"I am shaky on {node.node_name} and may be mixing it up."
     if node.stance == SimulatorAnswerStance.UNCERTAIN_UNDERSTANDING:
-        cue = _first_nonblank(node.unknown_cues) or node.limitation_summary or evidence_text
+        cue = node.uncertainty or node.boundary or support_text or node.core_claim
         if cue:
             return f"I am not fully sure about {node.node_name}, especially {cue}"
         return f"I am not fully sure about {node.node_name}."
     return f"I do not really know how to answer about {node.node_name} yet."
 
 
-def _render_label_refusal_node_answer(node: NodeExpressionContext) -> str:
+def _render_label_refusal_node_answer(node: NodeAnswerBlueprint) -> str:
     if node.stance == SimulatorAnswerStance.CORRECT_UNDERSTANDING:
-        return f"I can talk about {node.node_name}, but only in my own words: {node.capability_summary}"
-    cue = node.limitation_summary or _first_nonblank(node.unknown_cues) or _first_nonblank(
-        node.misconception_cues
-    )
+        return (
+            f"I can talk about {node.node_name}, but only in my own words: "
+            f"{node.core_claim}"
+        )
+    cue = node.mistaken_belief or node.uncertainty or node.boundary or node.core_claim
     if cue:
-        return f"I can describe how {node.node_name} feels to me, but not as a benchmark label: {cue}"
+        return (
+            f"I can describe how {node.node_name} feels to me, "
+            f"but not as a benchmark label: {cue}"
+        )
     return f"I can describe {node.node_name} in my own words, but not as a benchmark label."
-
-
-def _first_nonblank(values: tuple[str, ...]) -> str | None:
-    for value in values:
-        if value.strip():
-            return value
-    return None
 
 
 def _parse_answer_text(raw_output: str) -> str:

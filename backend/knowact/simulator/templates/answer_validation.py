@@ -1,12 +1,15 @@
 from textwrap import dedent
 
-from backend.knowact.core.interaction import VisibleSimulatorAnswer
+from backend.knowact.core.interaction import (
+    VisibleDialogueContext,
+    VisibleSimulatorAnswer,
+)
 from backend.knowact.llm.messages import (
     ModelMessage,
     ModelMessageProfile,
     OPENAI_MESSAGE_PROFILE,
 )
-from backend.knowact.simulator.expression import SimulatorExpressionContext
+from backend.knowact.simulator.policy import SimulatorAnswerBlueprint
 from backend.knowact.simulator.templates.common import (
     SIMULATOR_CONTEXT,
     SIMULATOR_JSON_ONLY_RULES,
@@ -20,12 +23,18 @@ from backend.knowact.simulator.templates.common import (
 def build_answer_validation_messages(
     *,
     candidate_answer: VisibleSimulatorAnswer,
-    expression_context: SimulatorExpressionContext,
+    intent: SimulatorAnswerBlueprint,
+    visible_dialogue_context: VisibleDialogueContext | None = None,
+    style_hint: str | None = None,
+    regeneration_guidance: tuple[str, ...] = (),
     message_profile: ModelMessageProfile = OPENAI_MESSAGE_PROFILE,
 ) -> tuple[ModelMessage, ...]:
     payload = {
         "candidate_answer": candidate_answer.model_dump(mode="json"),
-        "simulator_expression_context": expression_context.model_dump(mode="json"),
+        "answer_blueprint": intent.model_dump(mode="json"),
+        "visible_dialogue_turns": _visible_dialogue_payload(visible_dialogue_context),
+        "style_hint": style_hint,
+        "regeneration_guidance": regeneration_guidance,
         "blocking_safety_checks": (
             "benchmark mastery labels",
             "hidden evidence identifiers or reference fields",
@@ -33,9 +42,10 @@ def build_answer_validation_messages(
             "benchmark assessment fields",
             "new facts, examples, prior-experience claims, or ability claims not in context",
         ),
-        "intent_coverage_checks": (
-            "answer preserves response mode, primary stance, and node decisions",
-            "answer uses only de-identified capability, limitation, evidence, and cue fields",
+        "blueprint_coverage_checks": (
+            "answer preserves response mode, answer shape, primary stance, and content units",
+            "answer uses only de-identified core claims, boundaries, mistaken beliefs, uncertainties, and supporting cues",
+            "answer respects avoid_overclaiming limits",
             "answer remains natural first-person self-report",
             "answer uses visible dialogue only for continuity",
             "answer follows regeneration guidance when present",
@@ -51,7 +61,7 @@ def build_answer_validation_messages(
                     You are the Simulator Answer Validation Agent for KnowAct v1.
                     You judge whether one candidate simulator answer is safe to
                     expose to the tested agent and sufficiently covers the
-                    supplied answer intent.
+                    supplied answer blueprint.
                     """
                 ).strip(),
                 dedent(
@@ -69,11 +79,11 @@ def build_answer_validation_messages(
                     """
                     Inputs:
                     - candidate_answer.text: the proposed visible answer.
-                    - simulator_expression_context: de-identified expected
-                      response mode, stance, node decisions, evidence signals,
-                      cues, directives, visible dialogue, and style hint.
+                    - answer_blueprint: de-identified expected answer blueprint.
+                    - visible_dialogue_turns, style_hint, and
+                      regeneration_guidance: runtime wording context.
                     - blocking_safety_checks: safety categories that must fail.
-                    - intent_coverage_checks: usefulness categories to inspect.
+                    - blueprint_coverage_checks: usefulness categories to inspect.
                     """
                 ).strip(),
                 dedent(
@@ -82,14 +92,15 @@ def build_answer_validation_messages(
                     1. Inspect candidate_answer for benchmark leakage, hidden
                        artifacts, unsupported claims, and schema/internal language.
                     2. Compare candidate_answer to response_mode,
-                       overall_directive, primary_stance, node decisions,
-                       evidence_signals, misconception_cues, and unknown_cues.
+                       answer_shape, answer_strategy, primary_stance,
+                       content_units, core_claim, boundary, mistaken_belief,
+                       uncertainty, supporting_cues, and avoid_overclaiming.
                     3. Check whether visible dialogue was used only for continuity.
                     4. Set passed=false if any blocking safety issue appears.
                     5. Set passed=false if the answer does not preserve the core
                        stance or invents unsupported content.
                     6. Write concise blocking_safety_reasons and
-                       intent_coverage_notes; do not include hidden internals.
+                       blueprint_coverage_notes; do not include hidden internals.
                     7. Return only the JSON object described below.
                     """
                 ).strip(),
@@ -114,9 +125,11 @@ def build_answer_validation_messages(
                       or correct understanding when those decisions are supplied.
                     - The answer may paraphrase evidence signals, but it must not
                       contradict them.
+                    - The answer must not imply claims listed in
+                      avoid_overclaiming.
                     - Weak wording is acceptable only when it still communicates
                       the intended knowledge posture.
-                    - If coverage is weak but not unsafe, include an intent note;
+                    - If coverage is weak but not unsafe, include a blueprint note;
                       if the core stance is missing or contradicted, fail.
                     """
                 ).strip(),
@@ -127,7 +140,7 @@ def build_answer_validation_messages(
                     {
                       "passed": true,
                       "blocking_safety_reasons": [],
-                      "intent_coverage_notes": ["concise note"],
+                      "blueprint_coverage_notes": ["concise note"],
                       "fallback_guidance": null
                     }
                     """
@@ -141,7 +154,7 @@ def build_answer_validation_messages(
                     {
                       "passed": true,
                       "blocking_safety_reasons": [],
-                      "intent_coverage_notes": ["Preserves partial understanding."],
+                      "blueprint_coverage_notes": ["Preserves partial understanding."],
                       "fallback_guidance": null
                     }
                     """
@@ -165,4 +178,19 @@ def build_answer_validation_messages(
             role="user",
             content=dump_json_payload(payload),
         ),
+    )
+
+
+def _visible_dialogue_payload(
+    visible_dialogue_context: VisibleDialogueContext | None,
+) -> tuple[dict[str, str], ...]:
+    if visible_dialogue_context is None:
+        return ()
+    return tuple(
+        {
+            "question_text": turn.question.text,
+            "answer_text": turn.answer.text,
+            "observation_kind": turn.observation.kind.value,
+        }
+        for turn in visible_dialogue_context.turns
     )
