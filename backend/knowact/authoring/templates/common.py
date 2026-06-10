@@ -73,20 +73,6 @@ Global L0-L5 MasteryScale:
 """.strip()
 
 
-NODE_SCHEMA_CONTRACT = """
-Return KnowledgeNode objects that match the current parser contract:
-- id: stable snake_case machine id.
-- name: human-readable concept name.
-- type: "concept".
-- definition: concise source-grounded definition.
-- diagnostic_goal: the overall diagnostic target for this node.
-- levels: object with exactly keys L0, L1, L2, L3, L4, L5. Each value is a non-empty node-specific description string.
-- diagnostic_signals: non-empty list of observable answer signals useful for distinguishing mastery levels.
-- simulator_behavior: concise knowledge-state response behavior for a simulator; do not include persona, preferences, or hidden labels.
-- source_locators: non-empty list of simple source references.
-""".strip()
-
-
 JSON_ONLY_RULES = """
 Output rules:
 - Return exactly one valid JSON object.

@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 SCORING_PROFILE_SQUARED_MASTERY_DISTANCE_V1 = "squared_mastery_distance_v1"
-INTERACTION_RULE_SINGLE_DIAGNOSTIC_QUESTION = "single_diagnostic_question_per_turn"
 
 
 class ArtifactReviewStatus(StrEnum):

@@ -24,14 +24,16 @@ from backend.knowact.simulator.templates.answer_validation import (
 
 class V1SimulatorPromptTemplatesTest(unittest.TestCase):
     def test_answer_policy_template_is_structured_and_hidden_input_bounded(self):
-        fallback_intent = RuleBasedAnswerPolicy().derive_intent(
+        simulator_context = _empty_simulator_context()
+        fallback_intent = RuleBasedAnswerPolicy().derive(
             question_text="What should I study next?",
-            simulator_context=_empty_simulator_context(),
-        )
+            simulator_context=simulator_context,
+            grounding=QuestionGroundingResult(),
+        ).intent
 
         messages = build_answer_policy_messages(
             question_text="What should I study next?",
-            simulator_context=_empty_simulator_context(),
+            simulator_context=simulator_context,
             grounding=QuestionGroundingResult(),
             fallback_intent=fallback_intent,
         )

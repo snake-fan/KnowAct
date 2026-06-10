@@ -96,9 +96,6 @@ class NodeAnswerBlueprint(BaseModel):
         return value
 
 
-GroundedNodeAnswerDecision = NodeAnswerBlueprint
-
-
 class SimulatorAnswerPlan(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -128,21 +125,12 @@ class SimulatorAnswerBlueprint(BaseModel):
     answer_strategy: str
     content_units: tuple[NodeAnswerBlueprint, ...] = Field(default_factory=tuple)
 
-    @property
-    def node_decisions(self) -> tuple[NodeAnswerBlueprint, ...]:
-        """Compatibility accessor for callers migrating to content_units."""
-
-        return self.content_units
-
     @field_validator("question_text", "answer_strategy")
     @classmethod
     def _required_values_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("must not be blank")
         return value
-
-
-SimulatorAnswerIntent = SimulatorAnswerBlueprint
 
 
 class GroundedNodePolicyTrace(BaseModel):
@@ -237,26 +225,6 @@ class RuleBasedAnswerPolicy:
                 grounding_flags=_grounding_flags(grounding),
             ),
         )
-
-    def derive_intent(
-        self,
-        *,
-        question_text: str,
-        simulator_context: SimulatorTurnContext,
-    ) -> SimulatorAnswerBlueprint:
-        """Compatibility helper for older callers that do not pass grounding."""
-
-        grounding = QuestionGroundingResult(
-            grounded_node_ids=tuple(
-                context.state.node_id for context in simulator_context.grounded_nodes
-            )
-        )
-        return self.derive(
-            question_text=question_text,
-            simulator_context=simulator_context,
-            grounding=grounding,
-        ).intent
-
 
 class ModelClientAnswerPolicy:
     def __init__(

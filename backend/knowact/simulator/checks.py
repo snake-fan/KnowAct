@@ -32,12 +32,6 @@ class SimulatorAnswerValidationDecision(BaseModel):
     blueprint_coverage_notes: tuple[str, ...] = Field(default_factory=tuple)
     fallback_guidance: str | None = None
 
-    @property
-    def intent_coverage_notes(self) -> tuple[str, ...]:
-        """Compatibility accessor for callers migrating to blueprint terminology."""
-
-        return self.blueprint_coverage_notes
-
     @field_validator(
         "blocking_safety_reasons",
         "blueprint_coverage_notes",

@@ -830,7 +830,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
                     unknowns=unknowns,
                 )
 
-                intent = policy.derive_intent(
+                intent = _derive_rule_based_intent(
+                    policy=policy,
                     question_text="How would you use a train/test split?",
                     simulator_context=simulator_context,
                 )
@@ -1146,7 +1147,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
             misconceptions=(),
             unknowns=(),
         )
-        intent = RuleBasedAnswerPolicy().derive_intent(
+        intent = _derive_rule_based_intent(
+            policy=RuleBasedAnswerPolicy(),
             question_text="How would you use a train/test split?",
             simulator_context=simulator_context,
         )
@@ -1180,7 +1182,8 @@ class V1SimulatorServiceTest(unittest.TestCase):
             misconceptions=(),
             unknowns=("When a separate validation set is needed.",),
         )
-        intent = RuleBasedAnswerPolicy().derive_intent(
+        intent = _derive_rule_based_intent(
+            policy=RuleBasedAnswerPolicy(),
             question_text="How would you use a train/test split?",
             simulator_context=simulator_context,
         )
@@ -1685,6 +1688,24 @@ def _simulator_context_for_state(
         ),
         visible_dialogue_context=None,
     )
+
+
+def _derive_rule_based_intent(
+    *,
+    policy: RuleBasedAnswerPolicy,
+    question_text: str,
+    simulator_context: SimulatorTurnContext,
+):
+    return policy.derive(
+        question_text=question_text,
+        simulator_context=simulator_context,
+        grounding=QuestionGroundingResult(
+            grounded_node_ids=tuple(
+                context.state.node_id
+                for context in simulator_context.grounded_nodes
+            )
+        ),
+    ).intent
 
 
 def _knowledge_node(node_id: str, name: str) -> dict[str, object]:
