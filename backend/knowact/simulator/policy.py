@@ -12,6 +12,11 @@ from backend.knowact.simulator.context_builder import (
     GroundedSimulatorNodeContext,
     SimulatorTurnContext,
 )
+from backend.knowact.simulator.debug_trace import (
+    record_model_raw_output,
+    record_parser_failure,
+    record_parser_success,
+)
 from backend.knowact.simulator.grounding import QuestionGroundingResult
 from backend.knowact.simulator.templates.answer_policy import (
     build_answer_policy_messages,
@@ -252,18 +257,24 @@ class ModelClientAnswerPolicy:
             ),
             temperature=self._temperature,
         )
+        record_model_raw_output(raw_output)
         _LOGGER.info(
             "Simulator answer policy model call succeeded provider=%s model_name=%s raw_output_chars=%d",
             metadata.provider if metadata is not None else None,
             metadata.model_name if metadata is not None else None,
             len(raw_output),
         )
-        intent = _parse_policy_intent(raw_output)
-        _reject_unsafe_intent(
-            intent,
-            simulator_context=simulator_context,
-            grounding=grounding,
-        )
+        try:
+            intent = _parse_policy_intent(raw_output)
+            _reject_unsafe_intent(
+                intent,
+                simulator_context=simulator_context,
+                grounding=grounding,
+            )
+        except ModelClientError as exc:
+            record_parser_failure(exc)
+            raise
+        record_parser_success({"intent": intent.model_dump(mode="json")})
         _LOGGER.info(
             "Simulator answer policy parser succeeded response_mode=%s node_decisions=%d",
             intent.response_mode.value,
@@ -434,7 +445,7 @@ def _node_generation_directives(
 
 def _visibility_guards() -> tuple[str, ...]:
     return (
-        "No mastery labels such as L0-L5.",
+        "No benchmark mastery labels.",
         "No hidden evidence identifiers or evidence reference fields.",
         "No map ids, user ids, graph versions, manifests, state tables, or scoring fields.",
         "No unsupported facts, examples, prior experiences, or abilities.",

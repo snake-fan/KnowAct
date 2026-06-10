@@ -1,7 +1,7 @@
 from enum import StrEnum
 import re
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.knowact.core.interaction import (
     CoarseObservationMetadata,
@@ -45,11 +45,20 @@ class SimulatorPreviewRequest(BaseModel):
             )
         return value
 
+    @model_validator(mode="after")
+    def _question_id_must_be_safe_id(self) -> "SimulatorPreviewRequest":
+        question_id = self.question.question_id
+        if question_id is not None and not _SAFE_ID_PATTERN.fullmatch(question_id):
+            raise ValueError(
+                "question.question_id must contain only letters, numbers, dots, "
+                "underscores, or dashes"
+            )
+        return self
+
 
 class SimulatorPreviewWarningCode(StrEnum):
     MISSING_PROFILE_CONTEXT = "missing_profile_context"
     PREVIEW_CONFIGURATION = "preview_configuration"
-    DEBUG_TRACE_UNAVAILABLE = "debug_trace_unavailable"
 
 
 class SimulatorPreviewWarning(BaseModel):

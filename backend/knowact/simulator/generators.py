@@ -8,6 +8,11 @@ from backend.knowact.simulator.expression import (
     NodeExpressionContext,
     SimulatorExpressionContext,
 )
+from backend.knowact.simulator.debug_trace import (
+    record_model_raw_output,
+    record_parser_failure,
+    record_parser_success,
+)
 from backend.knowact.simulator.policy import SimulatorAnswerStance, SimulatorResponseMode
 from backend.knowact.simulator.templates.answer_generation import (
     build_answer_generation_messages,
@@ -48,13 +53,19 @@ class ModelClientAnswerGenerator:
             ),
             temperature=self._temperature,
         )
+        record_model_raw_output(raw_output)
         _LOGGER.info(
             "Simulator answer generation model call succeeded provider=%s model_name=%s raw_output_chars=%d",
             metadata.provider if metadata is not None else None,
             metadata.model_name if metadata is not None else None,
             len(raw_output),
         )
-        answer_text = _parse_answer_text(raw_output)
+        try:
+            answer_text = _parse_answer_text(raw_output)
+        except ModelClientError as exc:
+            record_parser_failure(exc)
+            raise
+        record_parser_success({"answer": {"text": answer_text}})
         _LOGGER.info(
             "Simulator answer generation parser succeeded answer_chars=%d",
             len(answer_text),

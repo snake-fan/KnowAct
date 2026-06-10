@@ -304,6 +304,31 @@ No-grounding and multiple-question flags belong in this hidden debug trace, not 
 
 **Simulator Answer Intent** may be retained in hidden debug artifacts for audit, but it should not be stored as part of the formal visible episode run artifacts. Formal run artifacts should center on visible transcript data, tested-agent outputs, and scoring reports.
 
+The development preview writes a local **Simulator Debug Trace** for every
+`POST /api/simulator/preview` request under:
+
+```text
+benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/
+```
+
+If the request supplies `question.question_id`, it must be filesystem-safe:
+letters, numbers, dots, underscores, or dashes only. If no `question_id` is
+supplied, preview generates `question_{timestamp}` as the trace directory key.
+Repeating the same `question_id` overwrites the previous preview trace by
+clearing that question directory first.
+
+The preview trace directory contains `debug_trace.json` plus optional
+`agent_traces/` raw/parser artifacts for LLM-backed steps:
+
+- `agent_traces/answer_policy/model_raw_output.txt` and `parser_output.json`
+- `agent_traces/answer_generation/attempt_{n}/model_raw_output.txt` and `parser_output.json`
+- `agent_traces/answer_validation/attempt_{n}/model_raw_output.txt` and `parser_output.json`
+
+Preview debug traces may store raw model outputs and parsed step outputs, but
+they must not store full prompt/messages, full reviewed graph payloads, full
+reviewed map payloads, or full confirmed profile-context payloads. The trace
+stores artifact identities and directly grounded turn details instead.
+
 ## Runtime Logging
 
 The simulator implementation should emit operator-facing logger `info` messages at
@@ -325,7 +350,7 @@ Phase 5 may expose a development-only simulator preview before formal **Evaluati
 
 Current initial route: `POST /api/simulator/preview`.
 
-The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Intent** derivation, de-identified **Simulator Expression Context** construction, LLM-backed visible answer generation, LLM-backed answer validation, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement retries, persistent debug trace artifacts, or formal episode persistence yet.
+The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Intent** derivation, de-identified **Simulator Expression Context** construction, LLM-backed visible answer generation, LLM-backed answer validation, bounded answer regeneration, persistent local preview debug trace artifacts, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement formal episode persistence yet.
 
 The next simulator-policy implementation slice should stabilize the structured intent boundary before adding an LLM-backed policy. Recommended order: define the richer **Simulator Answer Intent** and hidden **Simulator Policy Decision Trace** schemas, make the rule-based policy emit that schema as deterministic fallback, make expression consume only downstream-safe intent, update generator prompts around structured intent, route no-grounding/multiple/label-seeking modes through policy, add bounded validation-regeneration, and then add an LLM-backed policy behind the same interface.
 
@@ -340,12 +365,13 @@ The preview should:
 - continue with a configuration warning when confirmed **Profile Context** is missing
 - accept one primary diagnostic question per request
 - accept optional request-carried **Visible Dialogue Context**
-- accept optional `preview_options.include_debug_trace` and report only trace availability/reference metadata
+- write a local hidden debug trace artifact for every preview request
+- accept optional `preview_options.include_debug_trace` and use it only to decide whether the response returns trace availability/reference metadata
 - return only the visible simulator answer plus visible observation metadata
 - keep visible observation metadata coarse, such as `answer`, `clarification`, or `non_answer`
 - keep internal fallback categories and validation reasons out of visible metadata
 - allow non-leaking configuration warnings in preview metadata, such as missing style context
-- return only a `debug_trace_id` or `debug_trace_available` flag when debug tracing is enabled
+- return only a `debug_trace_id` and `debug_trace_available` flag when debug trace metadata is requested
 - keep the full **Simulator Debug Trace** behind a benchmark-author-only debug path or local artifact
 - avoid server-managed preview session state
 

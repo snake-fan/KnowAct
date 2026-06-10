@@ -286,6 +286,7 @@ core
 - `style.py`: optional content-preserving style pass using confirmed `Profile Context` for tone, brevity, and wording only. It must not introduce profile-derived facts, examples, prior-experience claims, or ability claims unless those are already present as grounded evidence.
 - `checks.py`: `Simulator Answer Validation`, including leakage checks, intent-coverage checks, consistency checks, fallback guidance, and validator-specific prompt/message helpers when using an LLM-backed validator. Validator inputs should be de-identified and should not become scoring signals.
 - `fallbacks.py`: natural non-leaking safe fallback construction for no grounding, multiple independent questions, hidden-label requests, generator failure, validator failure, and system failure.
+- `debug_trace.py`: local hidden preview trace writing, filesystem-safe trace ids, preview question-directory overwrite behavior, and request-scoped raw/parser artifact capture for LLM-backed simulator steps.
 - `service.py`: simulator turn orchestration; wires grounding, context building, answer policy, expression-context building, generation, style pass, validation, fallback, and hidden debug trace production.
 - `preview.py`: development-only stateless preview DTO/API boundary. It selects reviewed artifacts by identity and exposes only visible answer data, coarse preview metadata, non-leaking warnings, and optional debug trace handles.
 
@@ -297,6 +298,8 @@ core
 - simulator 可以在 formal episode manifest 存在前，通过 development-only preview flow 直接绑定 reviewed graph、reviewed map 和 optional confirmed profile context 来进行人工对话测试。
 - simulator preview 不是 benchmark run，也不产生 scoring report；它用于检查回答自然度、泄漏风险和 hidden-map 一致性。
 - simulator preview 通过 request-level `client_provider` 选择 LLM provider，使用与 authoring 相同的 `openai` / `deepseek` provider vocabulary，默认 `openai`。
+- simulator preview 每次请求都会写出隐藏的本地 **Simulator Debug Trace** 到 `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/`；重复的 `question_id` 会清空并覆盖该 question 目录，只保留最后一次 preview trace。
+- simulator preview debug trace 可以保存 LLM-backed simulator steps 的 raw model output 和 parser output，但不保存完整 prompt/messages、完整 reviewed graph、完整 reviewed map 或完整 confirmed profile context payload。
 - `Question Grounding` 只解释被测 agent 已提出的问题；它不是 tested-agent question selection policy。
 - hidden map state 和 hidden evidence 只能在 grounding 之后、针对 directly grounded nodes 进入 simulator-only context。
 - `Simulator Answer Intent` 可以进入 hidden debug trace，但正式 visible transcript 和 scoring artifacts 不应存储 intent、grounded node ids、hidden evidence ids 或 validator internals。

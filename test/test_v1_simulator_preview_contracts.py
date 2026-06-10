@@ -89,6 +89,14 @@ class V1SimulatorPreviewContractsTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SimulatorPreviewRequest.model_validate(candidate_path_payload)
 
+        invalid_question_id_payload = dict(payload)
+        invalid_question_id_payload["question"] = {
+            "question_id": "bad/question id",
+            "text": payload["question"]["text"],
+        }
+        with self.assertRaises(ValidationError):
+            SimulatorPreviewRequest.model_validate(invalid_question_id_payload)
+
     def test_preview_request_accepts_debug_trace_availability_option_only(self):
         payload = {
             "benchmark_domain": "classical_supervised_ml_algorithms",

@@ -15,6 +15,17 @@ from backend.knowact.simulator.context_builder import (
     SimulatorContextBuilder,
     SimulatorTurnContext,
 )
+from backend.knowact.simulator.debug_trace import (
+    ANSWER_GENERATION_STEP,
+    ANSWER_POLICY_STEP,
+    ANSWER_VALIDATION_STEP,
+    SimulatorDebugTraceRecorder,
+    active_simulator_debug_trace,
+    current_debug_trace_recorder,
+    error_payload,
+    question_trace_id_from_request,
+    simulator_model_step,
+)
 from backend.knowact.simulator.expression import (
     SimulatorExpressionContext,
     SimulatorExpressionContextBuilder,
@@ -74,224 +85,368 @@ class SimulatorService:
 
     def answer_preview(self, request: SimulatorPreviewRequest) -> SimulatorPreviewResponse:
         visible_turns = _visible_dialogue_turn_count(request)
+        question_trace_id = question_trace_id_from_request(request.question.question_id)
+        trace_recorder = SimulatorDebugTraceRecorder(
+            workspace_root=self._workspace_root,
+            benchmark_domain=request.benchmark_domain,
+            map_id=request.map_id,
+            question_trace_id=question_trace_id,
+        )
+        trace_recorder.prepare_output_dir()
+        trace_recorder.set_request(
+            {
+                "benchmark_domain": request.benchmark_domain,
+                "map_id": request.map_id,
+                "client_provider": request.client_provider,
+                "question": request.question.model_dump(mode="json"),
+                "question_trace_id": question_trace_id,
+                "visible_dialogue_turns": visible_turns,
+                "include_debug_trace": request.preview_options.include_debug_trace,
+            }
+        )
         _LOGGER.info(
-            "Simulator preview workflow started benchmark_domain=%s map_id=%s client_provider=%s question_id=%s visible_dialogue_turns=%d include_debug_trace=%s",
+            "Simulator preview workflow started benchmark_domain=%s map_id=%s client_provider=%s question_id=%s trace_id=%s visible_dialogue_turns=%d include_debug_trace=%s",
             request.benchmark_domain,
             request.map_id,
             request.client_provider,
             request.question.question_id,
+            question_trace_id,
             visible_turns,
             request.preview_options.include_debug_trace,
         )
-        try:
-            manifest = load_reviewed_map_manifest(
-                workspace_root=self._workspace_root,
-                benchmark_domain=request.benchmark_domain,
-                map_id=request.map_id,
-            )
-            _LOGGER.info(
-                "Simulator preview map manifest loaded benchmark_domain=%s map_id=%s graph_version=%s user_id=%s",
-                manifest.benchmark_domain,
-                manifest.map_id,
-                manifest.graph_version,
-                manifest.user_id,
-            )
-            graph_artifacts = load_reviewed_graph(
-                workspace_root=self._workspace_root,
-                benchmark_domain=manifest.benchmark_domain,
-                version=manifest.graph_version,
-            )
-            _LOGGER.info(
-                "Simulator preview reviewed graph loaded benchmark_domain=%s graph_version=%s nodes=%d edges=%d",
-                manifest.benchmark_domain,
-                manifest.graph_version,
-                len(graph_artifacts.graph.nodes),
-                len(graph_artifacts.graph.edges),
-            )
+        with active_simulator_debug_trace(trace_recorder):
+            try:
+                artifact_loading: dict[str, object] = {}
+                manifest = load_reviewed_map_manifest(
+                    workspace_root=self._workspace_root,
+                    benchmark_domain=request.benchmark_domain,
+                    map_id=request.map_id,
+                )
+                trace_recorder.set_artifact_bindings(
+                    {
+                        "graph_version": manifest.graph_version,
+                        "user_id": manifest.user_id,
+                        "reviewed_map_manifest_uri": _reviewed_map_manifest_uri(
+                            benchmark_domain=manifest.benchmark_domain,
+                            map_id=manifest.map_id,
+                        ),
+                    }
+                )
+                artifact_loading["map_manifest"] = {
+                    "status": "loaded",
+                    "graph_version": manifest.graph_version,
+                    "user_id": manifest.user_id,
+                }
+                trace_recorder.set_workflow_section("artifact_loading", artifact_loading)
+                _LOGGER.info(
+                    "Simulator preview map manifest loaded benchmark_domain=%s map_id=%s graph_version=%s user_id=%s",
+                    manifest.benchmark_domain,
+                    manifest.map_id,
+                    manifest.graph_version,
+                    manifest.user_id,
+                )
+                graph_artifacts = load_reviewed_graph(
+                    workspace_root=self._workspace_root,
+                    benchmark_domain=manifest.benchmark_domain,
+                    version=manifest.graph_version,
+                )
+                trace_recorder.set_artifact_bindings(
+                    {
+                        "reviewed_graph_dir_uri": _reviewed_graph_dir_uri(
+                            benchmark_domain=manifest.benchmark_domain,
+                            graph_version=manifest.graph_version,
+                        ),
+                    }
+                )
+                artifact_loading["reviewed_graph"] = {
+                    "status": "loaded",
+                    "nodes": len(graph_artifacts.graph.nodes),
+                    "edges": len(graph_artifacts.graph.edges),
+                }
+                trace_recorder.set_workflow_section("artifact_loading", artifact_loading)
+                _LOGGER.info(
+                    "Simulator preview reviewed graph loaded benchmark_domain=%s graph_version=%s nodes=%d edges=%d",
+                    manifest.benchmark_domain,
+                    manifest.graph_version,
+                    len(graph_artifacts.graph.nodes),
+                    len(graph_artifacts.graph.edges),
+                )
 
-            _LOGGER.info(
-                "Question grounding started benchmark_domain=%s map_id=%s visible_dialogue_turns=%d",
-                manifest.benchmark_domain,
-                manifest.map_id,
-                visible_turns,
-            )
-            grounding = self._grounder.ground(
-                question=request.question,
-                graph=graph_artifacts.graph,
-                visible_dialogue_context=request.visible_dialogue_context,
-            )
-            _LOGGER.info(
-                "Question grounding succeeded benchmark_domain=%s map_id=%s grounded_nodes=%d integrated_question=%s multiple_question=%s label_seeking=%s",
-                manifest.benchmark_domain,
-                manifest.map_id,
-                len(grounding.grounded_node_ids),
-                grounding.is_integrated_question,
-                grounding.is_multiple_question,
-                grounding.is_label_seeking,
-            )
-
-            if not grounding.has_grounding or grounding.is_multiple_question:
-                simulator_context = _minimal_simulator_context(
-                    manifest=manifest,
+                _LOGGER.info(
+                    "Question grounding started benchmark_domain=%s map_id=%s visible_dialogue_turns=%d",
+                    manifest.benchmark_domain,
+                    manifest.map_id,
+                    visible_turns,
+                )
+                grounding = self._grounder.ground(
+                    question=request.question,
+                    graph=graph_artifacts.graph,
                     visible_dialogue_context=request.visible_dialogue_context,
+                )
+                trace_recorder.set_workflow_section(
+                    "grounding",
+                    {
+                        **grounding.model_dump(mode="json"),
+                        "has_grounding": grounding.has_grounding,
+                        "grounded_node_count": len(grounding.grounded_node_ids),
+                    },
+                )
+                _LOGGER.info(
+                    "Question grounding succeeded benchmark_domain=%s map_id=%s grounded_nodes=%d integrated_question=%s multiple_question=%s label_seeking=%s",
+                    manifest.benchmark_domain,
+                    manifest.map_id,
+                    len(grounding.grounded_node_ids),
+                    grounding.is_integrated_question,
+                    grounding.is_multiple_question,
+                    grounding.is_label_seeking,
+                )
+
+                if not grounding.has_grounding or grounding.is_multiple_question:
+                    simulator_context = _minimal_simulator_context(
+                        manifest=manifest,
+                        visible_dialogue_context=request.visible_dialogue_context,
+                    )
+                    trace_recorder.set_workflow_section(
+                        "simulator_context",
+                        _simulator_context_trace_payload(simulator_context),
+                    )
+                    policy_result = self._derive_policy_result(
+                        question_text=request.question.text,
+                        simulator_context=simulator_context,
+                        grounding=grounding,
+                    )
+                    trace_recorder.set_workflow_section(
+                        "policy",
+                        _policy_result_trace_payload(policy_result),
+                    )
+                    expression_context = self._expression_builder.build(
+                        intent=policy_result.intent,
+                        visible_dialogue_context=request.visible_dialogue_context,
+                    )
+                    trace_recorder.set_workflow_section(
+                        "expression_context",
+                        expression_context.model_dump(mode="json"),
+                    )
+                    answer = self._generate_validated_answer(
+                        expression_context,
+                        benchmark_domain=manifest.benchmark_domain,
+                        map_id=manifest.map_id,
+                    )
+                    observation = CoarseObservationMetadata(
+                        kind=_observation_kind_for_response_mode(
+                            policy_result.intent.response_mode
+                        )
+                    )
+                    response = self._build_preview_response(
+                        request=request,
+                        trace_recorder=trace_recorder,
+                        answer=answer,
+                        observation=observation,
+                        warnings=(),
+                    )
+                    _LOGGER.info(
+                        "Simulator preview workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s response_mode=%s",
+                        manifest.benchmark_domain,
+                        manifest.map_id,
+                        observation.kind.value,
+                        len(response.warnings),
+                        response.debug_trace_available,
+                        policy_result.intent.response_mode.value,
+                    )
+                    return response
+
+                map_artifacts = load_reviewed_map(
+                    workspace_root=self._workspace_root,
+                    benchmark_domain=request.benchmark_domain,
+                    map_id=request.map_id,
+                )
+                trace_recorder.set_artifact_bindings(
+                    {
+                        "reviewed_map_uri": _reviewed_map_uri(
+                            benchmark_domain=manifest.benchmark_domain,
+                            map_id=manifest.map_id,
+                        ),
+                    }
+                )
+                artifact_loading["reviewed_map"] = {
+                    "status": "loaded",
+                    "states": len(map_artifacts.knowledge_map.states),
+                    "evidence_records": len(map_artifacts.knowledge_map.evidence),
+                }
+                trace_recorder.set_workflow_section("artifact_loading", artifact_loading)
+                _LOGGER.info(
+                    "Simulator preview reviewed map loaded benchmark_domain=%s map_id=%s states=%d evidence_records=%d",
+                    manifest.benchmark_domain,
+                    manifest.map_id,
+                    len(map_artifacts.knowledge_map.states),
+                    len(map_artifacts.knowledge_map.evidence),
+                )
+                profile_context, warnings = self._load_optional_profile_context(
+                    benchmark_domain=manifest.benchmark_domain,
+                    user_id=manifest.user_id,
+                )
+                if profile_context is not None:
+                    trace_recorder.set_artifact_bindings(
+                        {
+                            "confirmed_profile_context_uri": _confirmed_profile_context_uri(
+                                benchmark_domain=manifest.benchmark_domain,
+                                user_id=manifest.user_id,
+                            ),
+                        }
+                    )
+                trace_recorder.set_workflow_section(
+                    "profile_context",
+                    {
+                        "available": profile_context is not None,
+                        "warning_codes": tuple(warning.code.value for warning in warnings),
+                    },
+                )
+
+                _LOGGER.info(
+                    "Simulator context build started benchmark_domain=%s map_id=%s grounded_nodes=%d",
+                    manifest.benchmark_domain,
+                    manifest.map_id,
+                    len(grounding.grounded_node_ids),
+                )
+                simulator_context = self._context_builder.build(
+                    benchmark_domain=manifest.benchmark_domain,
+                    map_id=manifest.map_id,
+                    graph_version=manifest.graph_version,
+                    user_id=manifest.user_id,
+                    graph=graph_artifacts.graph,
+                    knowledge_map=map_artifacts.knowledge_map,
+                    grounding=grounding,
+                    visible_dialogue_context=request.visible_dialogue_context,
+                )
+                trace_recorder.set_workflow_section(
+                    "simulator_context",
+                    _simulator_context_trace_payload(simulator_context),
+                )
+                _LOGGER.info(
+                    "Simulator context built benchmark_domain=%s map_id=%s grounded_nodes=%d simulator_only_evidence_records=%d visible_dialogue_turns=%d",
+                    manifest.benchmark_domain,
+                    manifest.map_id,
+                    len(simulator_context.grounded_nodes),
+                    _simulator_only_evidence_count(simulator_context),
+                    visible_turns,
+                )
+
+                _LOGGER.info(
+                    "Answer intent derivation started benchmark_domain=%s map_id=%s grounded_nodes=%d",
+                    manifest.benchmark_domain,
+                    manifest.map_id,
+                    len(simulator_context.grounded_nodes),
                 )
                 policy_result = self._derive_policy_result(
                     question_text=request.question.text,
                     simulator_context=simulator_context,
                     grounding=grounding,
                 )
+                trace_recorder.set_workflow_section(
+                    "policy",
+                    _policy_result_trace_payload(policy_result),
+                )
+                _LOGGER.info(
+                    "Answer intent derived benchmark_domain=%s map_id=%s response_mode=%s node_decisions=%d policy_source=%s",
+                    manifest.benchmark_domain,
+                    manifest.map_id,
+                    policy_result.intent.response_mode.value,
+                    len(policy_result.intent.node_decisions),
+                    policy_result.trace.policy_source,
+                )
+
+                _LOGGER.info(
+                    "Expression context build started benchmark_domain=%s map_id=%s node_decisions=%d has_profile_context=%s",
+                    manifest.benchmark_domain,
+                    manifest.map_id,
+                    len(policy_result.intent.node_decisions),
+                    profile_context is not None,
+                )
                 expression_context = self._expression_builder.build(
                     intent=policy_result.intent,
                     visible_dialogue_context=request.visible_dialogue_context,
+                    profile_context=profile_context,
+                )
+                trace_recorder.set_workflow_section(
+                    "expression_context",
+                    expression_context.model_dump(mode="json"),
+                )
+                _LOGGER.info(
+                    "Expression context built benchmark_domain=%s map_id=%s expression_nodes=%d evidence_signals=%d visible_dialogue_turns=%d has_style_hint=%s",
+                    manifest.benchmark_domain,
+                    manifest.map_id,
+                    len(expression_context.nodes),
+                    _expression_evidence_signal_count(expression_context),
+                    len(expression_context.visible_dialogue_turns),
+                    expression_context.style_hint is not None,
                 )
                 answer = self._generate_validated_answer(
                     expression_context,
                     benchmark_domain=manifest.benchmark_domain,
                     map_id=manifest.map_id,
                 )
-                warnings, debug_trace_available = self._apply_debug_trace_preview_options(
-                    warnings=(),
-                    request=request,
-                )
-                _LOGGER.info(
-                    "Simulator preview workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s response_mode=%s",
-                    manifest.benchmark_domain,
-                    manifest.map_id,
-                    _observation_kind_for_response_mode(policy_result.intent.response_mode).value,
-                    len(warnings),
-                    debug_trace_available,
-                    policy_result.intent.response_mode.value,
-                )
-                return SimulatorPreviewResponse(
-                    answer=answer,
-                    observation=CoarseObservationMetadata(
-                        kind=_observation_kind_for_response_mode(
-                            policy_result.intent.response_mode
-                        )
-                    ),
-                    warnings=warnings,
-                    debug_trace_available=debug_trace_available,
-                )
-
-            map_artifacts = load_reviewed_map(
-                workspace_root=self._workspace_root,
-                benchmark_domain=request.benchmark_domain,
-                map_id=request.map_id,
-            )
-            _LOGGER.info(
-                "Simulator preview reviewed map loaded benchmark_domain=%s map_id=%s states=%d evidence_records=%d",
-                manifest.benchmark_domain,
-                manifest.map_id,
-                len(map_artifacts.knowledge_map.states),
-                len(map_artifacts.knowledge_map.evidence),
-            )
-            profile_context, warnings = self._load_optional_profile_context(
-                benchmark_domain=manifest.benchmark_domain,
-                user_id=manifest.user_id,
-            )
-
-            _LOGGER.info(
-                "Simulator context build started benchmark_domain=%s map_id=%s grounded_nodes=%d",
-                manifest.benchmark_domain,
-                manifest.map_id,
-                len(grounding.grounded_node_ids),
-            )
-            simulator_context = self._context_builder.build(
-                benchmark_domain=manifest.benchmark_domain,
-                map_id=manifest.map_id,
-                graph_version=manifest.graph_version,
-                user_id=manifest.user_id,
-                graph=graph_artifacts.graph,
-                knowledge_map=map_artifacts.knowledge_map,
-                grounding=grounding,
-                visible_dialogue_context=request.visible_dialogue_context,
-            )
-            _LOGGER.info(
-                "Simulator context built benchmark_domain=%s map_id=%s grounded_nodes=%d simulator_only_evidence_records=%d visible_dialogue_turns=%d",
-                manifest.benchmark_domain,
-                manifest.map_id,
-                len(simulator_context.grounded_nodes),
-                _simulator_only_evidence_count(simulator_context),
-                visible_turns,
-            )
-
-            _LOGGER.info(
-                "Answer intent derivation started benchmark_domain=%s map_id=%s grounded_nodes=%d",
-                manifest.benchmark_domain,
-                manifest.map_id,
-                len(simulator_context.grounded_nodes),
-            )
-            policy_result = self._derive_policy_result(
-                question_text=request.question.text,
-                simulator_context=simulator_context,
-                grounding=grounding,
-            )
-            _LOGGER.info(
-                "Answer intent derived benchmark_domain=%s map_id=%s response_mode=%s node_decisions=%d policy_source=%s",
-                manifest.benchmark_domain,
-                manifest.map_id,
-                policy_result.intent.response_mode.value,
-                len(policy_result.intent.node_decisions),
-                policy_result.trace.policy_source,
-            )
-
-            _LOGGER.info(
-                "Expression context build started benchmark_domain=%s map_id=%s node_decisions=%d has_profile_context=%s",
-                manifest.benchmark_domain,
-                manifest.map_id,
-                len(policy_result.intent.node_decisions),
-                profile_context is not None,
-            )
-            expression_context = self._expression_builder.build(
-                intent=policy_result.intent,
-                visible_dialogue_context=request.visible_dialogue_context,
-                profile_context=profile_context,
-            )
-            _LOGGER.info(
-                "Expression context built benchmark_domain=%s map_id=%s expression_nodes=%d evidence_signals=%d visible_dialogue_turns=%d has_style_hint=%s",
-                manifest.benchmark_domain,
-                manifest.map_id,
-                len(expression_context.nodes),
-                _expression_evidence_signal_count(expression_context),
-                len(expression_context.visible_dialogue_turns),
-                expression_context.style_hint is not None,
-            )
-            answer = self._generate_validated_answer(
-                expression_context,
-                benchmark_domain=manifest.benchmark_domain,
-                map_id=manifest.map_id,
-            )
-            warnings, debug_trace_available = self._apply_debug_trace_preview_options(
-                warnings=warnings,
-                request=request,
-            )
-            _LOGGER.info(
-                "Simulator preview workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s answer_chars=%d",
-                manifest.benchmark_domain,
-                manifest.map_id,
-                VisibleObservationKind.ANSWER.value,
-                len(warnings),
-                debug_trace_available,
-                len(answer.text),
-            )
-            return SimulatorPreviewResponse(
-                answer=answer,
-                observation=CoarseObservationMetadata(
+                observation = CoarseObservationMetadata(
                     kind=_observation_kind_for_response_mode(
                         policy_result.intent.response_mode
                     )
-                ),
-                warnings=warnings,
-                debug_trace_available=debug_trace_available,
-            )
-        except Exception as exc:
-            _LOGGER.error(
-                "Simulator preview workflow failed benchmark_domain=%s map_id=%s error_type=%s",
-                request.benchmark_domain,
-                request.map_id,
-                type(exc).__name__,
-            )
-            raise
+                )
+                response = self._build_preview_response(
+                    request=request,
+                    trace_recorder=trace_recorder,
+                    answer=answer,
+                    observation=observation,
+                    warnings=warnings,
+                )
+                _LOGGER.info(
+                    "Simulator preview workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s answer_chars=%d",
+                    manifest.benchmark_domain,
+                    manifest.map_id,
+                    observation.kind.value,
+                    len(response.warnings),
+                    response.debug_trace_available,
+                    len(answer.text),
+                )
+                return response
+            except Exception as exc:
+                trace_recorder.write_debug_trace(
+                    status="failed",
+                    error=error_payload(exc),
+                )
+                _LOGGER.error(
+                    "Simulator preview workflow failed benchmark_domain=%s map_id=%s error_type=%s",
+                    request.benchmark_domain,
+                    request.map_id,
+                    type(exc).__name__,
+                )
+                raise
+
+    def _build_preview_response(
+        self,
+        *,
+        request: SimulatorPreviewRequest,
+        trace_recorder: SimulatorDebugTraceRecorder,
+        answer: VisibleSimulatorAnswer,
+        observation: CoarseObservationMetadata,
+        warnings: tuple[SimulatorPreviewWarning, ...],
+    ) -> SimulatorPreviewResponse:
+        trace_recorder.set_visible_output(
+            {
+                "answer": answer.model_dump(mode="json"),
+                "observation": observation.model_dump(mode="json"),
+            }
+        )
+        trace_recorder.set_warnings(
+            tuple(warning.model_dump(mode="json") for warning in warnings)
+        )
+        trace_recorder.write_debug_trace(status="succeeded")
+        include_debug_trace = request.preview_options.include_debug_trace
+        return SimulatorPreviewResponse(
+            answer=answer,
+            observation=observation,
+            warnings=warnings,
+            debug_trace_id=trace_recorder.trace_id if include_debug_trace else None,
+            debug_trace_available=True if include_debug_trace else None,
+        )
 
     def _derive_policy_result(
         self,
@@ -301,11 +456,12 @@ class SimulatorService:
         grounding,
     ) -> SimulatorPolicyResult:
         try:
-            return self._policy.derive(
-                question_text=question_text,
-                simulator_context=simulator_context,
-                grounding=grounding,
-            )
+            with simulator_model_step(ANSWER_POLICY_STEP):
+                return self._policy.derive(
+                    question_text=question_text,
+                    simulator_context=simulator_context,
+                    grounding=grounding,
+                )
         except (ModelClientError, TimeoutError, ValueError) as exc:
             if self._policy is self._fallback_policy:
                 raise
@@ -339,18 +495,31 @@ class SimulatorService:
     ) -> VisibleSimulatorAnswer:
         current_context = expression_context
         for attempt_index in range(_MAX_ANSWER_GENERATION_ATTEMPTS):
+            attempt_number = attempt_index + 1
             _LOGGER.info(
                 "Simulator answer generation started benchmark_domain=%s map_id=%s generator=%s expression_nodes=%d attempt=%d",
                 benchmark_domain,
                 map_id,
                 type(self._generator).__name__,
                 len(current_context.nodes),
-                attempt_index + 1,
+                attempt_number,
             )
             try:
-                candidate_answer = self._generator.render(current_context)
+                with simulator_model_step(
+                    ANSWER_GENERATION_STEP,
+                    attempt_index=attempt_number,
+                ):
+                    candidate_answer = self._generator.render(current_context)
             except (ModelClientError, TimeoutError) as exc:
-                if attempt_index + 1 < _MAX_ANSWER_GENERATION_ATTEMPTS:
+                _append_generation_attempt(
+                    {
+                        "attempt_index": attempt_number,
+                        "generator": type(self._generator).__name__,
+                        "status": "generation_failed",
+                        "error": error_payload(exc),
+                    }
+                )
+                if attempt_number < _MAX_ANSWER_GENERATION_ATTEMPTS:
                     _LOGGER.warning(
                         "Simulator answer generation failed benchmark_domain=%s map_id=%s generator=%s error_type=%s retry=answer_generation",
                         benchmark_domain,
@@ -372,7 +541,9 @@ class SimulatorService:
                     type(self._generator).__name__,
                     type(exc).__name__,
                 )
-                return simulator_safe_fallback()
+                fallback = simulator_safe_fallback()
+                _set_fallback_trace("answer_generation_failed", fallback)
+                return fallback
             _LOGGER.info(
                 "Simulator answer generation succeeded benchmark_domain=%s map_id=%s answer_chars=%d",
                 benchmark_domain,
@@ -388,11 +559,25 @@ class SimulatorService:
                 len(candidate_answer.text),
             )
             try:
-                validation = self._validator.validate(
-                    candidate_answer=candidate_answer,
-                    expression_context=current_context,
-                )
+                with simulator_model_step(
+                    ANSWER_VALIDATION_STEP,
+                    attempt_index=attempt_number,
+                ):
+                    validation = self._validator.validate(
+                        candidate_answer=candidate_answer,
+                        expression_context=current_context,
+                    )
             except (ModelClientError, TimeoutError) as exc:
+                _append_generation_attempt(
+                    {
+                        "attempt_index": attempt_number,
+                        "generator": type(self._generator).__name__,
+                        "validator": type(self._validator).__name__,
+                        "status": "validation_unavailable",
+                        "candidate_answer_chars": len(candidate_answer.text),
+                        "error": error_payload(exc),
+                    }
+                )
                 _LOGGER.warning(
                     "Simulator answer validation unavailable benchmark_domain=%s map_id=%s validator=%s error_type=%s fallback=safe",
                     benchmark_domain,
@@ -400,7 +585,9 @@ class SimulatorService:
                     type(self._validator).__name__,
                     type(exc).__name__,
                 )
-                return simulator_safe_fallback()
+                fallback = simulator_safe_fallback()
+                _set_fallback_trace("answer_validation_unavailable", fallback)
+                return fallback
 
             _LOGGER.info(
                 "Simulator answer validation completed benchmark_domain=%s map_id=%s passed=%s blocking_reasons=%d intent_coverage_notes=%d",
@@ -411,8 +598,28 @@ class SimulatorService:
                 len(validation.intent_coverage_notes),
             )
             if validation.passed:
+                _append_generation_attempt(
+                    {
+                        "attempt_index": attempt_number,
+                        "generator": type(self._generator).__name__,
+                        "validator": type(self._validator).__name__,
+                        "status": "validated",
+                        "candidate_answer_chars": len(candidate_answer.text),
+                        "validation": validation.model_dump(mode="json"),
+                    }
+                )
                 return candidate_answer
-            if attempt_index + 1 < _MAX_ANSWER_GENERATION_ATTEMPTS:
+            _append_generation_attempt(
+                {
+                    "attempt_index": attempt_number,
+                    "generator": type(self._generator).__name__,
+                    "validator": type(self._validator).__name__,
+                    "status": "validation_failed",
+                    "candidate_answer_chars": len(candidate_answer.text),
+                    "validation": validation.model_dump(mode="json"),
+                }
+            )
+            if attempt_number < _MAX_ANSWER_GENERATION_ATTEMPTS:
                 _LOGGER.warning(
                     "Simulator answer validation failed benchmark_domain=%s map_id=%s blocking_reasons=%d retry=answer_generation",
                     benchmark_domain,
@@ -430,35 +637,12 @@ class SimulatorService:
                 map_id,
                 len(validation.blocking_safety_reasons),
             )
-            return simulator_safe_fallback()
-        return simulator_safe_fallback()
-
-    def _apply_debug_trace_preview_options(
-        self,
-        *,
-        warnings: tuple[SimulatorPreviewWarning, ...],
-        request: SimulatorPreviewRequest,
-    ) -> tuple[tuple[SimulatorPreviewWarning, ...], bool | None]:
-        if not request.preview_options.include_debug_trace:
-            return warnings, None
-        _LOGGER.info(
-            "Simulator debug trace preview requested benchmark_domain=%s map_id=%s status=unavailable",
-            request.benchmark_domain,
-            request.map_id,
-        )
-        return (
-            warnings
-            + (
-                SimulatorPreviewWarning(
-                    code=SimulatorPreviewWarningCode.DEBUG_TRACE_UNAVAILABLE,
-                    message=(
-                        "Debug trace content is not persisted by the stateless "
-                        "preview endpoint."
-                    ),
-                ),
-            ),
-            False,
-        )
+            fallback = simulator_safe_fallback()
+            _set_fallback_trace("answer_validation_failed", fallback)
+            return fallback
+        fallback = simulator_safe_fallback()
+        _set_fallback_trace("answer_generation_exhausted", fallback)
+        return fallback
 
     def _load_optional_profile_context(
         self,
@@ -521,6 +705,67 @@ def _expression_evidence_signal_count(expression_context: SimulatorExpressionCon
     return sum(len(node.evidence_signals) for node in expression_context.nodes)
 
 
+def _append_generation_attempt(payload: dict[str, object]) -> None:
+    recorder = current_debug_trace_recorder()
+    if recorder is None:
+        return
+    recorder.append_generation_attempt(payload)
+
+
+def _set_fallback_trace(reason: str, answer: VisibleSimulatorAnswer) -> None:
+    recorder = current_debug_trace_recorder()
+    if recorder is None:
+        return
+    recorder.set_fallback(
+        {
+            "reason": reason,
+            "answer": answer.model_dump(mode="json"),
+        }
+    )
+
+
+def _simulator_context_trace_payload(
+    simulator_context: SimulatorTurnContext,
+) -> dict[str, object]:
+    return {
+        "benchmark_domain": simulator_context.benchmark_domain,
+        "map_id": simulator_context.map_id,
+        "graph_version": simulator_context.graph_version,
+        "user_id": simulator_context.user_id,
+        "grounded_node_count": len(simulator_context.grounded_nodes),
+        "simulator_only_evidence_records": _simulator_only_evidence_count(
+            simulator_context
+        ),
+        "visible_dialogue_turns": (
+            0
+            if simulator_context.visible_dialogue_context is None
+            else len(simulator_context.visible_dialogue_context.turns)
+        ),
+        "grounded_nodes": tuple(
+            {
+                "node_id": node_context.state.node_id,
+                "node_name": node_context.node.name,
+                "mastery_level": node_context.state.mastery_level.value,
+                "evidence_refs": node_context.state.evidence_refs,
+                "evidence_kinds": tuple(
+                    evidence.evidence_kind.value
+                    for evidence in node_context.simulator_only_evidence
+                ),
+            }
+            for node_context in simulator_context.grounded_nodes
+        ),
+    }
+
+
+def _policy_result_trace_payload(
+    policy_result: SimulatorPolicyResult,
+) -> dict[str, object]:
+    return {
+        "intent": policy_result.intent.model_dump(mode="json"),
+        "decision_trace": policy_result.trace.model_dump(mode="json"),
+    }
+
+
 def _minimal_simulator_context(
     *,
     manifest,
@@ -547,6 +792,26 @@ def _observation_kind_for_response_mode(
     ):
         return VisibleObservationKind.NON_ANSWER
     return VisibleObservationKind.ANSWER
+
+
+def _reviewed_map_manifest_uri(*, benchmark_domain: str, map_id: str) -> str:
+    return (
+        f"benchmark/domains/{benchmark_domain}/maps/{map_id}/map_manifest.json"
+    )
+
+
+def _reviewed_map_uri(*, benchmark_domain: str, map_id: str) -> str:
+    return f"benchmark/domains/{benchmark_domain}/maps/{map_id}/map.json"
+
+
+def _reviewed_graph_dir_uri(*, benchmark_domain: str, graph_version: str) -> str:
+    return f"benchmark/domains/{benchmark_domain}/graphs/{graph_version}"
+
+
+def _confirmed_profile_context_uri(*, benchmark_domain: str, user_id: str) -> str:
+    return (
+        f"benchmark/domains/{benchmark_domain}/users/{user_id}/profile_context.json"
+    )
 
 
 def _with_regeneration_guidance(
