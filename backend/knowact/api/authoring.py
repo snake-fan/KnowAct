@@ -37,6 +37,8 @@ from backend.knowact.authoring.map_authoring_output import (
     read_candidate_map_run,
 )
 from backend.knowact.authoring.output import (
+    CANDIDATE_EDGES_FILENAME,
+    CANDIDATE_NODES_FILENAME,
     GraphAuthoringIntermediateArtifactWriter,
     write_graph_authoring_output,
     write_graph_authoring_run_log,
@@ -1157,9 +1159,8 @@ def build_authoring_router(
         benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
         run_id = _validate_safe_id_or_422(run_id, "run_id")
         output_dir = _candidate_graph_output_dir(root, benchmark_domain, run_id)
-        nodes_path = output_dir / "candidate_nodes.json"
-        edges_path = output_dir / "candidate_edges.json"
-        workflow_log_path = output_dir / WORKFLOW_LOG_FILENAME
+        nodes_path = output_dir / CANDIDATE_NODES_FILENAME
+        edges_path = output_dir / CANDIDATE_EDGES_FILENAME
         if not nodes_path.exists() or not edges_path.exists():
             raise HTTPException(status_code=404, detail="candidate graph artifacts do not exist")
 
@@ -1174,11 +1175,9 @@ def build_authoring_router(
             run_id=run_id,
             candidate_nodes=candidate_nodes,
             candidate_edges=candidate_edges,
-            artifact_paths=GraphCandidateArtifactPaths(
-                output_dir_uri=_relative_uri(output_dir, root),
-                candidate_nodes_uri=_relative_uri(nodes_path, root),
-                candidate_edges_uri=_relative_uri(edges_path, root),
-                workflow_log_uri=_relative_uri(workflow_log_path, root),
+            artifact_paths=_candidate_graph_artifact_paths(
+                output_dir=output_dir,
+                root=root,
             ),
         )
 
@@ -1195,8 +1194,8 @@ def build_authoring_router(
         benchmark_domain = _validate_safe_id_or_422(benchmark_domain, "benchmark_domain")
         run_id = _validate_safe_id_or_422(run_id, "run_id")
         output_dir = _candidate_graph_output_dir(root, benchmark_domain, run_id)
-        nodes_path = output_dir / "candidate_nodes.json"
-        edges_path = output_dir / "candidate_edges.json"
+        nodes_path = output_dir / CANDIDATE_NODES_FILENAME
+        edges_path = output_dir / CANDIDATE_EDGES_FILENAME
         if not nodes_path.exists() or not edges_path.exists():
             raise HTTPException(status_code=404, detail="candidate graph artifacts do not exist")
 
@@ -1212,18 +1211,15 @@ def build_authoring_router(
             candidate_edges=request.candidate_edges,
         )
         write_graph_authoring_output(result, output_dir)
-        workflow_log_path = output_dir / WORKFLOW_LOG_FILENAME
 
         return CandidateGraphArtifactsResponse(
             benchmark_domain=benchmark_domain,
             run_id=run_id,
             candidate_nodes=request.candidate_nodes,
             candidate_edges=request.candidate_edges,
-            artifact_paths=GraphCandidateArtifactPaths(
-                output_dir_uri=_relative_uri(output_dir, root),
-                candidate_nodes_uri=_relative_uri(nodes_path, root),
-                candidate_edges_uri=_relative_uri(edges_path, root),
-                workflow_log_uri=_relative_uri(workflow_log_path, root),
+            artifact_paths=_candidate_graph_artifact_paths(
+                output_dir=output_dir,
+                root=root,
             ),
         )
 
@@ -1389,12 +1385,12 @@ def build_authoring_router(
                 _relative_uri(nodes_path, root),
                 _relative_uri(edges_path, root),
             )
-            workflow_log_path = output_dir / WORKFLOW_LOG_FILENAME
+            artifact_paths = _candidate_graph_artifact_paths(
+                output_dir=output_dir,
+                root=root,
+            )
             log_artifact_paths = GraphAuthoringLogArtifactPaths(
-                output_dir_uri=_relative_uri(output_dir, root),
-                candidate_nodes_uri=_relative_uri(nodes_path, root),
-                candidate_edges_uri=_relative_uri(edges_path, root),
-                workflow_log_uri=_relative_uri(workflow_log_path, root),
+                **artifact_paths.model_dump(),
             )
             run_log = with_artifact_paths(run_log, log_artifact_paths)
             log_path = write_graph_authoring_run_log(run_log, output_dir)
@@ -1402,12 +1398,6 @@ def build_authoring_router(
                 "Graph authoring run log written run_id=%s workflow_log_uri=%s",
                 run_id,
                 _relative_uri(log_path, root),
-            )
-            artifact_paths = GraphCandidateArtifactPaths(
-                output_dir_uri=_relative_uri(output_dir, root),
-                candidate_nodes_uri=_relative_uri(nodes_path, root),
-                candidate_edges_uri=_relative_uri(edges_path, root),
-                workflow_log_uri=_relative_uri(log_path, root),
             )
 
         _LOGGER.info(
@@ -1624,6 +1614,19 @@ def _candidate_graph_output_dir(root: Path, benchmark_domain: str, run_id: str) 
 
 def _candidate_profile_context_output_dir(root: Path, benchmark_domain: str, run_id: str) -> Path:
     return root / "benchmark" / "domains" / benchmark_domain / "candidate_profile_contexts" / run_id
+
+
+def _candidate_graph_artifact_paths(
+    *,
+    output_dir: Path,
+    root: Path,
+) -> GraphCandidateArtifactPaths:
+    return GraphCandidateArtifactPaths(
+        output_dir_uri=_relative_uri(output_dir, root),
+        candidate_nodes_uri=_relative_uri(output_dir / CANDIDATE_NODES_FILENAME, root),
+        candidate_edges_uri=_relative_uri(output_dir / CANDIDATE_EDGES_FILENAME, root),
+        workflow_log_uri=_relative_uri(output_dir / WORKFLOW_LOG_FILENAME, root),
+    )
 
 
 def _copy_markdown_to_domain_sources(

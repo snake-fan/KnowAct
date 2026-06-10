@@ -120,10 +120,6 @@ export type GraphCandidateResponse = {
   artifact_paths: GraphCandidateArtifactPaths | null;
 };
 
-export type ApiError = {
-  message: string;
-};
-
 export type BenchmarkDomainListResponse = {
   benchmark_domains: string[];
 };
