@@ -764,7 +764,7 @@ Authored Knowledge Graph
 
 因此，map generation workflow 也属于 authoring pipeline，不属于 evaluation runtime。
 
-Persona、background、preferences 和 task goal 属于 `Profile Context`。它们可以用于生成更一致的 `Candidate Knowledge Map`，也可以作为 `background_fact` evidence 的来源。在 simulator runtime 中，`Profile Context` 只用于 content-preserving 的表达风格润色；回答内容应先由 grounded `User Knowledge State`、`Ground-Truth Evidence` 和 `Simulator Answer Intent` 决定，不能在润色阶段新增 profile-derived facts、例子、自述经历或能力判断。它们必须与 reviewed map 保持一致，但不进入 v1 的 `episode_mastery_distance` 主评分。
+Persona、background、preferences 和 task goal 属于 `Profile Context`。它们可以用于生成更一致的 `Candidate Knowledge Map`，也可以作为 `background_fact` evidence 的来源。在 simulator runtime 中，`Profile Context` 只用于 content-preserving 的表达风格润色；回答内容应先由 grounded `User Knowledge State`、`Ground-Truth Evidence` 和 `Simulator Answer Blueprint` 决定，不能在润色阶段新增 profile-derived facts、例子、自述经历或能力判断。它们必须与 reviewed map 保持一致，但不进入 v1 的 `episode_mastery_distance` 主评分。
 
 `Profile Context` 使用结构化 JSON artifact，而不是只保存一段自由文本。它包含 `user_id`、`benchmark_domain`、可读的 `summary`、`background`、`prior_experience`、`goals` 和 `preferences`。它不保存逐节点 mastery 值；逐节点知识状态属于 `Knowledge Map`。
 

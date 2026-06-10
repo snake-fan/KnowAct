@@ -37,7 +37,7 @@ from backend.knowact.simulator.generators import (
 from backend.knowact.simulator.grounding import RuleBasedQuestionGrounder
 from backend.knowact.simulator.policy import (
     RuleBasedAnswerPolicy,
-    SimulatorAnswerIntent,
+    SimulatorAnswerBlueprint,
     SimulatorAnswerPolicy,
     SimulatorPolicyResult,
     SimulatorResponseMode,
@@ -332,7 +332,7 @@ class SimulatorService:
                 )
 
                 _LOGGER.info(
-                    "Answer intent derivation started benchmark_domain=%s map_id=%s grounded_nodes=%d",
+                    "Answer blueprint derivation started benchmark_domain=%s map_id=%s grounded_nodes=%d",
                     manifest.benchmark_domain,
                     manifest.map_id,
                     len(simulator_context.grounded_nodes),
@@ -347,11 +347,11 @@ class SimulatorService:
                     _policy_result_trace_payload(policy_result),
                 )
                 _LOGGER.info(
-                    "Answer intent derived benchmark_domain=%s map_id=%s response_mode=%s node_decisions=%d policy_source=%s",
+                    "Answer blueprint derived benchmark_domain=%s map_id=%s response_mode=%s content_units=%d policy_source=%s",
                     manifest.benchmark_domain,
                     manifest.map_id,
                     policy_result.intent.response_mode.value,
-                    len(policy_result.intent.node_decisions),
+                    len(policy_result.intent.content_units),
                     policy_result.trace.policy_source,
                 )
 
@@ -366,10 +366,10 @@ class SimulatorService:
                     ),
                 )
                 _LOGGER.info(
-                    "Answer generation input prepared benchmark_domain=%s map_id=%s node_decisions=%d supporting_signals=%d visible_dialogue_turns=%d has_style_hint=%s",
+                    "Answer generation input prepared benchmark_domain=%s map_id=%s content_units=%d supporting_cues=%d visible_dialogue_turns=%d has_style_hint=%s",
                     manifest.benchmark_domain,
                     manifest.map_id,
-                    len(policy_result.intent.node_decisions),
+                    len(policy_result.intent.content_units),
                     _supporting_signal_count(policy_result.intent),
                     _visible_dialogue_turn_count(request),
                     style_hint is not None,
@@ -485,7 +485,7 @@ class SimulatorService:
     def _generate_validated_answer(
         self,
         *,
-        intent: SimulatorAnswerIntent,
+        intent: SimulatorAnswerBlueprint,
         visible_dialogue_context: VisibleDialogueContext | None,
         style_hint: str | None,
         benchmark_domain: str,
@@ -495,11 +495,11 @@ class SimulatorService:
         for attempt_index in range(_MAX_ANSWER_GENERATION_ATTEMPTS):
             attempt_number = attempt_index + 1
             _LOGGER.info(
-                "Simulator answer generation started benchmark_domain=%s map_id=%s generator=%s node_decisions=%d attempt=%d",
+                "Simulator answer generation started benchmark_domain=%s map_id=%s generator=%s content_units=%d attempt=%d",
                 benchmark_domain,
                 map_id,
                 type(self._generator).__name__,
-                len(intent.node_decisions),
+                len(intent.content_units),
                 attempt_number,
             )
             try:
@@ -596,12 +596,12 @@ class SimulatorService:
                 return fallback
 
             _LOGGER.info(
-                "Simulator answer validation completed benchmark_domain=%s map_id=%s passed=%s blocking_reasons=%d intent_coverage_notes=%d",
+                "Simulator answer validation completed benchmark_domain=%s map_id=%s passed=%s blocking_reasons=%d blueprint_coverage_notes=%d",
                 benchmark_domain,
                 map_id,
                 validation.passed,
                 len(validation.blocking_safety_reasons),
-                len(validation.intent_coverage_notes),
+                len(validation.blueprint_coverage_notes),
             )
             if validation.passed:
                 _append_generation_attempt(
@@ -707,8 +707,8 @@ def _simulator_only_evidence_count(simulator_context: SimulatorTurnContext) -> i
     )
 
 
-def _supporting_signal_count(intent: SimulatorAnswerIntent) -> int:
-    return sum(len(node.supporting_signals) for node in intent.node_decisions)
+def _supporting_signal_count(intent: SimulatorAnswerBlueprint) -> int:
+    return sum(len(unit.supporting_cues) for unit in intent.content_units)
 
 
 def _append_generation_attempt(payload: dict[str, object]) -> None:
@@ -767,21 +767,21 @@ def _policy_result_trace_payload(
     policy_result: SimulatorPolicyResult,
 ) -> dict[str, object]:
     return {
-        "intent": policy_result.intent.model_dump(mode="json"),
+        "answer_blueprint": policy_result.intent.model_dump(mode="json"),
         "decision_trace": policy_result.trace.model_dump(mode="json"),
     }
 
 
 def _answer_generation_input_trace_payload(
     *,
-    intent: SimulatorAnswerIntent,
+    intent: SimulatorAnswerBlueprint,
     visible_dialogue_context: VisibleDialogueContext | None,
     style_hint: str | None,
     regeneration_guidance: tuple[str, ...],
 ) -> dict[str, object]:
     return {
-        "node_decisions": len(intent.node_decisions),
-        "supporting_signals": _supporting_signal_count(intent),
+        "content_units": len(intent.content_units),
+        "supporting_cues": _supporting_signal_count(intent),
         "visible_dialogue_turns": _visible_dialogue_turn_count_for_context(
             visible_dialogue_context
         ),
@@ -869,10 +869,12 @@ def _regeneration_guidance(validation) -> tuple[str, ...]:
             "Remove content flagged by validation: "
             + "; ".join(validation.blocking_safety_reasons)
         )
-    if validation.intent_coverage_notes:
+    if validation.blueprint_coverage_notes:
         guidance.append(
-            "Improve intent coverage: " + "; ".join(validation.intent_coverage_notes)
+            "Improve blueprint coverage: " + "; ".join(validation.blueprint_coverage_notes)
         )
     if validation.fallback_guidance:
         guidance.append(validation.fallback_guidance)
-    return tuple(guidance) or ("Regenerate a safe answer that follows the same intent.",)
+    return tuple(guidance) or (
+        "Regenerate a safe answer that follows the same answer blueprint.",
+    )

@@ -34,7 +34,7 @@ def build_answer_policy_messages(
                     """
                     Role:
                     You are the Simulator Answer Policy Agent for KnowAct v1.
-                    You derive one compact answer-content plan from the grounded
+                    You derive one compact answer blueprint from the grounded
                     diagnostic situation. You do not write the final visible
                     answer and you do not restate fixed runtime safety rules.
                     """
@@ -73,8 +73,9 @@ def build_answer_policy_messages(
                        user can express, what limitation or misconception should
                        appear, and which evidence signals may support content.
                     3. Compress repeated capability, limitation, misconception,
-                       unknown, and evidence cues into one concise answer_focus
-                       and one optional boundary_focus.
+                       unknown, and evidence cues into one node-level content
+                       unit with direct fields for claim, boundary, mistaken
+                       belief, uncertainty, support, and overclaim limits.
                     4. Use node rubrics and simulator behavior to align the plan,
                        but do not copy mastery labels into the output.
                     5. Use simulator-only evidence as content support, but do not
@@ -94,7 +95,7 @@ def build_answer_policy_messages(
                       scoring fields, manifests, or debug-trace details.
                     - Use node names and de-identified evidence signals only.
                     - If runtime_response_mode is clarification or non_answer,
-                      return an empty node_decisions array.
+                      return an empty content_units array.
                     """
                 ).strip(),
                 dedent(
@@ -103,14 +104,22 @@ def build_answer_policy_messages(
                     Return JSON with exactly this shape:
                     {
                       "primary_stance": "partial_understanding",
+                      "answer_shape": {
+                        "voice": "first_person",
+                        "integration_mode": "single_node",
+                        "max_sentences": 2
+                      },
                       "answer_strategy": "one concise content strategy",
-                      "node_decisions": [
+                      "content_units": [
                         {
                           "node_name": "visible node name",
                           "stance": "partial_understanding",
-                          "answer_focus": "what the user should express",
-                          "boundary_focus": "what remains weak, unknown, or wrong",
-                          "supporting_signals": ["zero or more de-identified signals"]
+                          "core_claim": "what the user can directly express",
+                          "boundary": "what remains weak or incomplete",
+                          "mistaken_belief": null,
+                          "uncertainty": "what the user is unsure about",
+                          "supporting_cues": ["zero or more de-identified signals"],
+                          "avoid_overclaiming": ["claims the generator must not imply"]
                         }
                       ]
                     }
@@ -121,14 +130,17 @@ def build_answer_policy_messages(
                     Allowed enum values:
                     - stance: correct_understanding, partial_understanding,
                       uncertain_understanding, not_knowing, misconception.
+                    - answer_shape.voice: first_person.
+                    - answer_shape.integration_mode: single_node,
+                      integrated_multi_node, clarification, non_answer.
                     """
                 ).strip(),
                 dedent(
                     """
                     Final check before output:
                     - JSON matches the schema exactly and contains no extra keys.
-                    - The output does not include question_text, response_mode,
-                      fixed generation rules, or visibility guards.
+                    - The output does not include schema_version, question_text,
+                      response_mode, fixed generation rules, or visibility guards.
                     - The output does not contain mastery labels, hidden ids, or
                       state-table language.
                     - The answer content is grounded only in directly grounded
@@ -151,7 +163,7 @@ def build_answer_policy_messages(
                     "visible_dialogue_turns": _visible_dialogue_payload(simulator_context),
                     "fallback_plan": fallback_intent.model_dump(
                         mode="json",
-                        exclude={"question_text", "response_mode"},
+                        exclude={"schema_version", "question_text", "response_mode"},
                     ),
                 }
             ),

@@ -1,7 +1,7 @@
 import json
 import re
 from enum import StrEnum
-from typing import Protocol
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -43,30 +43,52 @@ class SimulatorResponseMode(StrEnum):
     SAFE_NON_ANSWER = "safe_non_answer"
 
 
-class GroundedNodeAnswerDecision(BaseModel):
+class SimulatorAnswerVoice(StrEnum):
+    FIRST_PERSON = "first_person"
+
+
+class SimulatorAnswerIntegrationMode(StrEnum):
+    SINGLE_NODE = "single_node"
+    INTEGRATED_MULTI_NODE = "integrated_multi_node"
+    CLARIFICATION = "clarification"
+    NON_ANSWER = "non_answer"
+
+
+class SimulatorAnswerShape(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    voice: SimulatorAnswerVoice = SimulatorAnswerVoice.FIRST_PERSON
+    integration_mode: SimulatorAnswerIntegrationMode
+    max_sentences: int = Field(default=2, ge=1, le=4)
+
+
+class NodeAnswerBlueprint(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_name: str
     stance: SimulatorAnswerStance
-    answer_focus: str
-    boundary_focus: str | None = None
-    supporting_signals: tuple[str, ...] = Field(default_factory=tuple)
+    core_claim: str | None = None
+    boundary: str | None = None
+    mistaken_belief: str | None = None
+    uncertainty: str | None = None
+    supporting_cues: tuple[str, ...] = Field(default_factory=tuple)
+    avoid_overclaiming: tuple[str, ...] = Field(default_factory=tuple)
 
-    @field_validator("node_name", "answer_focus")
+    @field_validator("node_name")
     @classmethod
     def _required_values_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("must not be blank")
         return value
 
-    @field_validator("boundary_focus")
+    @field_validator("core_claim", "boundary", "mistaken_belief", "uncertainty")
     @classmethod
     def _optional_value_must_not_be_blank(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
             raise ValueError("must not be blank")
         return value
 
-    @field_validator("supporting_signals")
+    @field_validator("supporting_cues", "avoid_overclaiming")
     @classmethod
     def _items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         if any(not item.strip() for item in value):
@@ -74,12 +96,16 @@ class GroundedNodeAnswerDecision(BaseModel):
         return value
 
 
+GroundedNodeAnswerDecision = NodeAnswerBlueprint
+
+
 class SimulatorAnswerPlan(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     primary_stance: SimulatorAnswerStance
+    answer_shape: SimulatorAnswerShape
     answer_strategy: str
-    node_decisions: tuple[GroundedNodeAnswerDecision, ...] = Field(default_factory=tuple)
+    content_units: tuple[NodeAnswerBlueprint, ...] = Field(default_factory=tuple)
 
     @field_validator("answer_strategy")
     @classmethod
@@ -89,14 +115,24 @@ class SimulatorAnswerPlan(BaseModel):
         return value
 
 
-class SimulatorAnswerIntent(BaseModel):
+class SimulatorAnswerBlueprint(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    schema_version: Literal["simulator_answer_blueprint.v1"] = (
+        "simulator_answer_blueprint.v1"
+    )
     question_text: str
     response_mode: SimulatorResponseMode
     primary_stance: SimulatorAnswerStance
+    answer_shape: SimulatorAnswerShape
     answer_strategy: str
-    node_decisions: tuple[GroundedNodeAnswerDecision, ...] = Field(default_factory=tuple)
+    content_units: tuple[NodeAnswerBlueprint, ...] = Field(default_factory=tuple)
+
+    @property
+    def node_decisions(self) -> tuple[NodeAnswerBlueprint, ...]:
+        """Compatibility accessor for callers migrating to content_units."""
+
+        return self.content_units
 
     @field_validator("question_text", "answer_strategy")
     @classmethod
@@ -104,6 +140,9 @@ class SimulatorAnswerIntent(BaseModel):
         if not value.strip():
             raise ValueError("must not be blank")
         return value
+
+
+SimulatorAnswerIntent = SimulatorAnswerBlueprint
 
 
 class GroundedNodePolicyTrace(BaseModel):
@@ -130,7 +169,7 @@ class SimulatorPolicyDecisionTrace(BaseModel):
 class SimulatorPolicyResult(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    intent: SimulatorAnswerIntent
+    intent: SimulatorAnswerBlueprint
     trace: SimulatorPolicyDecisionTrace
 
 
@@ -142,7 +181,7 @@ class SimulatorAnswerPolicy(Protocol):
         simulator_context: SimulatorTurnContext,
         grounding: QuestionGroundingResult,
     ) -> SimulatorPolicyResult:
-        """Derive a structured answer intent from one grounded simulator turn."""
+        """Derive a structured answer blueprint from one grounded simulator turn."""
 
 
 class RuleBasedAnswerPolicy:
@@ -158,7 +197,7 @@ class RuleBasedAnswerPolicy:
             SimulatorResponseMode.CLARIFICATION,
             SimulatorResponseMode.NON_ANSWER,
         )
-        node_decisions = (
+        content_units = (
             ()
             if suppress_node_content
             else tuple(
@@ -167,20 +206,24 @@ class RuleBasedAnswerPolicy:
             )
         )
         primary_stance = (
-            node_decisions[0].stance
-            if node_decisions
+            content_units[0].stance
+            if content_units
             else SimulatorAnswerStance.NOT_KNOWING
         )
-        intent = SimulatorAnswerIntent(
+        intent = SimulatorAnswerBlueprint(
             question_text=question_text,
             response_mode=response_mode,
             primary_stance=primary_stance,
+            answer_shape=_answer_shape(
+                response_mode=response_mode,
+                content_units=content_units,
+            ),
             answer_strategy=_answer_strategy(
                 response_mode=response_mode,
                 primary_stance=primary_stance,
-                node_decisions=node_decisions,
+                content_units=content_units,
             ),
-            node_decisions=node_decisions,
+            content_units=content_units,
         )
         return SimulatorPolicyResult(
             intent=intent,
@@ -200,7 +243,7 @@ class RuleBasedAnswerPolicy:
         *,
         question_text: str,
         simulator_context: SimulatorTurnContext,
-    ) -> SimulatorAnswerIntent:
+    ) -> SimulatorAnswerBlueprint:
         """Compatibility helper for older callers that do not pass grounding."""
 
         grounding = QuestionGroundingResult(
@@ -281,9 +324,9 @@ class ModelClientAnswerPolicy:
             raise
         record_parser_success({"plan": plan.model_dump(mode="json")})
         _LOGGER.info(
-            "Simulator answer policy parser succeeded response_mode=%s node_decisions=%d",
+            "Simulator answer policy parser succeeded response_mode=%s content_units=%d",
             intent.response_mode.value,
-            len(intent.node_decisions),
+            len(intent.content_units),
         )
         return SimulatorPolicyResult(
             intent=intent,
@@ -310,7 +353,7 @@ def _response_mode_for_grounding(
 
 def _decision_for_grounded_node(
     context: GroundedSimulatorNodeContext,
-) -> GroundedNodeAnswerDecision:
+) -> NodeAnswerBlueprint:
     state = context.state
     stance = _stance_for_state(state.mastery_level, state.misconceptions, state.unknowns)
     evidence_signals = tuple(evidence.signal for evidence in context.simulator_only_evidence)
@@ -326,15 +369,38 @@ def _decision_for_grounded_node(
         unknowns=state.unknowns,
         selected_rubric=selected_rubric,
     )
-    return GroundedNodeAnswerDecision(
+    core_claim = answer_focus
+    mistaken_belief = state.misconceptions[0] if state.misconceptions else None
+    uncertainty = state.unknowns[0] if state.unknowns else None
+    boundary = None
+    if stance in (
+        SimulatorAnswerStance.PARTIAL_UNDERSTANDING,
+        SimulatorAnswerStance.NOT_KNOWING,
+    ):
+        boundary = boundary_focus
+    elif stance == SimulatorAnswerStance.UNCERTAIN_UNDERSTANDING:
+        uncertainty = uncertainty or boundary_focus
+    elif stance == SimulatorAnswerStance.MISCONCEPTION:
+        mistaken_belief = mistaken_belief or boundary_focus
+    return NodeAnswerBlueprint(
         node_name=context.node.name,
         stance=stance,
-        answer_focus=answer_focus,
-        boundary_focus=boundary_focus,
-        supporting_signals=_supporting_signals(
+        core_claim=core_claim,
+        boundary=boundary,
+        mistaken_belief=mistaken_belief,
+        uncertainty=uncertainty,
+        supporting_cues=_supporting_cues(
             evidence_signals=evidence_signals,
-            answer_focus=answer_focus,
-            boundary_focus=boundary_focus,
+            content_fields=(
+                core_claim,
+                boundary,
+                mistaken_belief,
+                uncertainty,
+            ),
+        ),
+        avoid_overclaiming=_avoid_overclaiming(
+            stance=stance,
+            unknowns=state.unknowns,
         ),
     )
 
@@ -411,18 +477,63 @@ def _boundary_focus(
     return None
 
 
-def _supporting_signals(
+def _supporting_cues(
     *,
     evidence_signals: tuple[str, ...],
-    answer_focus: str,
-    boundary_focus: str | None,
+    content_fields: tuple[str | None, ...],
 ) -> tuple[str, ...]:
-    repeated_values = {answer_focus.strip()}
-    if boundary_focus is not None:
-        repeated_values.add(boundary_focus.strip())
+    repeated_values = {field.strip() for field in content_fields if field is not None}
     return tuple(
         signal for signal in evidence_signals
         if signal.strip() not in repeated_values
+    )
+
+
+def _avoid_overclaiming(
+    *,
+    stance: SimulatorAnswerStance,
+    unknowns: tuple[str, ...],
+) -> tuple[str, ...]:
+    if stance == SimulatorAnswerStance.CORRECT_UNDERSTANDING:
+        return ()
+    items = list(unknowns)
+    if stance == SimulatorAnswerStance.MISCONCEPTION:
+        items.append("Do not present the mistaken belief as settled expertise.")
+    elif stance == SimulatorAnswerStance.PARTIAL_UNDERSTANDING:
+        items.append("Do not claim full independent application of the concept.")
+    elif stance == SimulatorAnswerStance.UNCERTAIN_UNDERSTANDING:
+        items.append("Do not sound confident about details that are still uncertain.")
+    elif stance == SimulatorAnswerStance.NOT_KNOWING:
+        items.append("Do not claim reliable understanding of the concept.")
+    return tuple(items)
+
+
+def _answer_shape(
+    *,
+    response_mode: SimulatorResponseMode,
+    content_units: tuple[NodeAnswerBlueprint, ...],
+) -> SimulatorAnswerShape:
+    if response_mode == SimulatorResponseMode.CLARIFICATION:
+        return SimulatorAnswerShape(
+            integration_mode=SimulatorAnswerIntegrationMode.CLARIFICATION,
+            max_sentences=1,
+        )
+    if response_mode in (
+        SimulatorResponseMode.NON_ANSWER,
+        SimulatorResponseMode.SAFE_NON_ANSWER,
+    ):
+        return SimulatorAnswerShape(
+            integration_mode=SimulatorAnswerIntegrationMode.NON_ANSWER,
+            max_sentences=1,
+        )
+    if len(content_units) > 1:
+        return SimulatorAnswerShape(
+            integration_mode=SimulatorAnswerIntegrationMode.INTEGRATED_MULTI_NODE,
+            max_sentences=3,
+        )
+    return SimulatorAnswerShape(
+        integration_mode=SimulatorAnswerIntegrationMode.SINGLE_NODE,
+        max_sentences=2,
     )
 
 
@@ -430,7 +541,7 @@ def _answer_strategy(
     *,
     response_mode: SimulatorResponseMode,
     primary_stance: SimulatorAnswerStance,
-    node_decisions: tuple[GroundedNodeAnswerDecision, ...],
+    content_units: tuple[NodeAnswerBlueprint, ...],
 ) -> str:
     if response_mode == SimulatorResponseMode.CLARIFICATION:
         return "Ask the tested agent for one specific diagnostic question."
@@ -443,7 +554,7 @@ def _answer_strategy(
         )
     if response_mode == SimulatorResponseMode.SAFE_NON_ANSWER:
         return "Return a natural, non-leaking safe non-answer."
-    if len(node_decisions) > 1:
+    if len(content_units) > 1:
         return (
             "Give one integrated first-person answer that preserves the "
             f"{primary_stance.value.replace('_', ' ')} stance across the grounded concepts."
@@ -487,26 +598,37 @@ def _intent_from_plan(
     question_text: str,
     response_mode: SimulatorResponseMode,
     plan: SimulatorAnswerPlan,
-) -> SimulatorAnswerIntent:
-    return SimulatorAnswerIntent(
+) -> SimulatorAnswerBlueprint:
+    return SimulatorAnswerBlueprint(
         question_text=question_text,
         response_mode=response_mode,
         primary_stance=plan.primary_stance,
+        answer_shape=plan.answer_shape,
         answer_strategy=plan.answer_strategy,
-        node_decisions=plan.node_decisions,
+        content_units=plan.content_units,
     )
 
 
 def _reject_unsafe_intent(
-    intent: SimulatorAnswerIntent,
+    intent: SimulatorAnswerBlueprint,
     *,
     simulator_context: SimulatorTurnContext,
     grounding: QuestionGroundingResult,
 ) -> None:
     if intent.response_mode != _response_mode_for_grounding(grounding):
         raise ModelClientError("Simulator answer policy returned an invalid response mode")
+    expected_shape = _answer_shape(
+        response_mode=intent.response_mode,
+        content_units=intent.content_units,
+    )
+    if intent.answer_shape.voice != SimulatorAnswerVoice.FIRST_PERSON:
+        raise ModelClientError("Simulator answer policy returned an invalid answer voice")
+    if intent.answer_shape.integration_mode != expected_shape.integration_mode:
+        raise ModelClientError(
+            "Simulator answer policy returned an invalid answer integration mode"
+        )
     expected_node_names = tuple(context.node.name for context in simulator_context.grounded_nodes)
-    actual_node_names = tuple(decision.node_name for decision in intent.node_decisions)
+    actual_node_names = tuple(unit.node_name for unit in intent.content_units)
     if intent.response_mode in (
         SimulatorResponseMode.CLARIFICATION,
         SimulatorResponseMode.NON_ANSWER,

@@ -3,9 +3,11 @@ import unittest
 from backend.knowact.core.interaction import VisibleSimulatorAnswer
 from backend.knowact.simulator.grounding import QuestionGroundingResult
 from backend.knowact.simulator.policy import (
-    GroundedNodeAnswerDecision,
+    NodeAnswerBlueprint,
     RuleBasedAnswerPolicy,
-    SimulatorAnswerIntent,
+    SimulatorAnswerBlueprint,
+    SimulatorAnswerIntegrationMode,
+    SimulatorAnswerShape,
     SimulatorAnswerStance,
     SimulatorResponseMode,
 )
@@ -49,10 +51,11 @@ class V1SimulatorPromptTemplatesTest(unittest.TestCase):
                 self.assertIn(section, developer_prompt)
         self.assertIn("strict JSON", developer_prompt)
         self.assertIn("answer_strategy", developer_prompt)
+        self.assertIn("content_units", developer_prompt)
         self.assertNotIn('"visibility_guards"', developer_prompt)
 
     def test_answer_generation_template_is_structured_and_deidentified(self):
-        intent = _answer_intent()
+        intent = _answer_blueprint()
 
         messages = build_answer_generation_messages(
             intent=intent,
@@ -74,7 +77,7 @@ class V1SimulatorPromptTemplatesTest(unittest.TestCase):
                 self.assertIn(section, developer_prompt)
 
         user_payload = messages[1].content
-        self.assertIn("answer_intent", user_payload)
+        self.assertIn("answer_blueprint", user_payload)
         self.assertIn("held-out evaluation", user_payload)
         for hidden_fragment in (
             "mastery_level",
@@ -87,7 +90,7 @@ class V1SimulatorPromptTemplatesTest(unittest.TestCase):
                 self.assertNotIn(hidden_fragment, user_payload)
 
     def test_answer_validation_template_is_structured_and_deidentified(self):
-        intent = _answer_intent()
+        intent = _answer_blueprint()
 
         messages = build_answer_validation_messages(
             candidate_answer=VisibleSimulatorAnswer(
@@ -114,7 +117,7 @@ class V1SimulatorPromptTemplatesTest(unittest.TestCase):
 
         user_payload = messages[1].content
         self.assertIn("candidate_answer", user_payload)
-        self.assertIn("answer_intent", user_payload)
+        self.assertIn("answer_blueprint", user_payload)
         self.assertIn("held-out evaluation", user_payload)
         for hidden_fragment in (
             "mastery_level",
@@ -127,22 +130,27 @@ class V1SimulatorPromptTemplatesTest(unittest.TestCase):
                 self.assertNotIn(hidden_fragment, user_payload)
 
 
-def _answer_intent() -> SimulatorAnswerIntent:
-    return SimulatorAnswerIntent(
+def _answer_blueprint() -> SimulatorAnswerBlueprint:
+    return SimulatorAnswerBlueprint(
         question_text="How would you use a train/test split?",
         response_mode=SimulatorResponseMode.ANSWER,
         primary_stance=SimulatorAnswerStance.PARTIAL_UNDERSTANDING,
+        answer_shape=SimulatorAnswerShape(
+            integration_mode=SimulatorAnswerIntegrationMode.SINGLE_NODE,
+            max_sentences=2,
+        ),
         answer_strategy="Answer as the synthetic user with partial understanding.",
-        node_decisions=(
-            GroundedNodeAnswerDecision(
+        content_units=(
+            NodeAnswerBlueprint(
                 node_name="Train/Test Split",
                 stance=SimulatorAnswerStance.PARTIAL_UNDERSTANDING,
-                answer_focus=(
+                core_claim=(
                     "Can explain why held-out evaluation is useful but "
                     "mixes up validation details."
                 ),
-                boundary_focus="When validation differs from final testing.",
-                supporting_signals=(),
+                boundary="When validation differs from final testing.",
+                supporting_cues=(),
+                avoid_overclaiming=("full confidence about validation details",),
             ),
         ),
     )

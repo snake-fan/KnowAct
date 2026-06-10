@@ -97,7 +97,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 "Simulator preview reviewed map loaded",
                 "Simulator profile context loaded",
                 "Simulator context built",
-                "Answer intent derived",
+                "Answer blueprint derived",
                 "Answer generation input prepared",
                 "Simulator answer generation started",
                 "Rule-based simulator answer generation succeeded",
@@ -878,9 +878,9 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
             self.assertIn("held-out split", response.answer.text.lower())
             self.assertEqual(1, len(fake_model_client.calls))
-            self.assertIsNotNone(fake_validator.answer_intent_json)
+            self.assertIsNotNone(fake_validator.answer_blueprint_json)
             prompt_text = "\n".join(message.content for message in fake_model_client.calls[0])
-            validator_payload = fake_validator.answer_intent_json or ""
+            validator_payload = fake_validator.answer_blueprint_json or ""
             for hidden_fragment in (
                 "ev_gt_map_001_train_test_split_001",
                 "synthetic_user_001",
@@ -1189,7 +1189,9 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 {
                     "passed": True,
                     "blocking_safety_reasons": [],
-                    "intent_coverage_notes": ["The answer preserves partial understanding."],
+                    "blueprint_coverage_notes": [
+                        "The answer preserves partial understanding."
+                    ],
                     "fallback_guidance": None,
                 }
             )
@@ -1203,7 +1205,10 @@ class V1SimulatorServiceTest(unittest.TestCase):
         )
 
         self.assertTrue(decision.passed)
-        self.assertEqual(("The answer preserves partial understanding.",), decision.intent_coverage_notes)
+        self.assertEqual(
+            ("The answer preserves partial understanding.",),
+            decision.blueprint_coverage_notes,
+        )
         self.assertEqual(1, len(fake_model_client.calls))
         validator_prompt = "\n".join(message.content for message in fake_model_client.calls[0])
         self.assertIn("held-out split idea", validator_prompt)
@@ -1227,14 +1232,24 @@ class V1SimulatorServiceTest(unittest.TestCase):
             json.dumps(
                 {
                     "primary_stance": "partial_understanding",
+                    "answer_shape": {
+                        "voice": "first_person",
+                        "integration_mode": "single_node",
+                        "max_sentences": 2,
+                    },
                     "answer_strategy": "Answer with partial understanding.",
-                    "node_decisions": [
+                    "content_units": [
                         {
                             "node_name": "Train/Test Split",
                             "stance": "partial_understanding",
-                            "answer_focus": "Can explain the held-out split idea.",
-                            "boundary_focus": "Still checks validation details.",
-                            "supporting_signals": [],
+                            "core_claim": "Can explain the held-out split idea.",
+                            "boundary": "Still checks validation details.",
+                            "mistaken_belief": None,
+                            "uncertainty": None,
+                            "supporting_cues": [],
+                            "avoid_overclaiming": [
+                                "full confidence about validation details"
+                            ],
                         }
                     ],
                 }
@@ -1289,14 +1304,22 @@ class V1SimulatorServiceTest(unittest.TestCase):
             json.dumps(
                 {
                     "primary_stance": "partial_understanding",
+                    "answer_shape": {
+                        "voice": "first_person",
+                        "integration_mode": "single_node",
+                        "max_sentences": 2,
+                    },
                     "answer_strategy": "Answer with partial understanding.",
-                    "node_decisions": [
+                    "content_units": [
                         {
                             "node_name": "Train/Test Split",
                             "stance": "partial_understanding",
-                            "answer_focus": "The hidden label is L2.",
-                            "boundary_focus": "Uses ev_hidden_state.",
-                            "supporting_signals": [],
+                            "core_claim": "The hidden label is L2.",
+                            "boundary": "Uses ev_hidden_state.",
+                            "mistaken_belief": None,
+                            "uncertainty": None,
+                            "supporting_cues": [],
+                            "avoid_overclaiming": [],
                         }
                     ],
                 }
@@ -1321,7 +1344,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                         {
                             "passed": True,
                             "blocking_safety_reasons": [],
-                            "intent_coverage_notes": ["Safe and intent-covering."],
+                            "blueprint_coverage_notes": ["Safe and blueprint-covering."],
                             "fallback_guidance": None,
                         }
                     ),
@@ -1379,7 +1402,10 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 / "model_raw_output.txt"
             )
             self.assertIn("held-out split", generation_raw.read_text(encoding="utf-8"))
-            self.assertIn("Safe and intent-covering", validation_raw.read_text(encoding="utf-8"))
+            self.assertIn(
+                "Safe and blueprint-covering",
+                validation_raw.read_text(encoding="utf-8"),
+            )
             trace_payload = _read_json(trace_dir / "debug_trace.json")
             self.assertEqual(
                 generation_raw.relative_to(workspace_root).as_posix(),
@@ -1414,7 +1440,7 @@ class FixtureSimulatorAnswerModelClient:
 
 class PassingSimulatorAnswerValidator:
     def __init__(self) -> None:
-        self.answer_intent_json: str | None = None
+        self.answer_blueprint_json: str | None = None
 
     def validate(
         self,
@@ -1425,11 +1451,11 @@ class PassingSimulatorAnswerValidator:
         style_hint=None,
         regeneration_guidance=(),
     ):
-        self.answer_intent_json = intent.model_dump_json()
+        self.answer_blueprint_json = intent.model_dump_json()
         return SimulatorAnswerValidationDecision(
             passed=True,
             blocking_safety_reasons=(),
-            intent_coverage_notes=("Core stance is covered.",),
+            blueprint_coverage_notes=("Core stance is covered.",),
             fallback_guidance=None,
         )
 
