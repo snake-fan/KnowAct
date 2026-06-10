@@ -368,7 +368,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`：返回 candidate-map review 用的 generation-time edge-consistency warnings。
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`：用 reviewed graph 与 confirmed Profile Context 重新校验一份已保存的 Candidate Knowledge Map，将 `kind` 转换为 `ground_truth`，并发布不可变的 `maps/{map_id}/map.json` 与 `map_manifest.json`。已有 `map_id` 返回 `409 Conflict`，generation-time `consistency_warnings.json` 不会复制到 reviewed data，成功发布后的 run 会从 `candidate_maps/` 移除。
 - `GET /api/authoring/maps/{benchmark_domain}` 和 `GET /api/authoring/maps/{benchmark_domain}/{map_id}`：列出和读取 reviewed Knowledge Map snapshots，用于只读 workbench preview。这些是 inspection endpoints，不是 simulator runtime endpoints。
-- `POST /api/simulator/preview`：预览一个由 reviewed map grounding 的 simulator answer。它接受 `benchmark_domain`、reviewed `map_id`、request-level `client_provider`（`openai` 或 `deepseek`，默认 `openai`）、一个 diagnostic `question`、可选 visible dialogue context，以及可选 debug-trace availability 请求元数据。
+- `POST /api/simulator/preview`：预览一个由 reviewed map grounding 的 simulator answer。它接受 `benchmark_domain`、reviewed `map_id`、request-level `client_provider`（`openai` 或 `deepseek`，默认 `openai`）、一个 diagnostic `question`、可选 visible dialogue context，以及可选 debug-trace availability 请求元数据。每次 preview 都会在 `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/` 写出隐藏的本地 debug trace；`preview_options.include_debug_trace` 只控制 response 是否返回 `debug_trace_id` 和 `debug_trace_available`。
 
 ```json
 {

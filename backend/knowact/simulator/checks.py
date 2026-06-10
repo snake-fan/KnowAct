@@ -7,6 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from backend.knowact.core.interaction import VisibleSimulatorAnswer
 from backend.knowact.llm.client import ModelClient, ModelClientError
 from backend.knowact.logging_config import get_knowact_logger
+from backend.knowact.simulator.debug_trace import (
+    record_model_raw_output,
+    record_parser_failure,
+    record_parser_success,
+)
 from backend.knowact.simulator.expression import SimulatorExpressionContext
 from backend.knowact.simulator.templates.answer_validation import (
     build_answer_validation_messages,
@@ -118,15 +123,21 @@ class ModelClientAnswerValidator:
             ),
             temperature=self._temperature,
         )
+        record_model_raw_output(raw_output)
         _LOGGER.info(
             "Simulator answer validation model call succeeded provider=%s model_name=%s raw_output_chars=%d",
             metadata.provider if metadata is not None else None,
             metadata.model_name if metadata is not None else None,
             len(raw_output),
         )
-        decision = _parse_validation_decision(raw_output)
+        try:
+            decision = _parse_validation_decision(raw_output)
+        except ModelClientError as exc:
+            record_parser_failure(exc)
+            raise
         hard_block_reasons = _blocking_safety_reasons(candidate_answer.text)
         if not hard_block_reasons:
+            record_parser_success(decision.model_dump(mode="json"))
             _LOGGER.info(
                 "Simulator answer validation parser succeeded passed=%s blocking_reasons=%d intent_coverage_notes=%d hard_blocking_reasons=0",
                 decision.passed,
@@ -145,6 +156,7 @@ class ModelClientAnswerValidator:
             fallback_guidance=decision.fallback_guidance
             or "Return a safe simulator fallback.",
         )
+        record_parser_success(merged_decision.model_dump(mode="json"))
         _LOGGER.info(
             "Simulator answer validation parser succeeded passed=%s blocking_reasons=%d intent_coverage_notes=%d hard_blocking_reasons=%d",
             merged_decision.passed,
