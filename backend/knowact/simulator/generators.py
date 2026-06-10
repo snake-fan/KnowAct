@@ -8,7 +8,7 @@ from backend.knowact.simulator.expression import (
     NodeExpressionContext,
     SimulatorExpressionContext,
 )
-from backend.knowact.simulator.policy import SimulatorAnswerStance
+from backend.knowact.simulator.policy import SimulatorAnswerStance, SimulatorResponseMode
 from backend.knowact.simulator.templates.answer_generation import (
     build_answer_generation_messages,
 )
@@ -68,16 +68,34 @@ class RuleBasedAnswerGenerator:
             "Rule-based simulator answer generation started expression_nodes=%d",
             len(expression_context.nodes),
         )
-        if not expression_context.nodes:
+        if expression_context.response_mode == SimulatorResponseMode.CLARIFICATION:
+            answer = VisibleSimulatorAnswer(
+                text="Please ask one specific question at a time so I can answer it directly."
+            )
+        elif expression_context.response_mode == SimulatorResponseMode.NON_ANSWER:
             answer = VisibleSimulatorAnswer(
                 text="I am not sure which concept you want me to answer about."
             )
+        elif expression_context.response_mode == SimulatorResponseMode.SAFE_NON_ANSWER:
+            answer = VisibleSimulatorAnswer(
+                text="I am not confident I can answer that cleanly right now."
+            )
+        elif not expression_context.nodes:
+            answer = VisibleSimulatorAnswer(
+                text="I am not confident I can answer that cleanly right now."
+            )
         elif len(expression_context.nodes) == 1:
             answer = VisibleSimulatorAnswer(
-                text=_render_node_answer(expression_context.nodes[0])
+                text=_render_node_answer(
+                    expression_context.nodes[0],
+                    response_mode=expression_context.response_mode,
+                )
             )
         else:
-            rendered_parts = [_render_node_answer(node) for node in expression_context.nodes]
+            rendered_parts = [
+                _render_node_answer(node, response_mode=expression_context.response_mode)
+                for node in expression_context.nodes
+            ]
             answer = VisibleSimulatorAnswer(text=" ".join(rendered_parts))
         _LOGGER.info(
             "Rule-based simulator answer generation succeeded answer_chars=%d",
@@ -86,28 +104,49 @@ class RuleBasedAnswerGenerator:
         return answer
 
 
-def _render_node_answer(node: NodeExpressionContext) -> str:
+def _render_node_answer(
+    node: NodeExpressionContext,
+    *,
+    response_mode: SimulatorResponseMode,
+) -> str:
     node_name = node.node_name.lower()
     evidence_text = " ".join(node.evidence_signals)
+    if response_mode == SimulatorResponseMode.LABEL_REFUSAL:
+        return _render_label_refusal_node_answer(node)
     if node.stance == SimulatorAnswerStance.CORRECT_UNDERSTANDING:
         if evidence_text:
             return f"I can explain {node_name}: {evidence_text}"
+        if node.capability_summary:
+            return f"I can explain {node_name}: {node.capability_summary}"
         return f"I can explain {node_name} and apply it in concrete situations."
     if node.stance == SimulatorAnswerStance.PARTIAL_UNDERSTANDING:
         if evidence_text:
             return f"I have a partial handle on {node.node_name}: {evidence_text}"
+        if node.capability_summary:
+            return f"I have a partial handle on {node.node_name}: {node.capability_summary}"
         return f"I have a partial handle on {node.node_name}, but I would check details."
     if node.stance == SimulatorAnswerStance.MISCONCEPTION:
-        cue = _first_nonblank(node.misconception_cues) or evidence_text
+        cue = _first_nonblank(node.misconception_cues) or node.limitation_summary or evidence_text
         if cue:
             return f"I am shaky on {node.node_name}; I tend to think {cue}"
         return f"I am shaky on {node.node_name} and may be mixing it up."
     if node.stance == SimulatorAnswerStance.UNCERTAIN_UNDERSTANDING:
-        cue = _first_nonblank(node.unknown_cues) or evidence_text
+        cue = _first_nonblank(node.unknown_cues) or node.limitation_summary or evidence_text
         if cue:
             return f"I am not fully sure about {node.node_name}, especially {cue}"
         return f"I am not fully sure about {node.node_name}."
     return f"I do not really know how to answer about {node.node_name} yet."
+
+
+def _render_label_refusal_node_answer(node: NodeExpressionContext) -> str:
+    if node.stance == SimulatorAnswerStance.CORRECT_UNDERSTANDING:
+        return f"I can talk about {node.node_name}, but only in my own words: {node.capability_summary}"
+    cue = node.limitation_summary or _first_nonblank(node.unknown_cues) or _first_nonblank(
+        node.misconception_cues
+    )
+    if cue:
+        return f"I can describe how {node.node_name} feels to me, but not as a benchmark label: {cue}"
+    return f"I can describe {node.node_name} in my own words, but not as a benchmark label."
 
 
 def _first_nonblank(values: tuple[str, ...]) -> str | None:

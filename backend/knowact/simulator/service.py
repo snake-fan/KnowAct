@@ -20,8 +20,6 @@ from backend.knowact.simulator.expression import (
     SimulatorExpressionContextBuilder,
 )
 from backend.knowact.simulator.fallbacks import (
-    multiple_question_clarification,
-    no_grounding_answer,
     simulator_safe_fallback,
 )
 from backend.knowact.simulator.generators import (
@@ -29,7 +27,12 @@ from backend.knowact.simulator.generators import (
     SimulatorAnswerGenerator,
 )
 from backend.knowact.simulator.grounding import RuleBasedQuestionGrounder
-from backend.knowact.simulator.policy import RuleBasedAnswerPolicy
+from backend.knowact.simulator.policy import (
+    RuleBasedAnswerPolicy,
+    SimulatorAnswerPolicy,
+    SimulatorPolicyResult,
+    SimulatorResponseMode,
+)
 from backend.knowact.simulator.preview import (
     SimulatorPreviewRequest,
     SimulatorPreviewResponse,
@@ -48,6 +51,7 @@ from backend.knowact.storage.reviewed_maps import (
 
 
 _LOGGER = get_knowact_logger("simulator.service")
+_MAX_ANSWER_GENERATION_ATTEMPTS = 2
 
 
 class SimulatorService:
@@ -55,13 +59,15 @@ class SimulatorService:
         self,
         *,
         workspace_root: Path,
+        policy: SimulatorAnswerPolicy | None = None,
         generator: SimulatorAnswerGenerator | None = None,
         validator: SimulatorAnswerValidator | None = None,
     ) -> None:
         self._workspace_root = workspace_root
         self._grounder = RuleBasedQuestionGrounder()
         self._context_builder = SimulatorContextBuilder()
-        self._policy = RuleBasedAnswerPolicy()
+        self._fallback_policy = RuleBasedAnswerPolicy()
+        self._policy = policy or self._fallback_policy
         self._expression_builder = SimulatorExpressionContextBuilder()
         self._generator = generator or RuleBasedAnswerGenerator()
         self._validator = validator or HeuristicSimulatorAnswerValidator()
@@ -124,44 +130,44 @@ class SimulatorService:
                 grounding.is_label_seeking,
             )
 
-            if not grounding.has_grounding:
+            if not grounding.has_grounding or grounding.is_multiple_question:
+                simulator_context = _minimal_simulator_context(
+                    manifest=manifest,
+                    visible_dialogue_context=request.visible_dialogue_context,
+                )
+                policy_result = self._derive_policy_result(
+                    question_text=request.question.text,
+                    simulator_context=simulator_context,
+                    grounding=grounding,
+                )
+                expression_context = self._expression_builder.build(
+                    intent=policy_result.intent,
+                    visible_dialogue_context=request.visible_dialogue_context,
+                )
+                answer = self._generate_validated_answer(
+                    expression_context,
+                    benchmark_domain=manifest.benchmark_domain,
+                    map_id=manifest.map_id,
+                )
                 warnings, debug_trace_available = self._apply_debug_trace_preview_options(
                     warnings=(),
                     request=request,
                 )
                 _LOGGER.info(
-                    "Simulator preview workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s fallback_reason=%s",
+                    "Simulator preview workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s response_mode=%s",
                     manifest.benchmark_domain,
                     manifest.map_id,
-                    VisibleObservationKind.NON_ANSWER.value,
+                    _observation_kind_for_response_mode(policy_result.intent.response_mode).value,
                     len(warnings),
                     debug_trace_available,
-                    "no_grounding",
+                    policy_result.intent.response_mode.value,
                 )
                 return SimulatorPreviewResponse(
-                    answer=no_grounding_answer(),
-                    observation=CoarseObservationMetadata(kind=VisibleObservationKind.NON_ANSWER),
-                    warnings=warnings,
-                    debug_trace_available=debug_trace_available,
-                )
-            if grounding.is_multiple_question:
-                warnings, debug_trace_available = self._apply_debug_trace_preview_options(
-                    warnings=(),
-                    request=request,
-                )
-                _LOGGER.info(
-                    "Simulator preview workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s fallback_reason=%s",
-                    manifest.benchmark_domain,
-                    manifest.map_id,
-                    VisibleObservationKind.CLARIFICATION.value,
-                    len(warnings),
-                    debug_trace_available,
-                    "multiple_question",
-                )
-                return SimulatorPreviewResponse(
-                    answer=multiple_question_clarification(),
+                    answer=answer,
                     observation=CoarseObservationMetadata(
-                        kind=VisibleObservationKind.CLARIFICATION
+                        kind=_observation_kind_for_response_mode(
+                            policy_result.intent.response_mode
+                        )
                     ),
                     warnings=warnings,
                     debug_trace_available=debug_trace_available,
@@ -215,28 +221,30 @@ class SimulatorService:
                 manifest.map_id,
                 len(simulator_context.grounded_nodes),
             )
-            intent = self._policy.derive_intent(
+            policy_result = self._derive_policy_result(
                 question_text=request.question.text,
                 simulator_context=simulator_context,
+                grounding=grounding,
             )
             _LOGGER.info(
-                "Answer intent derived benchmark_domain=%s map_id=%s node_intents=%d hidden_evidence_refs=%d",
+                "Answer intent derived benchmark_domain=%s map_id=%s response_mode=%s node_decisions=%d policy_source=%s",
                 manifest.benchmark_domain,
                 manifest.map_id,
-                len(intent.node_intents),
-                len(intent.hidden_evidence_refs),
+                policy_result.intent.response_mode.value,
+                len(policy_result.intent.node_decisions),
+                policy_result.trace.policy_source,
             )
 
             _LOGGER.info(
-                "Expression context build started benchmark_domain=%s map_id=%s node_intents=%d has_profile_context=%s",
+                "Expression context build started benchmark_domain=%s map_id=%s node_decisions=%d has_profile_context=%s",
                 manifest.benchmark_domain,
                 manifest.map_id,
-                len(intent.node_intents),
+                len(policy_result.intent.node_decisions),
                 profile_context is not None,
             )
             expression_context = self._expression_builder.build(
-                intent=intent,
-                simulator_context=simulator_context,
+                intent=policy_result.intent,
+                visible_dialogue_context=request.visible_dialogue_context,
                 profile_context=profile_context,
             )
             _LOGGER.info(
@@ -268,7 +276,11 @@ class SimulatorService:
             )
             return SimulatorPreviewResponse(
                 answer=answer,
-                observation=CoarseObservationMetadata(kind=VisibleObservationKind.ANSWER),
+                observation=CoarseObservationMetadata(
+                    kind=_observation_kind_for_response_mode(
+                        policy_result.intent.response_mode
+                    )
+                ),
                 warnings=warnings,
                 debug_trace_available=debug_trace_available,
             )
@@ -281,6 +293,43 @@ class SimulatorService:
             )
             raise
 
+    def _derive_policy_result(
+        self,
+        *,
+        question_text: str,
+        simulator_context: SimulatorTurnContext,
+        grounding,
+    ) -> SimulatorPolicyResult:
+        try:
+            return self._policy.derive(
+                question_text=question_text,
+                simulator_context=simulator_context,
+                grounding=grounding,
+            )
+        except (ModelClientError, TimeoutError, ValueError) as exc:
+            if self._policy is self._fallback_policy:
+                raise
+            _LOGGER.warning(
+                "Simulator answer policy failed policy=%s error_type=%s fallback=rule_based",
+                type(self._policy).__name__,
+                type(exc).__name__,
+            )
+            fallback_result = self._fallback_policy.derive(
+                question_text=question_text,
+                simulator_context=simulator_context,
+                grounding=grounding,
+            )
+            return fallback_result.model_copy(
+                update={
+                    "trace": fallback_result.trace.model_copy(
+                        update={
+                            "policy_source": "rule_based_fallback",
+                            "fallback_reason": type(exc).__name__,
+                        }
+                    )
+                }
+            )
+
     def _generate_validated_answer(
         self,
         expression_context: SimulatorExpressionContext,
@@ -288,62 +337,93 @@ class SimulatorService:
         benchmark_domain: str,
         map_id: str,
     ) -> VisibleSimulatorAnswer:
-        _LOGGER.info(
-            "Simulator answer generation started benchmark_domain=%s map_id=%s generator=%s expression_nodes=%d",
-            benchmark_domain,
-            map_id,
-            type(self._generator).__name__,
-            len(expression_context.nodes),
-        )
-        try:
-            candidate_answer = self._generator.render(expression_context)
-        except (ModelClientError, TimeoutError) as exc:
-            _LOGGER.warning(
-                "Simulator answer generation failed benchmark_domain=%s map_id=%s generator=%s error_type=%s fallback=safe",
+        current_context = expression_context
+        for attempt_index in range(_MAX_ANSWER_GENERATION_ATTEMPTS):
+            _LOGGER.info(
+                "Simulator answer generation started benchmark_domain=%s map_id=%s generator=%s expression_nodes=%d attempt=%d",
                 benchmark_domain,
                 map_id,
                 type(self._generator).__name__,
-                type(exc).__name__,
+                len(current_context.nodes),
+                attempt_index + 1,
             )
-            return simulator_safe_fallback()
-        _LOGGER.info(
-            "Simulator answer generation succeeded benchmark_domain=%s map_id=%s answer_chars=%d",
-            benchmark_domain,
-            map_id,
-            len(candidate_answer.text),
-        )
+            try:
+                candidate_answer = self._generator.render(current_context)
+            except (ModelClientError, TimeoutError) as exc:
+                if attempt_index + 1 < _MAX_ANSWER_GENERATION_ATTEMPTS:
+                    _LOGGER.warning(
+                        "Simulator answer generation failed benchmark_domain=%s map_id=%s generator=%s error_type=%s retry=answer_generation",
+                        benchmark_domain,
+                        map_id,
+                        type(self._generator).__name__,
+                        type(exc).__name__,
+                    )
+                    current_context = _with_regeneration_guidance(
+                        current_context,
+                        (
+                            "Previous generation returned unusable output. Return valid JSON with one safe visible answer.",
+                        ),
+                    )
+                    continue
+                _LOGGER.warning(
+                    "Simulator answer generation failed benchmark_domain=%s map_id=%s generator=%s error_type=%s fallback=safe",
+                    benchmark_domain,
+                    map_id,
+                    type(self._generator).__name__,
+                    type(exc).__name__,
+                )
+                return simulator_safe_fallback()
+            _LOGGER.info(
+                "Simulator answer generation succeeded benchmark_domain=%s map_id=%s answer_chars=%d",
+                benchmark_domain,
+                map_id,
+                len(candidate_answer.text),
+            )
 
-        _LOGGER.info(
-            "Simulator answer validation started benchmark_domain=%s map_id=%s validator=%s answer_chars=%d",
-            benchmark_domain,
-            map_id,
-            type(self._validator).__name__,
-            len(candidate_answer.text),
-        )
-        try:
-            validation = self._validator.validate(
-                candidate_answer=candidate_answer,
-                expression_context=expression_context,
-            )
-        except (ModelClientError, TimeoutError) as exc:
-            _LOGGER.warning(
-                "Simulator answer validation unavailable benchmark_domain=%s map_id=%s validator=%s error_type=%s fallback=safe",
+            _LOGGER.info(
+                "Simulator answer validation started benchmark_domain=%s map_id=%s validator=%s answer_chars=%d",
                 benchmark_domain,
                 map_id,
                 type(self._validator).__name__,
-                type(exc).__name__,
+                len(candidate_answer.text),
             )
-            return simulator_safe_fallback()
+            try:
+                validation = self._validator.validate(
+                    candidate_answer=candidate_answer,
+                    expression_context=current_context,
+                )
+            except (ModelClientError, TimeoutError) as exc:
+                _LOGGER.warning(
+                    "Simulator answer validation unavailable benchmark_domain=%s map_id=%s validator=%s error_type=%s fallback=safe",
+                    benchmark_domain,
+                    map_id,
+                    type(self._validator).__name__,
+                    type(exc).__name__,
+                )
+                return simulator_safe_fallback()
 
-        _LOGGER.info(
-            "Simulator answer validation completed benchmark_domain=%s map_id=%s passed=%s blocking_reasons=%d intent_coverage_notes=%d",
-            benchmark_domain,
-            map_id,
-            validation.passed,
-            len(validation.blocking_safety_reasons),
-            len(validation.intent_coverage_notes),
-        )
-        if not validation.passed:
+            _LOGGER.info(
+                "Simulator answer validation completed benchmark_domain=%s map_id=%s passed=%s blocking_reasons=%d intent_coverage_notes=%d",
+                benchmark_domain,
+                map_id,
+                validation.passed,
+                len(validation.blocking_safety_reasons),
+                len(validation.intent_coverage_notes),
+            )
+            if validation.passed:
+                return candidate_answer
+            if attempt_index + 1 < _MAX_ANSWER_GENERATION_ATTEMPTS:
+                _LOGGER.warning(
+                    "Simulator answer validation failed benchmark_domain=%s map_id=%s blocking_reasons=%d retry=answer_generation",
+                    benchmark_domain,
+                    map_id,
+                    len(validation.blocking_safety_reasons),
+                )
+                current_context = _with_regeneration_guidance(
+                    current_context,
+                    _regeneration_guidance(validation),
+                )
+                continue
             _LOGGER.warning(
                 "Simulator answer validation failed benchmark_domain=%s map_id=%s blocking_reasons=%d fallback=safe",
                 benchmark_domain,
@@ -351,7 +431,7 @@ class SimulatorService:
                 len(validation.blocking_safety_reasons),
             )
             return simulator_safe_fallback()
-        return candidate_answer
+        return simulator_safe_fallback()
 
     def _apply_debug_trace_preview_options(
         self,
@@ -439,3 +519,60 @@ def _simulator_only_evidence_count(simulator_context: SimulatorTurnContext) -> i
 
 def _expression_evidence_signal_count(expression_context: SimulatorExpressionContext) -> int:
     return sum(len(node.evidence_signals) for node in expression_context.nodes)
+
+
+def _minimal_simulator_context(
+    *,
+    manifest,
+    visible_dialogue_context,
+) -> SimulatorTurnContext:
+    return SimulatorTurnContext(
+        benchmark_domain=manifest.benchmark_domain,
+        map_id=manifest.map_id,
+        graph_version=manifest.graph_version,
+        user_id=manifest.user_id,
+        grounded_nodes=(),
+        visible_dialogue_context=visible_dialogue_context,
+    )
+
+
+def _observation_kind_for_response_mode(
+    response_mode: SimulatorResponseMode,
+) -> VisibleObservationKind:
+    if response_mode == SimulatorResponseMode.CLARIFICATION:
+        return VisibleObservationKind.CLARIFICATION
+    if response_mode in (
+        SimulatorResponseMode.NON_ANSWER,
+        SimulatorResponseMode.SAFE_NON_ANSWER,
+    ):
+        return VisibleObservationKind.NON_ANSWER
+    return VisibleObservationKind.ANSWER
+
+
+def _with_regeneration_guidance(
+    expression_context: SimulatorExpressionContext,
+    guidance: tuple[str, ...],
+) -> SimulatorExpressionContext:
+    return expression_context.model_copy(
+        update={
+            "regeneration_guidance": tuple(
+                dict.fromkeys((*expression_context.regeneration_guidance, *guidance))
+            )
+        }
+    )
+
+
+def _regeneration_guidance(validation) -> tuple[str, ...]:
+    guidance: list[str] = []
+    if validation.blocking_safety_reasons:
+        guidance.append(
+            "Remove content flagged by validation: "
+            + "; ".join(validation.blocking_safety_reasons)
+        )
+    if validation.intent_coverage_notes:
+        guidance.append(
+            "Improve intent coverage: " + "; ".join(validation.intent_coverage_notes)
+        )
+    if validation.fallback_guidance:
+        guidance.append(validation.fallback_guidance)
+    return tuple(guidance) or ("Regenerate a safe answer that follows the same intent.",)

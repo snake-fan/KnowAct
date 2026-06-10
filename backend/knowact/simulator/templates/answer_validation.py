@@ -34,10 +34,11 @@ def build_answer_validation_messages(
             "new facts, examples, prior-experience claims, or ability claims not in context",
         ),
         "intent_coverage_checks": (
-            "answer preserves the primary stance",
-            "answer uses only de-identified evidence signals and cues",
+            "answer preserves response mode, primary stance, and node decisions",
+            "answer uses only de-identified capability, limitation, evidence, and cue fields",
             "answer remains natural first-person self-report",
             "answer uses visible dialogue only for continuity",
+            "answer follows regeneration guidance when present",
         ),
     }
     return (
@@ -69,8 +70,8 @@ def build_answer_validation_messages(
                     Inputs:
                     - candidate_answer.text: the proposed visible answer.
                     - simulator_expression_context: de-identified expected
-                      stance, node names, evidence signals, cues, visible dialogue,
-                      and style hint.
+                      response mode, stance, node decisions, evidence signals,
+                      cues, directives, visible dialogue, and style hint.
                     - blocking_safety_checks: safety categories that must fail.
                     - intent_coverage_checks: usefulness categories to inspect.
                     """
@@ -80,7 +81,8 @@ def build_answer_validation_messages(
                     Process:
                     1. Inspect candidate_answer for benchmark leakage, hidden
                        artifacts, unsupported claims, and schema/internal language.
-                    2. Compare candidate_answer to primary_stance, node stances,
+                    2. Compare candidate_answer to response_mode,
+                       overall_directive, primary_stance, node decisions,
                        evidence_signals, misconception_cues, and unknown_cues.
                     3. Check whether visible dialogue was used only for continuity.
                     4. Set passed=false if any blocking safety issue appears.
@@ -107,9 +109,9 @@ def build_answer_validation_messages(
                 dedent(
                     """
                     Intent coverage rules:
-                    - The answer should preserve uncertainty, partial knowledge,
-                      misconception, not-knowing, or correct understanding when
-                      that stance is supplied.
+                    - The answer should preserve the supplied response mode,
+                      uncertainty, partial knowledge, misconception, not-knowing,
+                      or correct understanding when those decisions are supplied.
                     - The answer may paraphrase evidence signals, but it must not
                       contradict them.
                     - Weak wording is acceptable only when it still communicates

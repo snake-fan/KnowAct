@@ -36,9 +36,9 @@ def build_answer_generation_messages(
                 dedent(
                     """
                     Objective:
-                    Produce one concise visible answer that preserves the supplied
-                    stance and de-identified evidence signals while revealing no
-                    hidden benchmark artifacts.
+                    Produce one concise visible answer that follows the supplied
+                    policy-derived answer intent while revealing no hidden
+                    benchmark artifacts.
                     Success means the answer is natural, diagnostically useful,
                     content-preserving, and safe for the tested agent to see.
                     """
@@ -50,14 +50,18 @@ def build_answer_generation_messages(
                     Inputs:
                     - simulator_expression_context.question_text: the current
                       diagnostic question.
-                    - primary_stance and node stances: the answer's required
-                      knowledge posture.
-                    - node names, evidence_signals, misconception_cues, and
-                      unknown_cues: the only content cues you may use.
+                    - response_mode, overall_directive, primary_stance, and node
+                      decisions: the policy's required answer-content decision.
+                    - node names, capability summaries, limitation summaries,
+                      evidence_signals, misconception_cues, and unknown_cues:
+                      the only content cues you may use.
+                    - generation_directives and visibility_guards: required
+                      policy instructions.
                     - visible_dialogue_turns: prior visible conversation text for
                       continuity only.
                     - style_hint: optional wording preference. Use it only to
                       adjust tone, brevity, or phrasing.
+                    - regeneration_guidance: retry feedback from validation.
                     """
                 ).strip(),
                 dedent(
@@ -65,26 +69,36 @@ def build_answer_generation_messages(
                     Process:
                     1. Read the current question and decide what a direct
                        first-person answer should cover.
-                    2. Preserve the primary stance. Express uncertainty,
-                       partial understanding, misconception, not-knowing, or
-                       correct understanding as ordinary self-report.
-                    3. Use de-identified evidence signals as content support.
-                    4. Use visible dialogue only to make follow-up wording
+                    2. Follow response_mode and overall_directive exactly.
+                    3. Preserve the primary stance. Express uncertainty, partial
+                       understanding, misconception, not-knowing, or correct
+                       understanding as ordinary self-report.
+                    4. Use de-identified capability, limitation, and evidence
+                       signals as content support.
+                    5. Use visible dialogue only to make follow-up wording
                        coherent; do not treat dialogue as hidden memory.
-                    5. Apply style_hint only after content is fixed.
-                    6. Remove benchmark labels, hidden ids, state-table wording,
+                    6. Apply style_hint only after content is fixed.
+                    7. Apply regeneration_guidance only to repair the candidate
+                       wording; do not add unsupported content.
+                    8. Remove benchmark labels, hidden ids, state-table wording,
                        map dumps, scores, debug references, and schema language.
-                    7. Return only the JSON object described below.
+                    9. Return only the JSON object described below.
                     """
                 ).strip(),
                 dedent(
                     """
                     Decision rules:
+                    - If response_mode is clarification, ask for one specific
+                      diagnostic question and do not answer knowledge content.
+                    - If response_mode is non_answer or safe_non_answer, give a
+                      natural non-leaking non-answer.
+                    - If response_mode is label_refusal, avoid benchmark-label
+                      language and give only a natural self-report.
                     - If one grounded node is present, answer that node directly.
                     - If multiple grounded nodes are present, write one integrated
                       answer instead of concatenating separate mini-answers.
                     - If evidence signals are sparse, answer conservatively from
-                      stance and cues rather than inventing examples.
+                      policy directives and cues rather than inventing examples.
                     - If style_hint asks for concreteness but no concrete example
                       appears in evidence signals, use concrete wording without
                       adding a new example.
