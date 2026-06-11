@@ -9,7 +9,11 @@ from backend.knowact.simulator.llm_service import (
 )
 from backend.knowact.simulator.providers import SimulatorClientProvider
 from backend.knowact.simulator.service import SimulatorService
-from backend.knowact.simulator.turn import SimulatorTurnRequest, SimulatorTurnResponse
+from backend.knowact.simulator.turn import (
+    SimulatorTurnRequest,
+    SimulatorTurnResponse,
+    SimulatorTurnTestResponse,
+)
 from backend.knowact.storage.profile_contexts import ConfirmedProfileContextArtifactError
 from backend.knowact.storage.reviewed_graphs import (
     ReviewedGraphArtifactError,
@@ -40,12 +44,26 @@ def build_simulator_router(
     router = APIRouter()
 
     def _answer_turn(request: SimulatorTurnRequest) -> SimulatorTurnResponse:
+        return _run_simulator_request(
+            request,
+            lambda service, turn_request: service.answer_turn(turn_request),
+        )
+
+    def _answer_turn_test(
+        request: SimulatorTurnRequest,
+    ) -> SimulatorTurnTestResponse:
+        return _run_simulator_request(
+            request,
+            lambda service, turn_request: service.answer_turn_test(turn_request),
+        )
+
+    def _run_simulator_request(request: SimulatorTurnRequest, operation):
         try:
             service = services_by_provider.get(request.client_provider)
             if service is None:
                 service = service_factory(request.client_provider, root)
                 services_by_provider[request.client_provider] = service
-            return service.answer_turn(request)
+            return operation(service, request)
         except SimulatorServiceConfigurationError as exc:
             raise HTTPException(
                 status_code=503,
@@ -86,6 +104,14 @@ def build_simulator_router(
     )
     def answer_turn(request: SimulatorTurnRequest) -> SimulatorTurnResponse:
         return _answer_turn(request)
+
+    @router.post(
+        "/turn-test",
+        response_model=SimulatorTurnTestResponse,
+        summary="Answer one simulator workbench test turn with grounded node ids.",
+    )
+    def answer_turn_test(request: SimulatorTurnRequest) -> SimulatorTurnTestResponse:
+        return _answer_turn_test(request)
 
     @router.post(
         "/preview",

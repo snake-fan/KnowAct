@@ -145,6 +145,45 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertNotIn("graph_version", payload)
             self.assertNotIn("user_id", payload)
 
+    def test_turn_test_api_returns_minimal_grounded_node_ids_for_workbench(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            client = _simulator_turn_test_client(workspace_root)
+
+            response = client.post(
+                "/api/simulator/turn-test",
+                json={
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "map_id": "gt_map_001",
+                    "question": {
+                        "text": (
+                            "Can you compare a train/test split with cross-validation "
+                            "for model evaluation?"
+                        )
+                    },
+                },
+            )
+
+            self.assertEqual(200, response.status_code)
+            payload = response.json()
+            self.assertEqual("answer", payload["observation"]["kind"])
+            self.assertEqual(
+                ["train_test_split", "cross_validation"],
+                payload["grounded_node_ids"],
+            )
+            response_payload = json.dumps(payload, sort_keys=True)
+            for hidden_fragment in (
+                "mastery_level",
+                "evidence_refs",
+                "ev_gt_map_001",
+                "synthetic_user_001",
+                "debug_trace_payload",
+                "raw_debug_trace",
+            ):
+                with self.subTest(hidden_fragment=hidden_fragment):
+                    self.assertNotIn(hidden_fragment, response_payload)
+
     def test_turn_api_selects_simulator_client_provider_per_request(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)

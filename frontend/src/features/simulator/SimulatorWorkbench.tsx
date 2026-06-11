@@ -19,7 +19,8 @@ import {
 import {
   SimulatorClientProvider,
   VisibleDialogueTurn,
-  answerSimulatorTurn
+  answerSimulatorTurnTest,
+  type SimulatorTurnTestResponse
 } from "../../api/simulator";
 import { MapPreviewCanvas } from "../mapAuthoring/MapPreviewCanvas";
 import {
@@ -36,6 +37,11 @@ type SimulatorMapContext = {
 
 type RunTask = (label: string, task: () => Promise<void>) => Promise<void>;
 
+type SimulatorTranscriptTurn = VisibleDialogueTurn & {
+  transcriptKey: string;
+  groundedNodeIds: string[];
+};
+
 export function SimulatorWorkbench() {
   const [benchmarkDomains, setBenchmarkDomains] = useState<string[]>([]);
   const [benchmarkDomain, setBenchmarkDomain] = useState("");
@@ -43,6 +49,9 @@ export function SimulatorWorkbench() {
   const [selectedMapId, setSelectedMapId] = useState("");
   const [simulatorContext, setSimulatorContext] = useState<SimulatorMapContext | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [activeTurnKey, setActiveTurnKey] = useState<string | null>(null);
+  const [activeGroundedNodeIds, setActiveGroundedNodeIds] = useState<string[]>([]);
+  const [mapInteractionResetKey, setMapInteractionResetKey] = useState(0);
   const [conversationResetKey, setConversationResetKey] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -112,7 +121,23 @@ export function SimulatorWorkbench() {
 
   function resetSimulatorConversation() {
     setConversationResetKey((current) => current + 1);
+    resetMapInteraction();
   }
+
+  function resetMapInteraction() {
+    setSelectedNodeId(null);
+    setActiveTurnKey(null);
+    setActiveGroundedNodeIds([]);
+    setMapInteractionResetKey((current) => current + 1);
+  }
+
+  const handleActivateTurn = useCallback((turnKey: string | null, groundedNodeIds: string[]) => {
+    setActiveTurnKey(turnKey);
+    setActiveGroundedNodeIds(groundedNodeIds);
+    if (groundedNodeIds.length === 0) {
+      setMapInteractionResetKey((current) => current + 1);
+    }
+  }, []);
 
   async function runTask(label: string, task: () => Promise<void>) {
     setBusy(label);
@@ -196,6 +221,8 @@ export function SimulatorWorkbench() {
             runTask={runTask}
             setNotice={setNotice}
             setError={setError}
+            activeTurnKey={activeTurnKey}
+            onActivateTurn={handleActivateTurn}
           />
         </section>
 
@@ -203,6 +230,8 @@ export function SimulatorWorkbench() {
           <SimulatorMapPreviewPanel
             simulatorContext={simulatorContext}
             selectedNodeId={selectedNodeId}
+            groundedNodeIds={activeGroundedNodeIds}
+            interactionResetKey={mapInteractionResetKey}
             onSelectNode={handleSelectNode}
           />
         ) : (
@@ -223,7 +252,9 @@ function SimulatorTurnPanel({
   busy,
   runTask,
   setNotice,
-  setError
+  setError,
+  activeTurnKey,
+  onActivateTurn
 }: {
   simulatorContext: SimulatorMapContext | null;
   selectedMapId: string;
@@ -231,11 +262,13 @@ function SimulatorTurnPanel({
   runTask: RunTask;
   setNotice: Dispatch<SetStateAction<string | null>>;
   setError: Dispatch<SetStateAction<string | null>>;
+  activeTurnKey: string | null;
+  onActivateTurn: (turnKey: string | null, groundedNodeIds: string[]) => void;
 }) {
   const [clientProvider, setClientProvider] = useState<SimulatorClientProvider>("openai");
   const [questionText, setQuestionText] = useState("");
   const [includeDebugTrace, setIncludeDebugTrace] = useState(false);
-  const [dialogueTurns, setDialogueTurns] = useState<VisibleDialogueTurn[]>([]);
+  const [dialogueTurns, setDialogueTurns] = useState<SimulatorTranscriptTurn[]>([]);
   const [latestTrace, setLatestTrace] = useState<{ id: string; available: boolean } | null>(null);
   const hasQuestion = questionText.trim().length > 0;
 
@@ -251,12 +284,12 @@ function SimulatorTurnPanel({
     }
 
     const visibleDialogueContext = dialogueTurns.length > 0
-      ? { turns: dialogueTurns }
+      ? { turns: dialogueTurns.map(toVisibleDialogueTurn) }
       : null;
     const turnIndex = dialogueTurns.length + 1;
 
     await runTask("simulator turn", async () => {
-      const response = await answerSimulatorTurn({
+      const response = await answerSimulatorTurnTest({
         benchmarkDomain: simulatorContext.benchmarkDomain,
         mapId: selectedMapId,
         clientProvider,
@@ -265,15 +298,20 @@ function SimulatorTurnPanel({
         includeDebugTrace
       });
       const turnId = response.debug_trace_id || `turn_${String(turnIndex).padStart(2, "0")}`;
+      const transcriptKey = `${turnId}-${turnIndex}`;
+      const groundedNodeIds = highlightableGroundedNodeIds(response);
       setDialogueTurns((currentTurns) => [
         ...currentTurns,
         {
+          transcriptKey,
           turn_id: turnId,
           question: { text: question },
           answer: response.answer,
-          observation: response.observation
+          observation: response.observation,
+          groundedNodeIds
         }
       ]);
+      onActivateTurn(transcriptKey, groundedNodeIds);
       setLatestTrace(
         response.debug_trace_id && response.debug_trace_available !== null
           ? {
@@ -293,6 +331,7 @@ function SimulatorTurnPanel({
   function clearSimulatorConversation() {
     setDialogueTurns([]);
     setLatestTrace(null);
+    onActivateTurn(null, []);
   }
 
   return (
@@ -359,9 +398,22 @@ function SimulatorTurnPanel({
           <p className="empty">No simulator turns yet.</p>
         ) : (
           dialogueTurns.map((turn, index) => (
-            <article key={`${turn.turn_id}-${index}`} className="simulator-turn-record">
+            <article
+              key={turn.transcriptKey}
+              className={
+                activeTurnKey === turn.transcriptKey
+                  ? "simulator-turn-record active"
+                  : "simulator-turn-record"
+              }
+            >
               <div>
-                <span>{turn.observation.kind}</span>
+                <button
+                  type="button"
+                  className="simulator-turn-kind"
+                  onClick={() => onActivateTurn(turn.transcriptKey, turn.groundedNodeIds)}
+                >
+                  {turn.observation.kind}
+                </button>
                 <strong>{turn.turn_id}</strong>
               </div>
               <p className="simulator-question">{turn.question.text}</p>
@@ -377,10 +429,14 @@ function SimulatorTurnPanel({
 const SimulatorMapPreviewPanel = memo(function SimulatorMapPreviewPanel({
   simulatorContext,
   selectedNodeId,
+  groundedNodeIds,
+  interactionResetKey,
   onSelectNode
 }: {
   simulatorContext: SimulatorMapContext;
   selectedNodeId: string | null;
+  groundedNodeIds: string[];
+  interactionResetKey: number;
   onSelectNode: (nodeId: string | null) => void;
 }) {
   const selectedNode = useMemo(() => {
@@ -417,6 +473,8 @@ const SimulatorMapPreviewPanel = memo(function SimulatorMapPreviewPanel({
           <MapPreviewCanvas
             graph={simulatorContext.graph}
             knowledgeMap={simulatorContext.reviewedMap.map}
+            groundedNodeIds={groundedNodeIds}
+            interactionResetKey={interactionResetKey}
             selectedNodeId={selectedNodeId}
             onSelectNode={onSelectNode}
             ariaLabel="Reviewed knowledge map simulator graph"
@@ -433,3 +491,18 @@ const SimulatorMapPreviewPanel = memo(function SimulatorMapPreviewPanel({
     </section>
   );
 });
+
+function toVisibleDialogueTurn(turn: SimulatorTranscriptTurn): VisibleDialogueTurn {
+  return {
+    turn_id: turn.turn_id,
+    question: turn.question,
+    answer: turn.answer,
+    observation: turn.observation
+  };
+}
+
+function highlightableGroundedNodeIds(response: SimulatorTurnTestResponse): string[] {
+  return response.observation.kind === "answer"
+    ? response.grounded_node_ids
+    : [];
+}

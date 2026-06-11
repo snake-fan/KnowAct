@@ -104,3 +104,7 @@ class SimulatorTurnResponse(BaseModel):
         if value is not None and not value.strip():
             raise ValueError("must not be blank")
         return value
+
+
+class SimulatorTurnTestResponse(SimulatorTurnResponse):
+    grounded_node_ids: tuple[str, ...] = Field(default_factory=tuple)

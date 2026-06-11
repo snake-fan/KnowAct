@@ -335,7 +335,7 @@ visible answer text.
 
 Phase 5 exposes a usable single-turn simulator before formal **Evaluation Episode Manifests** exist. The endpoint is stateless per turn so it does not become a parallel episode runtime.
 
-Current route: `POST /api/simulator/turn`. The old `POST /api/simulator/preview` route remains a deprecated compatibility alias.
+Current formal single-turn route: `POST /api/simulator/turn`. The workbench/test route `POST /api/simulator/turn-test` uses the same request contract and visible answer fields, but may add only `grounded_node_ids` so the benchmark-author UI can highlight the latest directly grounded **Knowledge Nodes**. The old `POST /api/simulator/preview` route remains a deprecated compatibility alias for the formal turn response.
 
 The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Blueprint** derivation, LLM-backed visible answer generation, LLM-backed answer validation, bounded answer regeneration, persistent local turn debug trace artifacts, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement formal episode persistence yet.
 
@@ -361,5 +361,7 @@ The single-turn endpoint should:
 - return only a `debug_trace_id` and `debug_trace_available` flag when debug trace metadata is requested
 - keep the full **Simulator Debug Trace** behind a benchmark-author-only debug path or local artifact
 - avoid server-managed simulator session state
+
+The `turn-test` endpoint is benchmark-author/workbench-oriented. It must not expose hidden map state, mastery labels, evidence refs, raw debug trace payloads, raw model outputs, or profile context. Its only field beyond the formal turn response is `grounded_node_ids`, a minimal **Question Grounding** signal for local UI highlighting. Formal episode transcripts and tested-agent-visible turn artifacts should still exclude `grounded_node_ids`.
 
 Formal episode routes come later through the runtime, where simulator answers become visible **Interaction Observations** inside an evaluation run. Formal tested-agent-visible observation metadata should be stricter than single-turn metadata and should not include benchmark-author configuration warnings.

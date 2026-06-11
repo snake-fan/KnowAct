@@ -45,6 +45,7 @@ from backend.knowact.simulator.policy import (
 from backend.knowact.simulator.turn import (
     SimulatorTurnRequest,
     SimulatorTurnResponse,
+    SimulatorTurnTestResponse,
     SimulatorTurnWarning,
     SimulatorTurnWarningCode,
 )
@@ -81,6 +82,22 @@ class SimulatorService:
         self._validator = validator or HeuristicSimulatorAnswerValidator()
 
     def answer_turn(self, request: SimulatorTurnRequest) -> SimulatorTurnResponse:
+        return self._answer_turn(request, expose_grounded_node_ids=False)
+
+    def answer_turn_test(
+        self, request: SimulatorTurnRequest
+    ) -> SimulatorTurnTestResponse:
+        response = self._answer_turn(request, expose_grounded_node_ids=True)
+        if not isinstance(response, SimulatorTurnTestResponse):
+            raise TypeError("turn test workflow did not produce test response")
+        return response
+
+    def _answer_turn(
+        self,
+        request: SimulatorTurnRequest,
+        *,
+        expose_grounded_node_ids: bool,
+    ) -> SimulatorTurnResponse | SimulatorTurnTestResponse:
         visible_turns = _visible_dialogue_turn_count(request)
         question_trace_id = question_trace_id_from_request(request.question.question_id)
         trace_recorder = SimulatorDebugTraceRecorder(
@@ -243,6 +260,11 @@ class SimulatorService:
                         answer=answer,
                         observation=observation,
                         warnings=(),
+                        grounded_node_ids=(
+                            grounding.grounded_node_ids
+                            if expose_grounded_node_ids
+                            else None
+                        ),
                     )
                     _LOGGER.info(
                         "Simulator turn workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s response_mode=%s",
@@ -392,6 +414,11 @@ class SimulatorService:
                     answer=answer,
                     observation=observation,
                     warnings=warnings,
+                    grounded_node_ids=(
+                        grounding.grounded_node_ids
+                        if expose_grounded_node_ids
+                        else None
+                    ),
                 )
                 _LOGGER.info(
                     "Simulator turn workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s answer_chars=%d",
@@ -427,7 +454,8 @@ class SimulatorService:
         answer: VisibleSimulatorAnswer,
         observation: CoarseObservationMetadata,
         warnings: tuple[SimulatorTurnWarning, ...],
-    ) -> SimulatorTurnResponse:
+        grounded_node_ids: tuple[str, ...] | None,
+    ) -> SimulatorTurnResponse | SimulatorTurnTestResponse:
         trace_recorder.set_visible_output(
             {
                 "answer": answer.model_dump(mode="json"),
@@ -439,12 +467,18 @@ class SimulatorService:
         )
         trace_recorder.write_debug_trace(status="succeeded")
         include_debug_trace = request.turn_options.include_debug_trace
-        return SimulatorTurnResponse(
-            answer=answer,
-            observation=observation,
-            warnings=warnings,
-            debug_trace_id=trace_recorder.trace_id if include_debug_trace else None,
-            debug_trace_available=True if include_debug_trace else None,
+        response_fields = {
+            "answer": answer,
+            "observation": observation,
+            "warnings": warnings,
+            "debug_trace_id": trace_recorder.trace_id if include_debug_trace else None,
+            "debug_trace_available": True if include_debug_trace else None,
+        }
+        if grounded_node_ids is None:
+            return SimulatorTurnResponse(**response_fields)
+        return SimulatorTurnTestResponse(
+            **response_fields,
+            grounded_node_ids=grounded_node_ids,
         )
 
     def _derive_policy_result(

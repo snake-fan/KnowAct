@@ -287,7 +287,7 @@ core
 - `fallbacks.py`: natural non-leaking safe fallback construction for no grounding, multiple independent questions, hidden-label requests, generator failure, validator failure, and system failure.
 - `debug_trace.py`: local hidden turn trace writing, filesystem-safe trace ids, repeated question-directory overwrite behavior, and request-scoped raw/parser artifact capture for LLM-backed simulator steps.
 - `service.py`: simulator turn orchestration; wires grounding, context building, answer policy, generation, validation, fallback, and hidden debug trace production.
-- `turn.py`: stateless single-turn DTO/API boundary. It selects reviewed artifacts by identity and exposes only visible answer data, coarse turn metadata, non-leaking warnings, and optional debug trace handles.
+- `turn.py`: stateless single-turn DTO/API boundary. The formal turn response selects reviewed artifacts by identity and exposes only visible answer data, coarse turn metadata, non-leaking warnings, and optional debug trace handles. A separate workbench/test response may add only directly grounded node ids for map highlighting.
 - `preview.py`: deprecated compatibility re-export for old preview DTO imports.
 
 边界：
@@ -303,6 +303,7 @@ core
 - `Question Grounding` 只解释被测 agent 已提出的问题；它不是 tested-agent question selection policy。
 - hidden map state 和 hidden evidence 只能在 grounding 之后、针对 directly grounded nodes 进入 simulator-only context。
 - `Simulator Answer Blueprint` 可以进入 hidden debug trace，但正式 visible transcript 和 scoring artifacts 不应存储 blueprint、grounded node ids、hidden evidence ids 或 validator internals。
+- simulator workbench/test route 可以返回 minimal `grounded_node_ids` 供 benchmark author 高亮 inspected nodes；它不应返回 mastery labels、hidden evidence ids、raw debug trace、profile context 或其他 hidden payload。
 - `Profile Context` 在 simulator runtime 中只用于 content-preserving wording style；回答内容必须先由 grounded user state、ground-truth evidence 和 answer blueprint 决定。
 
 ### `agents/`

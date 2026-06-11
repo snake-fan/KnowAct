@@ -2,7 +2,11 @@ import unittest
 
 from pydantic import ValidationError
 
-from backend.knowact.simulator.turn import SimulatorTurnRequest, SimulatorTurnResponse
+from backend.knowact.simulator.turn import (
+    SimulatorTurnRequest,
+    SimulatorTurnResponse,
+    SimulatorTurnTestResponse,
+)
 
 
 class V1SimulatorTurnContractsTest(unittest.TestCase):
@@ -197,6 +201,43 @@ class V1SimulatorTurnContractsTest(unittest.TestCase):
         }
         with self.assertRaises(ValidationError):
             SimulatorTurnResponse.model_validate(hidden_answer_payload)
+
+    def test_turn_test_response_exposes_only_grounded_node_ids_beyond_turn_response(self):
+        payload = {
+            "answer": {"text": "I can compare the held-out split with repeated folds."},
+            "observation": {"kind": "answer"},
+            "warnings": [],
+            "debug_trace_id": None,
+            "debug_trace_available": None,
+            "grounded_node_ids": ["train_test_split", "cross_validation"],
+        }
+
+        response = SimulatorTurnTestResponse.model_validate(payload)
+
+        self.assertEqual(
+            ("train_test_split", "cross_validation"),
+            response.grounded_node_ids,
+        )
+
+        forbidden_fields = {
+            "mastery_level": "L3",
+            "evidence_refs": ["ev_hidden"],
+            "evidence_ids": ["ev_hidden"],
+            "states": [{"node_id": "linear_regression"}],
+            "evidence": [{"id": "ev_hidden"}],
+            "profile_context": {"summary": "hidden persona text"},
+            "debug_trace": {"grounding": "hidden internals"},
+            "debug_trace_payload": {"validator": "hidden internals"},
+            "raw_debug_trace": "hidden internals",
+        }
+
+        for field, value in forbidden_fields.items():
+            with self.subTest(field=field):
+                hidden_payload = dict(payload)
+                hidden_payload[field] = value
+
+                with self.assertRaises(ValidationError):
+                    SimulatorTurnTestResponse.model_validate(hidden_payload)
 
 
 if __name__ == "__main__":

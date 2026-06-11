@@ -1064,6 +1064,11 @@ label {
   padding: 11px;
 }
 
+.simulator-turn-record.active {
+  border-color: #8bbeb4;
+  background: #f0f7f4;
+}
+
 .simulator-turn-record > div {
   display: flex;
   align-items: center;
@@ -1071,8 +1076,10 @@ label {
   gap: 10px;
 }
 
-.simulator-turn-record span {
+.simulator-turn-kind {
+  min-height: 0;
   border-radius: 999px;
+  border: 1px solid transparent;
   background: #e4efec;
   color: #1f6f66;
   padding: 4px 8px;
@@ -1080,6 +1087,13 @@ label {
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.simulator-turn-kind:hover,
+.simulator-turn-record.active .simulator-turn-kind {
+  border-color: #87bdb2;
+  background: #d4e9e3;
+  color: #15564f;
 }
 
 .simulator-turn-record strong {

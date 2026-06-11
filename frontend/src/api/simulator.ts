@@ -45,6 +45,10 @@ export type SimulatorTurnResponse = {
   debug_trace_available?: boolean | null;
 };
 
+export type SimulatorTurnTestResponse = SimulatorTurnResponse & {
+  grounded_node_ids: string[];
+};
+
 export async function answerSimulatorTurn(input: {
   benchmarkDomain: string;
   mapId: string;
@@ -54,6 +58,30 @@ export async function answerSimulatorTurn(input: {
   includeDebugTrace?: boolean;
 }): Promise<SimulatorTurnResponse> {
   return requestJson<SimulatorTurnResponse>("/api/simulator/turn", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      benchmark_domain: input.benchmarkDomain,
+      map_id: input.mapId,
+      client_provider: input.clientProvider,
+      question: input.question,
+      visible_dialogue_context: input.visibleDialogueContext ?? null,
+      turn_options: {
+        include_debug_trace: input.includeDebugTrace ?? false
+      }
+    })
+  });
+}
+
+export async function answerSimulatorTurnTest(input: {
+  benchmarkDomain: string;
+  mapId: string;
+  clientProvider: SimulatorClientProvider;
+  question: DiagnosticQuestion;
+  visibleDialogueContext?: VisibleDialogueContext | null;
+  includeDebugTrace?: boolean;
+}): Promise<SimulatorTurnTestResponse> {
+  return requestJson<SimulatorTurnTestResponse>("/api/simulator/turn-test", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
