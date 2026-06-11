@@ -7,9 +7,13 @@ from backend.knowact.simulator.llm_service import (
     SimulatorServiceConfigurationError,
     build_simulator_service_for_provider,
 )
-from backend.knowact.simulator.preview import SimulatorPreviewRequest, SimulatorPreviewResponse
 from backend.knowact.simulator.providers import SimulatorClientProvider
 from backend.knowact.simulator.service import SimulatorService
+from backend.knowact.simulator.turn import (
+    SimulatorTurnRequest,
+    SimulatorTurnResponse,
+    SimulatorTurnTestResponse,
+)
 from backend.knowact.storage.profile_contexts import ConfirmedProfileContextArtifactError
 from backend.knowact.storage.reviewed_graphs import (
     ReviewedGraphArtifactError,
@@ -39,18 +43,27 @@ def build_simulator_router(
     services_by_provider: dict[SimulatorClientProvider, SimulatorService] = {}
     router = APIRouter()
 
-    @router.post(
-        "/preview",
-        response_model=SimulatorPreviewResponse,
-        summary="Preview one reviewed-map-grounded simulator answer.",
-    )
-    def answer_preview(request: SimulatorPreviewRequest) -> SimulatorPreviewResponse:
+    def _answer_turn(request: SimulatorTurnRequest) -> SimulatorTurnResponse:
+        return _run_simulator_request(
+            request,
+            lambda service, turn_request: service.answer_turn(turn_request),
+        )
+
+    def _answer_turn_test(
+        request: SimulatorTurnRequest,
+    ) -> SimulatorTurnTestResponse:
+        return _run_simulator_request(
+            request,
+            lambda service, turn_request: service.answer_turn_test(turn_request),
+        )
+
+    def _run_simulator_request(request: SimulatorTurnRequest, operation):
         try:
             service = services_by_provider.get(request.client_provider)
             if service is None:
                 service = service_factory(request.client_provider, root)
                 services_by_provider[request.client_provider] = service
-            return service.answer_preview(request)
+            return operation(service, request)
         except SimulatorServiceConfigurationError as exc:
             raise HTTPException(
                 status_code=503,
@@ -81,8 +94,33 @@ def build_simulator_router(
         except (KeyError, ValueError) as exc:
             raise HTTPException(
                 status_code=422,
-                detail="Simulator preview request could not be satisfied by reviewed artifacts.",
+                detail="Simulator turn request could not be satisfied by reviewed artifacts.",
             ) from exc
+
+    @router.post(
+        "/turn",
+        response_model=SimulatorTurnResponse,
+        summary="Answer one reviewed-map-grounded simulator turn.",
+    )
+    def answer_turn(request: SimulatorTurnRequest) -> SimulatorTurnResponse:
+        return _answer_turn(request)
+
+    @router.post(
+        "/turn-test",
+        response_model=SimulatorTurnTestResponse,
+        summary="Answer one simulator workbench test turn with grounded node ids.",
+    )
+    def answer_turn_test(request: SimulatorTurnRequest) -> SimulatorTurnTestResponse:
+        return _answer_turn_test(request)
+
+    @router.post(
+        "/preview",
+        response_model=SimulatorTurnResponse,
+        summary="Deprecated compatibility alias for one simulator turn.",
+        deprecated=True,
+    )
+    def answer_preview(request: SimulatorTurnRequest) -> SimulatorTurnResponse:
+        return _answer_turn(request)
 
     return router
 

@@ -42,11 +42,12 @@ from backend.knowact.simulator.policy import (
     SimulatorPolicyResult,
     SimulatorResponseMode,
 )
-from backend.knowact.simulator.preview import (
-    SimulatorPreviewRequest,
-    SimulatorPreviewResponse,
-    SimulatorPreviewWarning,
-    SimulatorPreviewWarningCode,
+from backend.knowact.simulator.turn import (
+    SimulatorTurnRequest,
+    SimulatorTurnResponse,
+    SimulatorTurnTestResponse,
+    SimulatorTurnWarning,
+    SimulatorTurnWarningCode,
 )
 from backend.knowact.storage.profile_contexts import (
     ConfirmedProfileContextNotFoundError,
@@ -80,7 +81,23 @@ class SimulatorService:
         self._generator = generator or RuleBasedAnswerGenerator()
         self._validator = validator or HeuristicSimulatorAnswerValidator()
 
-    def answer_preview(self, request: SimulatorPreviewRequest) -> SimulatorPreviewResponse:
+    def answer_turn(self, request: SimulatorTurnRequest) -> SimulatorTurnResponse:
+        return self._answer_turn(request, expose_grounded_node_ids=False)
+
+    def answer_turn_test(
+        self, request: SimulatorTurnRequest
+    ) -> SimulatorTurnTestResponse:
+        response = self._answer_turn(request, expose_grounded_node_ids=True)
+        if not isinstance(response, SimulatorTurnTestResponse):
+            raise TypeError("turn test workflow did not produce test response")
+        return response
+
+    def _answer_turn(
+        self,
+        request: SimulatorTurnRequest,
+        *,
+        expose_grounded_node_ids: bool,
+    ) -> SimulatorTurnResponse | SimulatorTurnTestResponse:
         visible_turns = _visible_dialogue_turn_count(request)
         question_trace_id = question_trace_id_from_request(request.question.question_id)
         trace_recorder = SimulatorDebugTraceRecorder(
@@ -98,18 +115,18 @@ class SimulatorService:
                 "question": request.question.model_dump(mode="json"),
                 "question_trace_id": question_trace_id,
                 "visible_dialogue_turns": visible_turns,
-                "include_debug_trace": request.preview_options.include_debug_trace,
+                "include_debug_trace": request.turn_options.include_debug_trace,
             }
         )
         _LOGGER.info(
-            "Simulator preview workflow started benchmark_domain=%s map_id=%s client_provider=%s question_id=%s trace_id=%s visible_dialogue_turns=%d include_debug_trace=%s",
+            "Simulator turn workflow started benchmark_domain=%s map_id=%s client_provider=%s question_id=%s trace_id=%s visible_dialogue_turns=%d include_debug_trace=%s",
             request.benchmark_domain,
             request.map_id,
             request.client_provider,
             request.question.question_id,
             question_trace_id,
             visible_turns,
-            request.preview_options.include_debug_trace,
+            request.turn_options.include_debug_trace,
         )
         with active_simulator_debug_trace(trace_recorder):
             try:
@@ -136,7 +153,7 @@ class SimulatorService:
                 }
                 trace_recorder.set_workflow_section("artifact_loading", artifact_loading)
                 _LOGGER.info(
-                    "Simulator preview map manifest loaded benchmark_domain=%s map_id=%s graph_version=%s user_id=%s",
+                    "Simulator turn map manifest loaded benchmark_domain=%s map_id=%s graph_version=%s user_id=%s",
                     manifest.benchmark_domain,
                     manifest.map_id,
                     manifest.graph_version,
@@ -162,7 +179,7 @@ class SimulatorService:
                 }
                 trace_recorder.set_workflow_section("artifact_loading", artifact_loading)
                 _LOGGER.info(
-                    "Simulator preview reviewed graph loaded benchmark_domain=%s graph_version=%s nodes=%d edges=%d",
+                    "Simulator turn reviewed graph loaded benchmark_domain=%s graph_version=%s nodes=%d edges=%d",
                     manifest.benchmark_domain,
                     manifest.graph_version,
                     len(graph_artifacts.graph.nodes),
@@ -237,15 +254,20 @@ class SimulatorService:
                             policy_result.intent.response_mode
                         )
                     )
-                    response = self._build_preview_response(
+                    response = self._build_turn_response(
                         request=request,
                         trace_recorder=trace_recorder,
                         answer=answer,
                         observation=observation,
                         warnings=(),
+                        grounded_node_ids=(
+                            grounding.grounded_node_ids
+                            if expose_grounded_node_ids
+                            else None
+                        ),
                     )
                     _LOGGER.info(
-                        "Simulator preview workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s response_mode=%s",
+                        "Simulator turn workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s response_mode=%s",
                         manifest.benchmark_domain,
                         manifest.map_id,
                         observation.kind.value,
@@ -275,7 +297,7 @@ class SimulatorService:
                 }
                 trace_recorder.set_workflow_section("artifact_loading", artifact_loading)
                 _LOGGER.info(
-                    "Simulator preview reviewed map loaded benchmark_domain=%s map_id=%s states=%d evidence_records=%d",
+                    "Simulator turn reviewed map loaded benchmark_domain=%s map_id=%s states=%d evidence_records=%d",
                     manifest.benchmark_domain,
                     manifest.map_id,
                     len(map_artifacts.knowledge_map.states),
@@ -386,15 +408,20 @@ class SimulatorService:
                         policy_result.intent.response_mode
                     )
                 )
-                response = self._build_preview_response(
+                response = self._build_turn_response(
                     request=request,
                     trace_recorder=trace_recorder,
                     answer=answer,
                     observation=observation,
                     warnings=warnings,
+                    grounded_node_ids=(
+                        grounding.grounded_node_ids
+                        if expose_grounded_node_ids
+                        else None
+                    ),
                 )
                 _LOGGER.info(
-                    "Simulator preview workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s answer_chars=%d",
+                    "Simulator turn workflow succeeded benchmark_domain=%s map_id=%s observation_kind=%s warnings=%d debug_trace_available=%s answer_chars=%d",
                     manifest.benchmark_domain,
                     manifest.map_id,
                     observation.kind.value,
@@ -409,22 +436,26 @@ class SimulatorService:
                     error=error_payload(exc),
                 )
                 _LOGGER.error(
-                    "Simulator preview workflow failed benchmark_domain=%s map_id=%s error_type=%s",
+                    "Simulator turn workflow failed benchmark_domain=%s map_id=%s error_type=%s",
                     request.benchmark_domain,
                     request.map_id,
                     type(exc).__name__,
                 )
                 raise
 
-    def _build_preview_response(
+    def answer_preview(self, request: SimulatorTurnRequest) -> SimulatorTurnResponse:
+        return self.answer_turn(request)
+
+    def _build_turn_response(
         self,
         *,
-        request: SimulatorPreviewRequest,
+        request: SimulatorTurnRequest,
         trace_recorder: SimulatorDebugTraceRecorder,
         answer: VisibleSimulatorAnswer,
         observation: CoarseObservationMetadata,
-        warnings: tuple[SimulatorPreviewWarning, ...],
-    ) -> SimulatorPreviewResponse:
+        warnings: tuple[SimulatorTurnWarning, ...],
+        grounded_node_ids: tuple[str, ...] | None,
+    ) -> SimulatorTurnResponse | SimulatorTurnTestResponse:
         trace_recorder.set_visible_output(
             {
                 "answer": answer.model_dump(mode="json"),
@@ -435,13 +466,19 @@ class SimulatorService:
             tuple(warning.model_dump(mode="json") for warning in warnings)
         )
         trace_recorder.write_debug_trace(status="succeeded")
-        include_debug_trace = request.preview_options.include_debug_trace
-        return SimulatorPreviewResponse(
-            answer=answer,
-            observation=observation,
-            warnings=warnings,
-            debug_trace_id=trace_recorder.trace_id if include_debug_trace else None,
-            debug_trace_available=True if include_debug_trace else None,
+        include_debug_trace = request.turn_options.include_debug_trace
+        response_fields = {
+            "answer": answer,
+            "observation": observation,
+            "warnings": warnings,
+            "debug_trace_id": trace_recorder.trace_id if include_debug_trace else None,
+            "debug_trace_available": True if include_debug_trace else None,
+        }
+        if grounded_node_ids is None:
+            return SimulatorTurnResponse(**response_fields)
+        return SimulatorTurnTestResponse(
+            **response_fields,
+            grounded_node_ids=grounded_node_ids,
         )
 
     def _derive_policy_result(
@@ -655,7 +692,7 @@ class SimulatorService:
         *,
         benchmark_domain: str,
         user_id: str,
-    ) -> tuple[object | None, tuple[SimulatorPreviewWarning, ...]]:
+    ) -> tuple[object | None, tuple[SimulatorTurnWarning, ...]]:
         _LOGGER.info(
             "Simulator profile context load started benchmark_domain=%s user_id=%s",
             benchmark_domain,
@@ -676,9 +713,9 @@ class SimulatorService:
             return (
                 None,
                 (
-                    SimulatorPreviewWarning(
-                        code=SimulatorPreviewWarningCode.MISSING_PROFILE_CONTEXT,
-                        message="Profile context is unavailable; preview used neutral wording.",
+                    SimulatorTurnWarning(
+                        code=SimulatorTurnWarningCode.MISSING_PROFILE_CONTEXT,
+                        message="Profile context is unavailable; simulator used neutral wording.",
                     ),
                 ),
             )
@@ -694,7 +731,7 @@ class SimulatorService:
         return profile_context, ()
 
 
-def _visible_dialogue_turn_count(request: SimulatorPreviewRequest) -> int:
+def _visible_dialogue_turn_count(request: SimulatorTurnRequest) -> int:
     if request.visible_dialogue_context is None:
         return 0
     return len(request.visible_dialogue_context.turns)

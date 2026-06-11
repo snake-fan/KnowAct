@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import {
   Graph as G6Graph,
   type EdgeData as G6EdgeData,
@@ -22,17 +22,24 @@ import {
   buildLayeredGraphNodePositions,
   wrapGraphNodeLabel
 } from "../candidateGraph/KnowledgeGraphLayout";
+import {
+  buildMapNodeInteractionStates,
+  MAP_NODE_DIMMED_STATE,
+  MAP_NODE_SELECTED_STATE
+} from "./MapPreviewCanvasModel";
 
 type MapPreviewCanvasProps = {
   graph: ReviewedGraphPayload;
   knowledgeMap: KnowledgeMap;
   warnings?: MapEdgeConsistencyWarning[];
+  groundedNodeIds?: readonly string[];
+  interactionResetKey?: number;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string | null) => void;
   ariaLabel?: string;
 };
 
-const SELECTED_STATE = "selected";
+const EMPTY_GROUNDED_NODE_IDS: readonly string[] = [];
 const NODE_SIZE: [number, number] = [208, 88];
 const LAYER_GAP = 156;
 const ROW_GAP = 56;
@@ -40,10 +47,12 @@ const MIN_NODES_PER_LAYER = 3;
 const TARGET_NODES_PER_LAYER = 5;
 const MAX_NODES_PER_LAYER = 6;
 
-export function MapPreviewCanvas({
+export const MapPreviewCanvas = memo(function MapPreviewCanvas({
   graph,
   knowledgeMap,
   warnings = [],
+  groundedNodeIds = EMPTY_GROUNDED_NODE_IDS,
+  interactionResetKey = 0,
   selectedNodeId,
   onSelectNode,
   ariaLabel = "Knowledge map preview graph"
@@ -65,8 +74,10 @@ export function MapPreviewCanvas({
     layoutKey,
     graph.authored_nodes.map((node) => `${node.id}:${node.name}:${node.type}`).join("\u0000"),
     knowledgeMap.states.map((state) => `${state.node_id}:${state.mastery_level}`).join("\u0000"),
-    warnings.map((warning) => `${warning.edge_id}:${warning.source_node_id}:${warning.target_node_id}`).join("\u0000")
+    warnings.map((warning) => `${warning.edge_id}:${warning.source_node_id}:${warning.target_node_id}`).join("\u0000"),
+    `reset:${interactionResetKey}`
   ].join("\u0001");
+  const groundedNodeIdsKey = groundedNodeIds.join("\u0000");
 
   useEffect(() => {
     graphPayloadRef.current = graph;
@@ -127,9 +138,13 @@ export function MapPreviewCanvas({
           };
         },
         state: {
-          [SELECTED_STATE]: {
+          [MAP_NODE_DIMMED_STATE]: {
+            opacity: 0.32
+          },
+          [MAP_NODE_SELECTED_STATE]: {
             stroke: "#2563eb",
             lineWidth: 5,
+            opacity: 1,
             halo: true,
             haloStroke: "#2563eb",
             haloStrokeOpacity: 0.18,
@@ -269,7 +284,7 @@ export function MapPreviewCanvas({
     void draw
       .then(() => {
         if (cancelled || graphRef.current !== graphInstance || !isGraphRuntimeAvailable(graphInstance)) return;
-        applySelectedState(graphInstance, graph, selectedNodeIdRef.current);
+        applyNodeInteractionStates(graphInstance, graph, selectedNodeIdRef.current, groundedNodeIds);
       })
       .catch((error: unknown) => {
         if (!isGraphRuntimeAvailable(graphInstance) || isGraphLifecycleError(error)) return;
@@ -279,13 +294,13 @@ export function MapPreviewCanvas({
     return () => {
       cancelled = true;
     };
-  }, [graph, graphDataKey, knowledgeMap, layoutKey, warnings]);
+  }, [graph, graphDataKey, groundedNodeIdsKey, knowledgeMap, layoutKey, warnings]);
 
   useEffect(() => {
     const graphInstance = graphRef.current;
     if (!isGraphRuntimeAvailable(graphInstance)) return;
-    applySelectedState(graphInstance, graph, selectedNodeId);
-  }, [graph, selectedNodeId]);
+    applyNodeInteractionStates(graphInstance, graph, selectedNodeId, groundedNodeIds);
+  }, [graph, groundedNodeIds, groundedNodeIdsKey, interactionResetKey, selectedNodeId]);
 
   return (
     <div
@@ -295,7 +310,7 @@ export function MapPreviewCanvas({
       aria-label={ariaLabel}
     />
   );
-}
+});
 
 function toG6Data(
   graph: ReviewedGraphPayload,
@@ -346,15 +361,13 @@ function toG6Data(
   };
 }
 
-function applySelectedState(
+function applyNodeInteractionStates(
   graphInstance: G6Graph,
   graph: ReviewedGraphPayload,
-  selectedNodeId: string | null
+  selectedNodeId: string | null,
+  groundedNodeIds: readonly string[]
 ) {
-  const states: Record<string, string[]> = {};
-  for (const node of graph.authored_nodes) {
-    states[node.id] = selectedNodeId === node.id ? [SELECTED_STATE] : [];
-  }
+  const states = buildMapNodeInteractionStates(graph, selectedNodeId, groundedNodeIds);
   void graphInstance.setElementState(states, false);
 }
 

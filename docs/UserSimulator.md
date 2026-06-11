@@ -20,7 +20,7 @@ It is not a state-query API, a scoring component, or a tested-agent question-sel
 - LLM generation and LLM-backed validation are allowed, but both must sit behind interfaces and respect de-identified context boundaries.
 - Unsafe or unvalidated answers fail closed into a **Simulator Safe Fallback**.
 - Debug traces are hidden benchmark-author artifacts, separate from visible transcript and scoring outputs.
-- Phase 5 preview is stateless per turn and must not become a parallel episode runtime.
+- The Phase 5 single-turn endpoint is stateless per turn and must not become a parallel episode runtime.
 
 ## Workflow
 
@@ -202,7 +202,7 @@ The policy must not read hidden map state, hidden evidence, or mastery labels fo
 
 ## Generators
 
-The LLM generator is the naturalness-oriented path for simulator preview. A rule-based generator is useful as a soft fallback and for regression fixtures.
+The LLM generator is the naturalness-oriented path for simulator turns. A rule-based generator is useful as a soft fallback and for regression fixtures.
 
 This is a soft implementation preference, not a permanent architectural ban. Any generator must respect the same **Simulator Answer Blueprint** and validation contract.
 
@@ -291,8 +291,8 @@ No-grounding and multiple-question flags belong in this hidden debug trace, not 
 
 **Simulator Answer Blueprint** may be retained in hidden debug artifacts for audit, but it should not be stored as part of the formal visible episode run artifacts. Formal run artifacts should center on visible transcript data, tested-agent outputs, and scoring reports.
 
-The development preview writes a local **Simulator Debug Trace** for every
-`POST /api/simulator/preview` request under:
+The single-turn simulator endpoint writes a local **Simulator Debug Trace** for every
+`POST /api/simulator/turn` request under:
 
 ```text
 benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/
@@ -300,18 +300,18 @@ benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/
 
 If the request supplies `question.question_id`, it must be filesystem-safe:
 letters, numbers, dots, underscores, or dashes only. If no `question_id` is
-supplied, preview generates `question_{timestamp}` as the trace directory key.
-Repeating the same `question_id` overwrites the previous preview trace by
+supplied, the simulator generates `question_{timestamp}` as the trace directory key.
+Repeating the same `question_id` overwrites the previous turn trace by
 clearing that question directory first.
 
-The preview trace directory contains `debug_trace.json` plus optional
+The turn trace directory contains `debug_trace.json` plus optional
 `agent_traces/` raw/parser artifacts for LLM-backed steps:
 
 - `agent_traces/answer_policy/model_raw_output.txt` and `parser_output.json`
 - `agent_traces/answer_generation/attempt_{n}/model_raw_output.txt` and `parser_output.json`
 - `agent_traces/answer_validation/attempt_{n}/model_raw_output.txt` and `parser_output.json`
 
-Preview debug traces may store raw model outputs and parsed step outputs, but
+Turn debug traces may store raw model outputs and parsed step outputs, but
 they must not store full prompt/messages, full reviewed graph payloads, full
 reviewed map payloads, or full confirmed profile-context payloads. The trace
 stores artifact identities and directly grounded turn details instead.
@@ -322,7 +322,7 @@ The simulator implementation should emit operator-facing logger `info` messages 
 workflow boundaries so terminal output shows which step is running: reviewed
 artifact loading, question grounding, simulator context construction, answer
 blueprint derivation, answer generation, answer
-validation, fallback, and final preview completion.
+validation, fallback, and final turn completion.
 
 Runtime logs are not **Simulator Debug Trace** artifacts and are not visible
 transcript data. They should record only progress metadata such as artifact
@@ -331,17 +331,17 @@ They must not record full hidden map payloads, hidden evidence ids, hidden
 evidence signals, profile-context prose, raw model output, prompt payloads, or
 visible answer text.
 
-## Preview Boundary
+## Single-Turn Boundary
 
-Phase 5 may expose a development-only simulator preview before formal **Evaluation Episode Manifests** exist. The preview should be stateless per turn so it does not become a parallel episode runtime.
+Phase 5 exposes a usable single-turn simulator before formal **Evaluation Episode Manifests** exist. The endpoint is stateless per turn so it does not become a parallel episode runtime.
 
-Current initial route: `POST /api/simulator/preview`.
+Current formal single-turn route: `POST /api/simulator/turn`. The workbench/test route `POST /api/simulator/turn-test` uses the same request contract and visible answer fields, but may add only `grounded_node_ids` so the benchmark-author UI can highlight the latest directly grounded **Knowledge Nodes**. The old `POST /api/simulator/preview` route remains a deprecated compatibility alias for the formal turn response.
 
-The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Blueprint** derivation, LLM-backed visible answer generation, LLM-backed answer validation, bounded answer regeneration, persistent local preview debug trace artifacts, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement formal episode persistence yet.
+The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Blueprint** derivation, LLM-backed visible answer generation, LLM-backed answer validation, bounded answer regeneration, persistent local turn debug trace artifacts, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement formal episode persistence yet.
 
 The next simulator-policy implementation slice should keep hardening the structured blueprint boundary before broadening episode runtime integration. The rule-based policy and LLM-backed policy should emit the same **Simulator Answer Blueprint**, generator prompts should consume that blueprint rather than raw map information, and validation-regeneration should preserve the same blueprint unless policy output is unsafe or contradictory.
 
-The preview should:
+The single-turn endpoint should:
 
 - select reviewed artifacts by identity, such as `benchmark_domain` and `map_id`
 - accept request-level `client_provider`, using the same `openai` / `deepseek` provider vocabulary as authoring and defaulting to `openai`
@@ -352,14 +352,16 @@ The preview should:
 - continue with a configuration warning when confirmed **Profile Context** is missing
 - accept one primary diagnostic question per request
 - accept optional request-carried **Visible Dialogue Context**
-- write a local hidden debug trace artifact for every preview request
-- accept optional `preview_options.include_debug_trace` and use it only to decide whether the response returns trace availability/reference metadata
+- write a local hidden debug trace artifact for every turn request
+- accept optional `turn_options.include_debug_trace` and use it only to decide whether the response returns trace availability/reference metadata
 - return only the visible simulator answer plus visible observation metadata
 - keep visible observation metadata coarse, such as `answer`, `clarification`, or `non_answer`
 - keep internal fallback categories and validation reasons out of visible metadata
-- allow non-leaking configuration warnings in preview metadata, such as missing style context
+- allow non-leaking configuration warnings in turn metadata, such as missing style context
 - return only a `debug_trace_id` and `debug_trace_available` flag when debug trace metadata is requested
 - keep the full **Simulator Debug Trace** behind a benchmark-author-only debug path or local artifact
-- avoid server-managed preview session state
+- avoid server-managed simulator session state
 
-Formal episode routes come later through the runtime, where simulator answers become visible **Interaction Observations** inside an evaluation run. Formal tested-agent-visible observation metadata should be stricter than preview metadata and should not include benchmark-author configuration warnings.
+The `turn-test` endpoint is benchmark-author/workbench-oriented. It must not expose hidden map state, mastery labels, evidence refs, raw debug trace payloads, raw model outputs, or profile context. Its only field beyond the formal turn response is `grounded_node_ids`, a minimal **Question Grounding** signal for local UI highlighting. Formal episode transcripts and tested-agent-visible turn artifacts should still exclude `grounded_node_ids`.
+
+Formal episode routes come later through the runtime, where simulator answers become visible **Interaction Observations** inside an evaluation run. Formal tested-agent-visible observation metadata should be stricter than single-turn metadata and should not include benchmark-author configuration warnings.
