@@ -365,3 +365,23 @@ The single-turn endpoint should:
 The `turn-test` endpoint is benchmark-author/workbench-oriented. It must not expose hidden map state, mastery labels, evidence refs, raw debug trace payloads, raw model outputs, or profile context. Its only field beyond the formal turn response is `grounded_node_ids`, a minimal **Question Grounding** signal for local UI highlighting. Formal episode transcripts and tested-agent-visible turn artifacts should still exclude `grounded_node_ids`.
 
 Formal episode routes come later through the runtime, where simulator answers become visible **Interaction Observations** inside an evaluation run. Formal tested-agent-visible observation metadata should be stricter than single-turn metadata and should not include benchmark-author configuration warnings.
+
+## Phase 5 Preview Verification
+
+The Phase 5 simulator route set is a development and workbench preview of one reviewed-map-grounded turn. It is not a formal **Evaluation Episode** runtime, does not create or read **Evaluation Episode Manifests**, and does not persist server-side simulator sessions.
+
+Regression tests use temporary, development-only reviewed graph/map/profile fixtures. They select simulator inputs by `benchmark_domain` and reviewed `map_id`, derive graph and user bindings from reviewed artifacts, and keep candidate graph/map runs out of the simulator input boundary.
+
+The focused grounded-ambiguity regression module covers multiple mastery levels and evidence kinds. It checks uncertainty, partial correctness, self-correction, not knowing, ability boundaries, misconceptions, visible-dialogue follow-up wording without hidden state mutation, no-grounding preview non-answers, and multiple-question preview clarifications.
+
+Run the focused simulator verification with:
+
+```bash
+uv run python -m unittest test/test_v1_simulator_grounded_ambiguity.py test/test_v1_simulator_service.py test/test_v1_simulator_turn_contracts.py
+```
+
+Run the full Python regression suite with:
+
+```bash
+uv run python -m unittest
+```
