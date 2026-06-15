@@ -68,7 +68,8 @@ Authoritative Source
 │       └── api/
 ├── benchmark/
 │   ├── domains/
-│   └── fixtures/
+│   ├── fixtures/
+│   └── runtime/
 ├── experiments/
 │   ├── runs/
 │   └── reports/
@@ -78,7 +79,7 @@ Authoritative Source
 说明：
 
 - `backend/knowact/` 是 benchmark 的 Python package 主体。
-- `benchmark/` 存放 benchmark artifacts，包括 development fixtures、candidate review data、reviewed graph/map/episode manifests。`benchmark/domains/` 可以继续被默认 ignore；只有明确要发布或保留的 reviewed artifacts 才应有意加入版本库。
+- `benchmark/` 存放 benchmark artifacts，包括 development fixtures、candidate review data、reviewed graph/map data 和 runtime episode manifests。`benchmark/runtime/episodes/` 是跨 domain 的 `Runtime Episode Registry`。`benchmark/domains/` 可以继续被默认 ignore；只有明确要发布或保留的 reviewed artifacts 才应有意加入版本库。
 - `experiments/` 存放 episode run outputs、agent outputs、scoring reports 和分析结果。是否全部提交到版本库后续再定；默认应避免提交大体积或敏感实验输出。
 - `Reference/` 中的 PDF 或源材料可以作为本地工作资料，但正式 benchmark data 应通过 `Source Locator` 和 source metadata 保持可审计，不依赖把大型原始 PDF 强绑定进 runtime。
 
@@ -330,20 +331,35 @@ core
 
 建议模块：
 
-- `episode_loader.py`: 加载 manifest、reviewed graph、reviewed map、profile context。
-- `visibility.py`: 构造 tested-agent-visible context 和 simulator-only context。
+- `episode_repository.py`: 读取 `Runtime Episode Registry` 中的 episode manifest。
+- `episode_loader.py`: 加载 identity-first manifest、reviewed graph、reviewed map、derived profile context。
+- `visibility.py`: 构造 tested-agent-visible context 和 simulator-only context reference，并验证 hidden data 不进入 tested-agent-visible payload。
 - `turn_loop.py`: one diagnostic question + one simulator answer。
 - `runner.py`: orchestrate episode start/end。
 - `transcript.py`: transcript and interaction observation recording。
 
+Phase 6 的初始 runtime scope 是 contract skeleton：episode registry、manifest loading、artifact binding、visibility context construction 和 read-only runtime API。它不启动 formal run，不调用 tested agent 或 simulator，不产生 transcript、agent output 或 scoring report；`turn_loop.py`、`runner.py` 和 `transcript.py` 在 Phase 7-9 接入。
+
+`Evaluation Episode Manifest` 在 Phase 6 采用 identity-first binding，而不是自由 artifact URI：
+
+- `episode_id`
+- `benchmark_domain`
+- `graph_version`
+- `hidden_map_id`
+- `max_turns`
+- `interaction_rule = single_diagnostic_question_per_turn`
+- `scoring_profile = squared_mastery_distance_v1`
+
 runtime 的核心 flow：
 
 ```text
-load Evaluation Episode Manifest
+load Evaluation Episode Manifest from Runtime Episode Registry
   -> load reviewed Authored Knowledge Graph
-  -> load reviewed Map
+  -> load reviewed Map and derive profile context from the map manifest user_id
   -> build simulator-only context
   -> build tested-agent-visible context
+  -> Phase 6 stops here for read-only inspection
+  -> Phase 7-9 continue:
   -> repeat until max_turns:
        agent asks one Diagnostic Question
        simulator answers naturally
@@ -410,9 +426,9 @@ load Evaluation Episode Manifest
 - `GET /graphs`
 - `GET /graphs/{graph_id}`
 - `GET /maps/{map_id}`
-- `GET /episodes`
-- `GET /episodes/{episode_id}`
-- `POST /episodes/{episode_id}/runs`
+- `GET /api/runtime/episodes`
+- `GET /api/runtime/episodes/{episode_id}`
+- `POST /api/runtime/episodes/{episode_id}/runs`
 - `GET /runs/{run_id}`
 - `GET /runs/{run_id}/report`
 
@@ -422,7 +438,7 @@ Phase 4 的初始 authoring surface 保持 narrow and functional：profile-conte
 
 ## Benchmark Data Layout
 
-建议把 benchmark data 分为 fixtures、candidate、reviewed、episodes 和 runs。
+建议把 benchmark data 分为 fixtures、candidate、reviewed、runtime registry 和 runs。
 
 ```text
 benchmark/
@@ -433,50 +449,51 @@ benchmark/
 │       ├── authored_edges.json
 │       ├── maps/
 │       └── episodes/
-└── domains/
-    └── classical_supervised_ml_algorithms/
-        ├── sources/
-        │   └── isl_python.md
-        ├── candidate_graphs/
-        │   └── run_001/
-        │       ├── candidate_nodes.json
-        │       ├── candidate_edges.json
-        │       ├── workflow_log.json
-        │       ├── intermediate/
-        │       └── agent_traces/
-        ├── graphs/
-        │   └── v1/
-        │       ├── graph_manifest.json
-        │       ├── authored_nodes.json
-        │       └── authored_edges.json
-        ├── candidate_profile_contexts/
-        │   └── run_001/
-        │       ├── candidate_profile_context.json
-        │       ├── workflow_log.json
-        │       └── agent_traces/
-        │           ├── model_raw_output.txt
-        │           └── parser_output.json
-        ├── users/
-        ├── candidate_maps/
-        │   └── run_001/
-        │       ├── candidate_map.json
-        │       ├── consistency_warnings.json
-        │       ├── workflow_log.json
-        │       ├── intermediate/
-        │       │   ├── state_outline.json
-        │       │   └── ground_truth_evidence.json
-        │       └── agent_traces/
-        │           ├── knowledge_state_outline/
-        │           │   ├── model_raw_output.txt
-        │           │   └── parser_output.json
-        │           └── ground_truth_evidence/
-        │               └── batch_001/
-        │                   ├── model_raw_output.txt
-        │                   └── parser_output.json
-        ├── maps/
-        └── episodes/
-            └── v1/
-                └── episode_001.json
+├── domains/
+│   └── classical_supervised_ml_algorithms/
+│       ├── sources/
+│       │   └── isl_python.md
+│       ├── candidate_graphs/
+│       │   └── run_001/
+│       │       ├── candidate_nodes.json
+│       │       ├── candidate_edges.json
+│       │       ├── workflow_log.json
+│       │       ├── intermediate/
+│       │       └── agent_traces/
+│       ├── graphs/
+│       │   └── v1/
+│       │       ├── graph_manifest.json
+│       │       ├── authored_nodes.json
+│       │       └── authored_edges.json
+│       ├── candidate_profile_contexts/
+│       │   └── run_001/
+│       │       ├── candidate_profile_context.json
+│       │       ├── workflow_log.json
+│       │       └── agent_traces/
+│       │           ├── model_raw_output.txt
+│       │           └── parser_output.json
+│       ├── users/
+│       ├── candidate_maps/
+│       │   └── run_001/
+│       │       ├── candidate_map.json
+│       │       ├── consistency_warnings.json
+│       │       ├── workflow_log.json
+│       │       ├── intermediate/
+│       │       │   ├── state_outline.json
+│       │       │   └── ground_truth_evidence.json
+│       │       └── agent_traces/
+│       │           ├── knowledge_state_outline/
+│       │           │   ├── model_raw_output.txt
+│       │           │   └── parser_output.json
+│       │           └── ground_truth_evidence/
+│       │               └── batch_001/
+│       │                   ├── model_raw_output.txt
+│       │                   └── parser_output.json
+│       └── maps/
+└── runtime/
+    └── episodes/
+        └── episode_001/
+            └── episode_manifest.json
 ```
 
 ```text
@@ -496,6 +513,7 @@ Artifact policy:
 - `fixtures/` 可以小而稳定，用于 tests 和 local development。
 - `candidate_graphs/` 和 `candidate_maps/` 是 review input，不进入 formal evaluation。
 - `graphs/{version}/` 和 `maps/` 是 reviewed benchmark data；只有明确要发布或保留时才应加入版本库。
+- `runtime/episodes/` 是 `Runtime Episode Registry`；它可以收集跨 benchmark domain 的 runnable episodes，但每个 manifest 仍只绑定一个 benchmark domain、一个 reviewed graph version 和一个 hidden reviewed map。
 - Phase 3 graph promotion 将重新校验后的 candidate snapshot 复制到 `graphs/{version}/`，保留原 candidate run，并生成只绑定 metadata 与 node/edge 文件引用的 `graph_manifest.json`。Reviewed graph version 不允许覆盖；修订必须发布新的 version。
 - `experiments/runs/` 是 generated output，应避免混入人工 authored ground truth。
 - 大型 source PDFs 可以本地保存，正式数据只引用 source metadata 和 `Source Locator`。
@@ -548,7 +566,7 @@ UI 边界：
 | M3 graph review promotion | `storage/`, `validation/`, optional review UI | reviewed graph 才能进入 runtime |
 | M4 maps | `authoring/`, `core/`, `validation/`, `storage/` | map coverage 和 evidence visibility 是重点 |
 | M5 simulator | `simulator/`, `llm/`, `storage/`, `validation/` | reviewed-map grounded turns 和 leakage guard 是关键风险 |
-| M6 episode contract | `core/episode.py`, `runtime/episode_loader.py`, `runtime/visibility.py`, `validation/` | manifest 绑定 graph/map/simulator/rules/scoring |
+| M6 episode contract | `core/episode.py`, `storage/`, `runtime/episode_repository.py`, `runtime/episode_loader.py`, `runtime/visibility.py`, `api/`, `validation/` | runtime registry、identity-first manifest、reviewed artifact binding、visible context inspection |
 | M7 baselines | `agents/`, `runtime/turn_loop.py` | fixed/random/simple LLM 共用协议 |
 | M8 scoring reports | `scoring/`, `reports/`, `storage/` | 不调用 LLM，不读取 persona 作主分数 |
 | M9 end-to-end v1 | `runtime/`, `agents/`, `simulator/`, `scoring/` | 第一份可解释 experiment report |
@@ -563,7 +581,7 @@ UI 边界：
 - schema tests: Pydantic object parsing and serialization。
 - validation tests: graph references、map coverage、evidence visibility、manifest scoring profile。
 - scoring tests: squared mastery distance、missing penalty 36、unsupported inference rate。
-- runtime tests: one-turn contract、max_turns、visibility context construction。
+- runtime tests: registry loading、manifest artifact binding、max_turns、visibility context construction。
 - simulator guard tests: 不泄露 mastery labels、hidden evidence ids、full map。
 - end-to-end fixture tests: 5-8 node development fixture 跑完整 episode。
 

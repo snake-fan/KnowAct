@@ -1,0 +1,2 @@
+- grounding nodes 采用启发式方法，后续需要用 LLM 来实现
+- fallback 处理问题

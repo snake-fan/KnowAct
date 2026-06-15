@@ -81,8 +81,8 @@ A user-specific or agent-reconstructed view of knowledge state over a **Knowledg
 _Avoid_: domain graph, authored graph
 
 **Reviewed Map**:
-The hidden **Knowledge Map** used as the benchmark reference for a simulated or real user.
-_Avoid_: user graph, true graph, ground-truth graph
+The hidden **Knowledge Map** used as the benchmark reference for a simulated or real user, bound to one reviewed graph version and one **Confirmed Profile Context Snapshot**.
+_Avoid_: user graph, true graph, ground-truth graph, cross-domain map
 
 **Candidate Knowledge Map**:
 A generated user-specific **Knowledge Map** sample produced during authoring before benchmark-author review, from one **Confirmed Profile Context Snapshot** and one reviewed graph version in the same **Benchmark Domain**.
@@ -133,8 +133,16 @@ A bounded interaction in which a tested agent tries to infer one user's **Review
 _Avoid_: learning session, tutoring session, conversation
 
 **Evaluation Episode Manifest**:
-The configuration record that binds an **Evaluation Episode** to its graph, hidden map, profile context, turn budget, interaction rules, and scoring profile.
+The configuration record in the **Runtime Episode Registry** that binds an **Evaluation Episode** to one benchmark domain, one reviewed graph version, one hidden **Reviewed Map**, turn budget, interaction rules, and scoring profile.
 _Avoid_: loose runner args, experiment notes, prompt metadata
+
+**Evaluation Runtime**:
+The execution boundary that runs an **Evaluation Episode** by loading its manifest and reviewed benchmark artifacts, constructing the separate visible contexts for the **User Simulator** and **Tested Agent**, and orchestrating calls between them.
+_Avoid_: authoring workflow, simulator preview, scoring-only script, loose test platform
+
+**Runtime Episode Registry**:
+The **Evaluation Runtime** registry of runnable **Evaluation Episodes**, allowing experiments to select episodes across benchmark domains while each episode manifest still binds one benchmark domain, one reviewed graph version, and one hidden reviewed map.
+_Avoid_: domain-local episode list, agent-owned test queue, cross-domain knowledge map
 
 **Benchmark Domain**:
 The subject area covered by a v1 authored graph and its evaluation episodes.
@@ -519,7 +527,8 @@ _Avoid_: ground-truth edge, authored edge
 - Initial edge-aware checks do not infer mastery ordering from `part_of`, `supports`, or `contrasts_with` edges.
 - **Profile Context** should be consistent with the **Reviewed Map** but is not part of **Episode Mastery Distance**.
 - A v1 **Evaluation Episode** should be declared by an **Evaluation Episode Manifest**.
-- An **Evaluation Episode Manifest** references the **Episode Knowledge Graph**, **Reviewed Map**, optional **Profile Context**, **Turn Budget**, interaction rules, and scoring profile.
+- An **Evaluation Episode Manifest** lives in the **Runtime Episode Registry** and selects one **Episode Knowledge Graph** version, one hidden **Reviewed Map**, **Turn Budget**, interaction rules, and scoring profile.
+- The **Evaluation Runtime** derives the relevant **Confirmed Profile Context Snapshot** from the selected **Reviewed Map** rather than duplicating profile identity in the **Evaluation Episode Manifest**.
 - V1 uses one fixed **Scoring Profile**, `squared_mastery_distance_v1`.
 - An **Evaluation Episode Manifest** may reference the v1 **Scoring Profile** but must not override it.
 - V1 targets one **Benchmark Domain** before multi-domain expansion.
@@ -714,6 +723,7 @@ _Avoid_: ground-truth edge, authored edge
 - "episode score" can imply a reward where higher is better; resolved: v1 primary result is **Episode Mastery Distance**, where lower is better.
 - "turn budget" can be inferred from graph size; resolved: v1 uses an explicit **Turn Budget** configured per **Evaluation Episode**.
 - "episode config" can be scattered across runner arguments; resolved: v1 uses an **Evaluation Episode Manifest**.
+- "episode manifests belong to one domain directory" can limit cross-domain experiment orchestration; resolved: v1 stores runnable episode manifests in a **Runtime Episode Registry** while each manifest still selects one domain graph version and one hidden **Reviewed Map**.
 - "scoring profile" can imply per-episode custom metrics; resolved: v1 uses fixed `squared_mastery_distance_v1` for comparability.
 - "benchmark domain" can imply a multi-domain suite; resolved: v1 starts with one domain and defers multi-domain calibration.
 - "machine learning algorithms" is too broad for v1; resolved: the first domain is classical supervised ML algorithms with enough nodes for profile differentiation.

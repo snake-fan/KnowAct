@@ -344,21 +344,26 @@ Goal: make each evaluation run reproducible and explicit after simulator behavio
 
 Milestone M6:
 
-- Each `Evaluation Episode Manifest` binds the episode graph, hidden map, simulator configuration, optional profile context, `max_turns`, interaction rule, and `squared_mastery_distance_v1`.
+- Each `Evaluation Episode Manifest` lives in the `Runtime Episode Registry` under `benchmark/runtime/episodes/{episode_id}/episode_manifest.json`.
+- Each manifest uses identity-first binding: `benchmark_domain`, `graph_version`, `hidden_map_id`, `max_turns`, interaction rule, and `squared_mastery_distance_v1`.
+- Runtime loading derives the confirmed profile context from the reviewed map manifest's `user_id` instead of duplicating user/profile identity in the episode manifest.
 - The manifest validator rejects custom scoring overrides.
+- The manifest validator and loader reject graph/map identity mismatches and candidate artifacts.
 - Runtime loading enforces the visibility boundary: the simulator sees hidden map data and simulator-only evidence, while the tested agent sees the authored graph and visible interaction history only.
 - One `Interaction Turn` means one primary `Diagnostic Question` followed by one simulator answer.
+- Phase 6 stops at read-only episode inspection and visibility-context construction. It does not open a run trigger, call a tested agent, call the simulator, write transcripts, or produce scoring reports.
 
 Recommended development fixture:
 
 - One small development episode can be used to test manifest loading, artifact binding, and visibility-context construction.
-- Formal v1 episodes must use reviewed graph and reviewed maps.
+- Formal v1 episodes must be registered through the runtime registry and must use reviewed graph versions and reviewed maps.
 
 Implementation note:
 
-- Structures to implement: `backend/knowact/runtime/episode_loader.py`, `runtime/visibility.py`, storage repositories for manifests/graphs/maps, and manifest validation tests.
-- Interfaces to open: stable read-only endpoints for `GET /episodes` and `GET /episodes/{episode_id}` once repositories exist; run-trigger endpoints should wait until simulator, agent, and scoring wiring can preserve the visibility boundary.
-- Development API boundary: episode-loading or visibility smoke endpoints may use development fixtures, but formal runtime paths must reject candidate graph/map artifacts.
+- Structures to implement: `backend/knowact/runtime/episode_repository.py`, `runtime/episode_loader.py`, `runtime/visibility.py`, storage helpers for runtime episode manifests, and manifest/visibility validation tests.
+- Interfaces to open: stable read-only endpoints for `GET /api/runtime/episodes` and `GET /api/runtime/episodes/{episode_id}` once repositories exist. The detail endpoint may return a tested-agent-visible context preview, but must not return hidden maps, hidden evidence ids, simulator-only context, or profile context payload.
+- Run-trigger endpoints should wait until simulator, agent, transcript, and scoring wiring can preserve the visibility boundary.
+- Development API boundary: fixture or smoke endpoints may exist only if clearly separated from formal runtime paths. Formal runtime paths must read `benchmark/runtime/episodes/` and reject candidate graph/map artifacts.
 
 ## Phase 7: Tested Agent Interface and Baselines
 
@@ -433,7 +438,7 @@ Minimum review questions for the report:
 Implementation note:
 
 - Structures to implement: `backend/knowact/runtime/runner.py`, `runtime/turn_loop.py`, `runtime/transcript.py`, `experiments/runs/` output snapshots, and experiment-level report documents.
-- Interfaces to open: `POST /episodes/{episode_id}/runs`, `GET /runs/{run_id}`, and `GET /runs/{run_id}/report` once reviewed artifacts, simulator, agents, and scoring are wired.
+- Interfaces to open: `POST /api/runtime/episodes/{episode_id}/runs`, `GET /runs/{run_id}`, and `GET /runs/{run_id}/report` once reviewed artifacts, simulator, agents, and scoring are wired.
 - Development API boundary: end-to-end fixture runs can appear in development-only routes first, but formal v1 runs should use stable routes and reviewed artifacts only.
 
 ## Phase 10: Research Workbench
