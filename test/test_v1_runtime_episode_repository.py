@@ -3,6 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from backend.knowact.runtime.episode_repository import (
     EPISODE_MANIFEST_FILENAME,
     RuntimeEpisodeArtifactError,
@@ -12,6 +14,10 @@ from backend.knowact.runtime.episode_repository import (
     RuntimeEpisodeNotFoundError,
     RuntimeProfileContextStatus,
     RuntimeEpisodeRepository,
+)
+from backend.knowact.runtime.visibility import (
+    TestedAgentVisibleEpisodeContext,
+    validate_tested_agent_visible_episode_context,
 )
 
 
@@ -217,6 +223,129 @@ class V1RuntimeEpisodeRepositoryTest(unittest.TestCase):
             RuntimeEpisodeBindingWarningCode.MISSING_PROFILE_CONTEXT,
             binding.warnings[0].code,
         )
+
+    def test_build_tested_agent_visible_context_exposes_graph_and_empty_dialogue(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(
+                workspace_root,
+                "episode_a",
+                graph_version="v1",
+                hidden_map_id="gt_map_001",
+            )
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+
+            context = RuntimeEpisodeRepository(
+                workspace_root=workspace_root
+            ).build_tested_agent_visible_context("episode_a")
+            simulator_trace_root = (
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "simulator"
+            )
+            experiments_root = workspace_root / "experiments"
+
+        self.assertEqual("episode_a", context.episode_id)
+        self.assertEqual("classical_supervised_ml_algorithms", context.benchmark_domain)
+        self.assertEqual("v1", context.graph_version)
+        self.assertEqual(3, context.max_turns)
+        self.assertEqual("single_diagnostic_question_per_turn", context.interaction_rule)
+        self.assertEqual("squared_mastery_distance_v1", context.scoring_profile)
+        self.assertEqual(2, len(context.graph.nodes))
+        self.assertEqual(1, len(context.graph.edges))
+        self.assertEqual((), context.visible_dialogue_context.turns)
+        self.assertEqual(
+            "Diagnose understanding of Train/Test Split.",
+            context.graph.nodes[0].diagnostic_goal,
+        )
+        self.assertEqual(
+            "prerequisite_for",
+            context.graph.edges[0].type,
+        )
+
+        validate_tested_agent_visible_episode_context(context)
+        self.assertFalse(simulator_trace_root.exists())
+        self.assertFalse(experiments_root.exists())
+
+    def test_tested_agent_visible_context_dump_does_not_leak_hidden_payloads(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(
+                workspace_root,
+                "episode_a",
+                graph_version="v1",
+                hidden_map_id="gt_map_001",
+            )
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+
+            context = RuntimeEpisodeRepository(
+                workspace_root=workspace_root
+            ).build_tested_agent_visible_context("episode_a")
+
+        payload = context.model_dump(mode="json", exclude_none=True)
+        payload_text = json.dumps(payload, sort_keys=True)
+
+        self.assertNotIn("hidden_map_id", payload)
+        for hidden_fragment in (
+            "gt_map_001",
+            "synthetic_user_001",
+            "ev_gt_map_001",
+            "mastery_level",
+            "evidence_refs",
+            "simulator_only",
+            "The user can explain held-out evaluation and leakage risks.",
+            "The user has heard of cross-validation but cannot describe fold rotation.",
+            "profile_context",
+            "A practical beginner with limited statistical foundations.",
+            "Has followed introductory sklearn examples.",
+            "Can run basic estimator workflows.",
+            "Understand model evaluation.",
+            "Prefers concrete examples.",
+            "answer_blueprint",
+            "debug_trace",
+        ):
+            with self.subTest(hidden_fragment=hidden_fragment):
+                self.assertNotIn(hidden_fragment, payload_text)
+
+    def test_tested_agent_visible_context_contract_rejects_hidden_extra_fields(self):
+        visible_payload = {
+            "episode_id": "episode_a",
+            "benchmark_domain": "classical_supervised_ml_algorithms",
+            "graph_version": "v1",
+            "max_turns": 3,
+            "interaction_rule": "single_diagnostic_question_per_turn",
+            "scoring_profile": "squared_mastery_distance_v1",
+            "graph": {
+                "nodes": [_knowledge_node("train_test_split", "Train/Test Split")],
+                "edges": [],
+            },
+            "visible_dialogue_context": {"turns": []},
+        }
+        forbidden_fields = {
+            "hidden_map_id": "gt_map_001",
+            "map_id": "gt_map_001",
+            "user_id": "synthetic_user_001",
+            "profile_context": {"summary": "hidden persona text"},
+            "states": [{"node_id": "train_test_split", "mastery_level": "L4"}],
+            "evidence": [{"id": "ev_hidden"}],
+            "debug_trace": {"grounding": "hidden internals"},
+            "answer_blueprint": {"response_mode": "direct_answer"},
+        }
+
+        TestedAgentVisibleEpisodeContext.model_validate(visible_payload)
+        for field, value in forbidden_fields.items():
+            with self.subTest(field=field):
+                payload = dict(visible_payload)
+                payload[field] = value
+
+                with self.assertRaises(ValidationError):
+                    TestedAgentVisibleEpisodeContext.model_validate(payload)
 
 
 def _episode_dir(

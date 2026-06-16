@@ -284,7 +284,7 @@ V1 实现已经从 schema 与 validation spine 开始：
 - `backend/knowact/validation/`：用于 graph 引用、map coverage/evidence support 和 episode manifest 约束的跨对象 validator。
 - `backend/knowact/authoring/`：Phase 2 graph authoring workflow spine，包含 node extraction、node rubric authoring、edge proposal、candidate file export 边界，以及分离的 `templates/` 和 `parsers/` 模块来管理 agent prompts 与 raw model outputs。
 - `backend/knowact/simulator/`：Phase 5 user simulator contract，当前包含 usable stateless single-turn API boundary，保持 request 与 response 字段只暴露 tested-agent-visible 信息。
-- `backend/knowact/runtime/`：Phase 6 runtime episode helpers，当前包含用于只读 episode manifest lookup 的 `Runtime Episode Registry` repository。
+- `backend/knowact/runtime/`：Phase 6 runtime episode helpers，包含 `Runtime Episode Registry` repository 和 tested-agent-visible episode context construction。
 - `backend/knowact/llm/`：model-client interface，以及基于 OpenAI 和 DeepSeek SDK 的 clients，用于 text-based authoring steps 和 LLM-backed simulator turns。
 - `backend/knowact/storage/`：local artifact、material path 与 reviewed graph/map promotion helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
 - `backend/knowact/api/` 与 `backend/main.py`：FastAPI 入口，以及可从本地教材 PDF 运行真实 graph authoring workflow 的 authoring API。
@@ -370,6 +370,8 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`：返回 candidate-map review 用的 generation-time edge-consistency warnings。
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`：用 reviewed graph 与 confirmed Profile Context 重新校验一份已保存的 Candidate Knowledge Map，将 `kind` 转换为 `ground_truth`，并发布不可变的 `maps/{map_id}/map.json` 与 `map_manifest.json`。已有 `map_id` 返回 `409 Conflict`，generation-time `consistency_warnings.json` 不会复制到 reviewed data，成功发布后的 run 会从 `candidate_maps/` 移除。
 - `GET /api/authoring/maps/{benchmark_domain}` 和 `GET /api/authoring/maps/{benchmark_domain}/{map_id}`：列出和读取 reviewed Knowledge Map snapshots，用于只读 workbench inspection。
+- `GET /api/runtime/episodes`：从 `benchmark/runtime/episodes/` 列出 runtime episode summaries，不暴露 hidden map id 或 profile context payload。
+- `GET /api/runtime/episodes/{episode_id}`：返回 tested-agent-visible episode context，包含 episode identity、domain、graph version、turn budget、interaction rule、scoring profile、reviewed graph nodes/edges 和空的 visible dialogue scaffold。它不会调用 simulator 或 tested agent，也不会返回 hidden map state、hidden evidence、profile context、debug traces、answer blueprints、transcripts 或 scoring reports。
 - `POST /api/simulator/turn`：返回一个由 reviewed map grounding 的 simulator answer。它接受 `benchmark_domain`、reviewed `map_id`、request-level `client_provider`（`openai` 或 `deepseek`，默认 `openai`）、一个 diagnostic `question`、可选 visible dialogue context，以及可选 debug-trace availability 请求元数据。每次 turn 都会在 `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/` 写出隐藏的本地 debug trace；`turn_options.include_debug_trace` 只控制 response 是否返回 `debug_trace_id` 和 `debug_trace_available`。`/api/simulator/turn-test` 是 workbench/test variant，request 与 visible answer 字段相同，只额外返回 `grounded_node_ids` 供 map highlighting 使用。`/api/simulator/preview` 保留为 deprecated compatibility alias。
 
 ```json
@@ -397,6 +399,7 @@ PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `.
 - [x] 基于 LLM 的 Profile Context generation 与不可变 confirmation gate
 - [x] Single-batch Candidate Knowledge Map generation tracer bullet
 - [x] Reviewed map promotion 与 map manifest generation
+- [x] Tested-agent-visible episode context preview
 - [ ] Ground-truth map authoring
 - [ ] 人工校验协议
 - [x] 用户模拟器
