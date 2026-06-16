@@ -54,6 +54,18 @@ class RuntimeEpisodeBindingError(ValueError):
     """Raised when reviewed artifacts cannot be bound to a runtime episode."""
 
 
+class RuntimeEpisodeReviewedArtifactLoadError(RuntimeEpisodeBindingError):
+    """Raised when a reviewed artifact dependency cannot be loaded safely."""
+
+
+class RuntimeEpisodeIdentityMismatchError(RuntimeEpisodeBindingError):
+    """Raised when reviewed artifact identities do not match the episode manifest."""
+
+
+class RuntimeEpisodeVisibilityError(RuntimeEpisodeBindingError):
+    """Raised when a tested-agent-visible context fails visibility validation."""
+
+
 class RuntimeProfileContextStatus(StrEnum):
     LOADED = "loaded"
     MISSING_OPTIONAL = "missing_optional"
@@ -150,10 +162,13 @@ class RuntimeEpisodeRepository:
         episode_id: str,
     ) -> TestedAgentVisibleEpisodeContext:
         binding = self.load_episode_binding(episode_id)
-        return build_tested_agent_visible_episode_context(
-            manifest=binding.manifest,
-            graph=binding.reviewed_graph.graph,
-        )
+        try:
+            return build_tested_agent_visible_episode_context(
+                manifest=binding.manifest,
+                graph=binding.reviewed_graph.graph,
+            )
+        except KnowActValidationError as exc:
+            raise RuntimeEpisodeVisibilityError(str(exc)) from exc
 
 
 def _load_episode_record(
@@ -198,7 +213,7 @@ def _bind_episode_record(
             version=manifest.graph_version,
         )
     except (ReviewedGraphNotFoundError, ReviewedGraphArtifactError) as exc:
-        raise RuntimeEpisodeBindingError(
+        raise RuntimeEpisodeReviewedArtifactLoadError(
             f"Reviewed graph {manifest.graph_version} cannot be loaded"
         ) from exc
 
@@ -209,7 +224,7 @@ def _bind_episode_record(
             map_id=manifest.hidden_map_id,
         )
     except (ReviewedMapNotFoundError, ReviewedMapArtifactError) as exc:
-        raise RuntimeEpisodeBindingError(
+        raise RuntimeEpisodeReviewedArtifactLoadError(
             f"Reviewed hidden map {manifest.hidden_map_id} cannot be loaded"
         ) from exc
 
@@ -219,8 +234,8 @@ def _bind_episode_record(
             reviewed_graph=reviewed_graph,
             hidden_map=hidden_map,
         )
-    except KnowActValidationError as exc:
-        raise RuntimeEpisodeBindingError(str(exc)) from exc
+    except RuntimeEpisodeBindingError:
+        raise
 
     profile_context, warnings = _load_profile_context_binding(
         workspace_root=workspace_root,
@@ -245,22 +260,25 @@ def _validate_runtime_episode_artifact_binding(
 ) -> None:
     map_manifest = hidden_map.manifest
     if map_manifest.benchmark_domain != manifest.benchmark_domain:
-        raise KnowActValidationError(
+        raise RuntimeEpisodeIdentityMismatchError(
             "Reviewed map manifest benchmark_domain does not match episode manifest"
         )
     if map_manifest.graph_version != manifest.graph_version:
-        raise KnowActValidationError(
+        raise RuntimeEpisodeIdentityMismatchError(
             "Reviewed map manifest graph_version does not match episode manifest"
         )
     if hidden_map.knowledge_map.kind != KnowledgeMapKind.GROUND_TRUTH:
-        raise KnowActValidationError(
+        raise RuntimeEpisodeReviewedArtifactLoadError(
             "Runtime episodes require a reviewed ground-truth hidden map"
         )
     if hidden_map.knowledge_map.user_id != map_manifest.user_id:
-        raise KnowActValidationError(
+        raise RuntimeEpisodeIdentityMismatchError(
             "Reviewed map user_id does not match reviewed map manifest"
         )
-    validate_knowledge_map(hidden_map.knowledge_map, reviewed_graph.graph)
+    try:
+        validate_knowledge_map(hidden_map.knowledge_map, reviewed_graph.graph)
+    except KnowActValidationError as exc:
+        raise RuntimeEpisodeReviewedArtifactLoadError(str(exc)) from exc
 
 
 def _load_profile_context_binding(
@@ -294,7 +312,7 @@ def _load_profile_context_binding(
             ),
         )
     except ConfirmedProfileContextArtifactError as exc:
-        raise RuntimeEpisodeBindingError(
+        raise RuntimeEpisodeReviewedArtifactLoadError(
             "Confirmed Profile Context cannot be loaded"
         ) from exc
 
