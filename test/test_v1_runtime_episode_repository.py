@@ -6,8 +6,11 @@ from pathlib import Path
 from backend.knowact.runtime.episode_repository import (
     EPISODE_MANIFEST_FILENAME,
     RuntimeEpisodeArtifactError,
+    RuntimeEpisodeBindingError,
+    RuntimeEpisodeBindingWarningCode,
     RuntimeEpisodeIdError,
     RuntimeEpisodeNotFoundError,
+    RuntimeProfileContextStatus,
     RuntimeEpisodeRepository,
 )
 
@@ -111,6 +114,110 @@ class V1RuntimeEpisodeRepositoryTest(unittest.TestCase):
             with self.assertRaises(RuntimeEpisodeArtifactError):
                 RuntimeEpisodeRepository(workspace_root=workspace_root).list_episodes()
 
+    def test_load_episode_binding_reads_reviewed_artifacts_and_profile_identity(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(workspace_root, "episode_a", graph_version="v1", hidden_map_id="gt_map_001")
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+
+            binding = RuntimeEpisodeRepository(
+                workspace_root=workspace_root
+            ).load_episode_binding("episode_a")
+
+        self.assertEqual("episode_a", binding.episode_id)
+        self.assertEqual("v1", binding.reviewed_graph.manifest.version)
+        self.assertEqual(2, len(binding.reviewed_graph.graph.nodes))
+        self.assertEqual("gt_map_001", binding.hidden_map.manifest.map_id)
+        self.assertEqual("synthetic_user_001", binding.hidden_map.manifest.user_id)
+        self.assertEqual("synthetic_user_001", binding.profile_context.user_id)
+        self.assertEqual(RuntimeProfileContextStatus.LOADED, binding.profile_context.status)
+        self.assertEqual("synthetic_user_001", getattr(binding.profile_context.profile_context, "user_id"))
+        self.assertEqual((), binding.warnings)
+
+    def test_load_episode_binding_rejects_map_domain_mismatch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(workspace_root, "episode_a", graph_version="v1", hidden_map_id="gt_map_001")
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root, manifest_benchmark_domain="other_domain")
+
+            with self.assertRaises(RuntimeEpisodeBindingError):
+                RuntimeEpisodeRepository(
+                    workspace_root=workspace_root
+                ).load_episode_binding("episode_a")
+
+    def test_load_episode_binding_rejects_map_graph_version_mismatch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(workspace_root, "episode_a", graph_version="v1", hidden_map_id="gt_map_001")
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root, graph_version="v2")
+
+            with self.assertRaises(RuntimeEpisodeBindingError):
+                RuntimeEpisodeRepository(
+                    workspace_root=workspace_root
+                ).load_episode_binding("episode_a")
+
+    def test_load_episode_binding_rejects_missing_reviewed_graph_even_if_candidate_exists(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(workspace_root, "episode_a", graph_version="v1", hidden_map_id="gt_map_001")
+            _write_candidate_graph_placeholder(workspace_root)
+
+            with self.assertRaises(RuntimeEpisodeBindingError):
+                RuntimeEpisodeRepository(
+                    workspace_root=workspace_root
+                ).load_episode_binding("episode_a")
+
+    def test_load_episode_binding_rejects_missing_reviewed_map_even_if_candidate_exists(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(workspace_root, "episode_a", graph_version="v1", hidden_map_id="gt_map_001")
+            _write_reviewed_graph(workspace_root)
+            _write_candidate_map_placeholder(workspace_root)
+
+            with self.assertRaises(RuntimeEpisodeBindingError):
+                RuntimeEpisodeRepository(
+                    workspace_root=workspace_root
+                ).load_episode_binding("episode_a")
+
+    def test_load_episode_binding_rejects_candidate_map_in_reviewed_map_slot(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(workspace_root, "episode_a", graph_version="v1", hidden_map_id="gt_map_001")
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root, map_kind="candidate")
+
+            with self.assertRaises(RuntimeEpisodeBindingError):
+                RuntimeEpisodeRepository(
+                    workspace_root=workspace_root
+                ).load_episode_binding("episode_a")
+
+    def test_load_episode_binding_returns_optional_missing_profile_context_status(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(workspace_root, "episode_a", graph_version="v1", hidden_map_id="gt_map_001")
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+
+            binding = RuntimeEpisodeRepository(
+                workspace_root=workspace_root
+            ).load_episode_binding("episode_a")
+
+        self.assertEqual("synthetic_user_001", binding.profile_context.user_id)
+        self.assertEqual(
+            RuntimeProfileContextStatus.MISSING_OPTIONAL,
+            binding.profile_context.status,
+        )
+        self.assertIsNone(binding.profile_context.profile_context)
+        self.assertEqual(1, len(binding.warnings))
+        self.assertEqual(
+            RuntimeEpisodeBindingWarningCode.MISSING_PROFILE_CONTEXT,
+            binding.warnings[0].code,
+        )
+
 
 def _episode_dir(
     workspace_root: Path,
@@ -127,6 +234,9 @@ def _write_manifest(
     *,
     root_parts: tuple[str, ...] = ("benchmark", "runtime", "episodes"),
     payload_episode_id: str | None = None,
+    benchmark_domain: str = "classical_supervised_ml_algorithms",
+    graph_version: str = "dev_fixture_v1",
+    hidden_map_id: str = "dev_user_001_map",
     max_turns: int = 3,
     scoring_overrides: dict[str, int] | None = None,
 ) -> Path:
@@ -138,9 +248,9 @@ def _write_manifest(
     manifest_path.parent.mkdir(parents=True)
     payload = {
         "episode_id": payload_episode_id or episode_id,
-        "benchmark_domain": "classical_supervised_ml_algorithms",
-        "graph_version": "dev_fixture_v1",
-        "hidden_map_id": "dev_user_001_map",
+        "benchmark_domain": benchmark_domain,
+        "graph_version": graph_version,
+        "hidden_map_id": hidden_map_id,
         "max_turns": max_turns,
         "interaction_rule": "single_diagnostic_question_per_turn",
         "scoring_profile": "squared_mastery_distance_v1",
@@ -149,3 +259,197 @@ def _write_manifest(
         payload["scoring_overrides"] = scoring_overrides
     manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return manifest_path
+
+
+def _write_reviewed_graph(workspace_root: Path) -> None:
+    graph_dir = (
+        workspace_root
+        / "benchmark"
+        / "domains"
+        / "classical_supervised_ml_algorithms"
+        / "graphs"
+        / "v1"
+    )
+    graph_dir.mkdir(parents=True)
+    _write_json(
+        graph_dir / "graph_manifest.json",
+        {
+            "graph_id": "kg_classical_supervised_ml_algorithms_v1",
+            "domain": "classical_supervised_ml_algorithms",
+            "version": "v1",
+            "promoted_from_candidate_run": "graph_run_001",
+            "nodes_file": "authored_nodes.json",
+            "edges_file": "authored_edges.json",
+        },
+    )
+    _write_json(
+        graph_dir / "authored_nodes.json",
+        [
+            _knowledge_node("train_test_split", "Train/Test Split"),
+            _knowledge_node("cross_validation", "Cross-Validation"),
+        ],
+    )
+    _write_json(
+        graph_dir / "authored_edges.json",
+        [
+            {
+                "id": "edge_train_test_split_prerequisite_for_cross_validation",
+                "source": "train_test_split",
+                "target": "cross_validation",
+                "type": "prerequisite_for",
+                "rationale": "A held-out split motivates repeated validation splits.",
+                "weight": 0.7,
+                "curation_confidence": 0.8,
+            }
+        ],
+    )
+
+
+def _write_reviewed_map(
+    workspace_root: Path,
+    *,
+    manifest_benchmark_domain: str = "classical_supervised_ml_algorithms",
+    graph_version: str = "v1",
+    map_kind: str = "ground_truth",
+) -> None:
+    map_dir = (
+        workspace_root
+        / "benchmark"
+        / "domains"
+        / "classical_supervised_ml_algorithms"
+        / "maps"
+        / "gt_map_001"
+    )
+    map_dir.mkdir(parents=True)
+    _write_json(
+        map_dir / "map_manifest.json",
+        {
+            "map_id": "gt_map_001",
+            "user_id": "synthetic_user_001",
+            "benchmark_domain": manifest_benchmark_domain,
+            "graph_version": graph_version,
+            "promoted_from_candidate_run": "map_run_001",
+        },
+    )
+    _write_json(
+        map_dir / "map.json",
+        {
+            "user_id": "synthetic_user_001",
+            "kind": map_kind,
+            "states": [
+                {
+                    "node_id": "train_test_split",
+                    "mastery_level": "L4",
+                    "evidence_refs": ["ev_gt_map_001_train_test_split_001"],
+                    "misconceptions": [],
+                    "unknowns": [],
+                },
+                {
+                    "node_id": "cross_validation",
+                    "mastery_level": "L1",
+                    "evidence_refs": ["ev_gt_map_001_cross_validation_001"],
+                    "misconceptions": ["Treats each fold as a separate final test set."],
+                    "unknowns": ["How folds rotate validation data."],
+                },
+            ],
+            "evidence": [
+                _ground_truth_evidence(
+                    "ev_gt_map_001_train_test_split_001",
+                    "train_test_split",
+                    "The user can explain held-out evaluation and leakage risks.",
+                ),
+                _ground_truth_evidence(
+                    "ev_gt_map_001_cross_validation_001",
+                    "cross_validation",
+                    "The user has heard of cross-validation but cannot describe fold rotation.",
+                ),
+            ],
+        },
+    )
+
+
+def _write_confirmed_profile_context(workspace_root: Path) -> None:
+    profile_path = (
+        workspace_root
+        / "benchmark"
+        / "domains"
+        / "classical_supervised_ml_algorithms"
+        / "users"
+        / "synthetic_user_001"
+        / "profile_context.json"
+    )
+    profile_path.parent.mkdir(parents=True)
+    _write_json(
+        profile_path,
+        {
+            "user_id": "synthetic_user_001",
+            "benchmark_domain": "classical_supervised_ml_algorithms",
+            "summary": "A practical beginner with limited statistical foundations.",
+            "background": ["Has followed introductory sklearn examples."],
+            "prior_experience": ["Can run basic estimator workflows."],
+            "goals": ["Understand model evaluation."],
+            "preferences": ["Prefers concrete examples."],
+        },
+    )
+
+
+def _write_candidate_graph_placeholder(workspace_root: Path) -> None:
+    candidate_dir = (
+        workspace_root
+        / "benchmark"
+        / "domains"
+        / "classical_supervised_ml_algorithms"
+        / "candidate_graphs"
+        / "v1"
+    )
+    candidate_dir.mkdir(parents=True)
+    _write_json(candidate_dir / "candidate_nodes.json", [])
+    _write_json(candidate_dir / "candidate_edges.json", [])
+
+
+def _write_candidate_map_placeholder(workspace_root: Path) -> None:
+    candidate_dir = (
+        workspace_root
+        / "benchmark"
+        / "domains"
+        / "classical_supervised_ml_algorithms"
+        / "candidate_maps"
+        / "gt_map_001"
+    )
+    candidate_dir.mkdir(parents=True)
+    _write_json(candidate_dir / "candidate_map.json", {"kind": "candidate"})
+
+
+def _knowledge_node(node_id: str, name: str) -> dict[str, object]:
+    return {
+        "id": node_id,
+        "name": name,
+        "type": "concept",
+        "definition": f"Definition for {name}.",
+        "source_locators": [{"source_id": "isl_python", "locator": "chapter 5"}],
+        "diagnostic_goal": f"Diagnose understanding of {name}.",
+        "levels": {f"L{index}": f"L{index} rubric for {name}." for index in range(6)},
+        "diagnostic_signals": [f"Can discuss {name}."],
+        "simulator_behavior": f"Answer consistently about {name}.",
+    }
+
+
+def _ground_truth_evidence(
+    evidence_id: str,
+    node_id: str,
+    signal: str,
+) -> dict[str, object]:
+    return {
+        "id": evidence_id,
+        "node_id": node_id,
+        "evidence_type": "ground_truth_profile",
+        "evidence_kind": "prior_answer",
+        "visibility": "simulator_only",
+        "signal": signal,
+    }
+
+
+def _write_json(path: Path, payload: object) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+        handle.write("\n")
