@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import StrEnum
 import json
 from pathlib import Path
 import re
@@ -6,8 +7,27 @@ import re
 from pydantic import ValidationError
 
 from backend.knowact.core.episode import EvaluationEpisodeManifest
+from backend.knowact.core.map import KnowledgeMapKind
+from backend.knowact.storage.profile_contexts import (
+    ConfirmedProfileContextArtifactError,
+    ConfirmedProfileContextNotFoundError,
+    load_confirmed_profile_context,
+)
+from backend.knowact.storage.reviewed_graphs import (
+    ReviewedGraphArtifactError,
+    ReviewedGraphArtifacts,
+    ReviewedGraphNotFoundError,
+    load_reviewed_graph,
+)
+from backend.knowact.storage.reviewed_maps import (
+    ReviewedMapArtifactError,
+    ReviewedMapArtifacts,
+    ReviewedMapNotFoundError,
+    load_reviewed_map,
+)
 from backend.knowact.validation.episode import validate_episode_manifest
 from backend.knowact.validation.exceptions import KnowActValidationError
+from backend.knowact.validation.map import validate_knowledge_map
 
 
 EPISODE_MANIFEST_FILENAME = "episode_manifest.json"
@@ -26,6 +46,19 @@ class RuntimeEpisodeArtifactError(ValueError):
     """Raised when a runtime episode manifest cannot be parsed or validated."""
 
 
+class RuntimeEpisodeBindingError(ValueError):
+    """Raised when reviewed artifacts cannot be bound to a runtime episode."""
+
+
+class RuntimeProfileContextStatus(StrEnum):
+    LOADED = "loaded"
+    MISSING_OPTIONAL = "missing_optional"
+
+
+class RuntimeEpisodeBindingWarningCode(StrEnum):
+    MISSING_PROFILE_CONTEXT = "missing_profile_context"
+
+
 @dataclass(frozen=True)
 class RuntimeEpisodeRecord:
     episode_id: str
@@ -34,10 +67,35 @@ class RuntimeEpisodeRecord:
     manifest_path: Path
 
 
+@dataclass(frozen=True)
+class RuntimeEpisodeBindingWarning:
+    code: RuntimeEpisodeBindingWarningCode
+    message: str
+
+
+@dataclass(frozen=True)
+class RuntimeProfileContextBinding:
+    benchmark_domain: str
+    user_id: str
+    status: RuntimeProfileContextStatus
+    profile_context: object | None = None
+
+
+@dataclass(frozen=True)
+class RuntimeEpisodeBinding:
+    episode_id: str
+    manifest: EvaluationEpisodeManifest
+    reviewed_graph: ReviewedGraphArtifacts
+    hidden_map: ReviewedMapArtifacts
+    profile_context: RuntimeProfileContextBinding
+    warnings: tuple[RuntimeEpisodeBindingWarning, ...]
+
+
 class RuntimeEpisodeRepository:
     """Read runnable Evaluation Episode manifests from the runtime registry."""
 
     def __init__(self, *, workspace_root: Path) -> None:
+        self._workspace_root = workspace_root
         self._registry_root = workspace_root / "benchmark" / "runtime" / "episodes"
 
     def list_episodes(self) -> tuple[RuntimeEpisodeRecord, ...]:
@@ -76,6 +134,13 @@ class RuntimeEpisodeRepository:
     def read_episode_manifest(self, episode_id: str) -> EvaluationEpisodeManifest:
         return self.read_episode(episode_id).manifest
 
+    def load_episode_binding(self, episode_id: str) -> RuntimeEpisodeBinding:
+        record = self.read_episode(episode_id)
+        return _bind_episode_record(
+            workspace_root=self._workspace_root,
+            record=record,
+        )
+
 
 def _load_episode_record(
     *,
@@ -103,6 +168,130 @@ def _load_episode_record(
         manifest=manifest,
         episode_dir=episode_dir,
         manifest_path=manifest_path,
+    )
+
+
+def _bind_episode_record(
+    *,
+    workspace_root: Path,
+    record: RuntimeEpisodeRecord,
+) -> RuntimeEpisodeBinding:
+    manifest = record.manifest
+    try:
+        reviewed_graph = load_reviewed_graph(
+            workspace_root=workspace_root,
+            benchmark_domain=manifest.benchmark_domain,
+            version=manifest.graph_version,
+        )
+    except (ReviewedGraphNotFoundError, ReviewedGraphArtifactError) as exc:
+        raise RuntimeEpisodeBindingError(
+            f"Reviewed graph {manifest.graph_version} cannot be loaded"
+        ) from exc
+
+    try:
+        hidden_map = load_reviewed_map(
+            workspace_root=workspace_root,
+            benchmark_domain=manifest.benchmark_domain,
+            map_id=manifest.hidden_map_id,
+        )
+    except (ReviewedMapNotFoundError, ReviewedMapArtifactError) as exc:
+        raise RuntimeEpisodeBindingError(
+            f"Reviewed hidden map {manifest.hidden_map_id} cannot be loaded"
+        ) from exc
+
+    try:
+        _validate_runtime_episode_artifact_binding(
+            manifest=manifest,
+            reviewed_graph=reviewed_graph,
+            hidden_map=hidden_map,
+        )
+    except KnowActValidationError as exc:
+        raise RuntimeEpisodeBindingError(str(exc)) from exc
+
+    profile_context, warnings = _load_profile_context_binding(
+        workspace_root=workspace_root,
+        benchmark_domain=hidden_map.manifest.benchmark_domain,
+        user_id=hidden_map.manifest.user_id,
+    )
+    return RuntimeEpisodeBinding(
+        episode_id=record.episode_id,
+        manifest=manifest,
+        reviewed_graph=reviewed_graph,
+        hidden_map=hidden_map,
+        profile_context=profile_context,
+        warnings=warnings,
+    )
+
+
+def _validate_runtime_episode_artifact_binding(
+    *,
+    manifest: EvaluationEpisodeManifest,
+    reviewed_graph: ReviewedGraphArtifacts,
+    hidden_map: ReviewedMapArtifacts,
+) -> None:
+    map_manifest = hidden_map.manifest
+    if map_manifest.benchmark_domain != manifest.benchmark_domain:
+        raise KnowActValidationError(
+            "Reviewed map manifest benchmark_domain does not match episode manifest"
+        )
+    if map_manifest.graph_version != manifest.graph_version:
+        raise KnowActValidationError(
+            "Reviewed map manifest graph_version does not match episode manifest"
+        )
+    if hidden_map.knowledge_map.kind != KnowledgeMapKind.GROUND_TRUTH:
+        raise KnowActValidationError(
+            "Runtime episodes require a reviewed ground-truth hidden map"
+        )
+    if hidden_map.knowledge_map.user_id != map_manifest.user_id:
+        raise KnowActValidationError(
+            "Reviewed map user_id does not match reviewed map manifest"
+        )
+    validate_knowledge_map(hidden_map.knowledge_map, reviewed_graph.graph)
+
+
+def _load_profile_context_binding(
+    *,
+    workspace_root: Path,
+    benchmark_domain: str,
+    user_id: str,
+) -> tuple[RuntimeProfileContextBinding, tuple[RuntimeEpisodeBindingWarning, ...]]:
+    try:
+        profile_context = load_confirmed_profile_context(
+            workspace_root=workspace_root,
+            benchmark_domain=benchmark_domain,
+            user_id=user_id,
+        )
+    except ConfirmedProfileContextNotFoundError:
+        return (
+            RuntimeProfileContextBinding(
+                benchmark_domain=benchmark_domain,
+                user_id=user_id,
+                status=RuntimeProfileContextStatus.MISSING_OPTIONAL,
+                profile_context=None,
+            ),
+            (
+                RuntimeEpisodeBindingWarning(
+                    code=RuntimeEpisodeBindingWarningCode.MISSING_PROFILE_CONTEXT,
+                    message=(
+                        "Profile context is unavailable; runtime binding derived "
+                        "the profile identity from the reviewed map manifest."
+                    ),
+                ),
+            ),
+        )
+    except ConfirmedProfileContextArtifactError as exc:
+        raise RuntimeEpisodeBindingError(
+            "Confirmed Profile Context cannot be loaded"
+        ) from exc
+
+    return (
+        RuntimeProfileContextBinding(
+            benchmark_domain=benchmark_domain,
+            user_id=user_id,
+            status=RuntimeProfileContextStatus.LOADED,
+            profile_context=profile_context,
+        ),
+        (),
     )
 
 
