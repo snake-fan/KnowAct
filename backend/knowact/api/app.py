@@ -9,6 +9,7 @@ from backend.knowact.api.simulator import (
     SimulatorServiceFactory,
     build_simulator_router,
 )
+from backend.knowact.api.runtime import build_runtime_router
 from backend.knowact.authoring.openai_workflow import (
     GraphAuthoringClientProvider,
     build_graph_authoring_workflow_for_provider,
@@ -84,6 +85,11 @@ def create_app(
         ),
         prefix="/api/simulator",
         tags=["simulator"],
+    )
+    app.include_router(
+        build_runtime_router(workspace_root=workspace_root),
+        prefix="/api/runtime",
+        tags=["runtime"],
     )
 
     @app.get("/health", response_model=HealthResponse)

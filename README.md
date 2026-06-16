@@ -284,7 +284,7 @@ The V1 implementation has started with the schema and validation spine:
 - `backend/knowact/validation/`: cross-object validators for graph references, map coverage/evidence support, and episode manifest constraints.
 - `backend/knowact/authoring/`: the Phase 2 graph authoring workflow spine, with node extraction, node rubric authoring, edge proposal, candidate file export boundaries, and separate `templates/` and `parsers/` modules for agent prompts and raw model outputs.
 - `backend/knowact/simulator/`: Phase 5 user simulator contracts with a usable stateless single-turn API that keeps request and response fields tested-agent-visible.
-- `backend/knowact/runtime/`: Phase 6 runtime episode helpers, starting with the `Runtime Episode Registry` repository for read-only episode manifest lookup.
+- `backend/knowact/runtime/`: Phase 6 runtime episode helpers, including the `Runtime Episode Registry` repository and tested-agent-visible episode context construction.
 - `backend/knowact/llm/`: a model-client interface plus OpenAI and DeepSeek SDK-backed clients for text-based authoring steps and LLM-backed simulator turns.
 - `backend/knowact/storage/`: local artifact, material path, and reviewed graph/map promotion helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
 - `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
@@ -370,6 +370,8 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`, which returns generation-time edge-consistency warnings for candidate-map review.
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`, which revalidates one saved Candidate Knowledge Map with its reviewed graph and confirmed Profile Context, converts `kind` to `ground_truth`, and publishes immutable `maps/{map_id}/map.json` plus `map_manifest.json`. Existing `map_id` values return `409 Conflict`, generation-time `consistency_warnings.json` is not copied into reviewed data, and a successfully published run is removed from `candidate_maps/`.
 - `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`, which list and read reviewed Knowledge Map snapshots for read-only workbench inspection.
+- `GET /api/runtime/episodes`, which lists runtime episode summaries from `benchmark/runtime/episodes/` without exposing hidden map ids or profile context payloads.
+- `GET /api/runtime/episodes/{episode_id}`, which returns the tested-agent-visible episode context: episode identity, domain, graph version, turn budget, interaction rule, scoring profile, reviewed graph nodes/edges, and an empty visible dialogue scaffold. It does not call the simulator or tested agent, and it does not return hidden map state, hidden evidence, profile context, debug traces, answer blueprints, transcripts, or scoring reports.
 - `POST /api/simulator/turn`, which returns one reviewed-map-grounded simulator answer. It accepts `benchmark_domain`, reviewed `map_id`, request-level `client_provider` (`openai` or `deepseek`, default `openai`), one diagnostic `question`, optional visible dialogue context, and optional debug-trace availability request metadata. Every turn writes a hidden local debug trace under `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/`; `turn_options.include_debug_trace` only controls whether the response returns `debug_trace_id` and `debug_trace_available`. `/api/simulator/turn-test` is the workbench/test variant with the same request and visible answer fields plus only `grounded_node_ids` for map highlighting. `/api/simulator/preview` remains a deprecated compatibility alias.
 
 ```json
@@ -397,6 +399,7 @@ Implemented / planned components include:
 - [x] LLM-based Profile Context generation and immutable confirmation gate
 - [x] Single-batch Candidate Knowledge Map generation tracer bullet
 - [x] Reviewed map promotion with map manifests
+- [x] Tested-agent-visible episode context preview
 - [ ] Ground-truth map authoring
 - [ ] Human verification protocol
 - [x] User simulator

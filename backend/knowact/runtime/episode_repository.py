@@ -8,6 +8,10 @@ from pydantic import ValidationError
 
 from backend.knowact.core.episode import EvaluationEpisodeManifest
 from backend.knowact.core.map import KnowledgeMapKind
+from backend.knowact.runtime.visibility import (
+    TestedAgentVisibleEpisodeContext,
+    build_tested_agent_visible_episode_context,
+)
 from backend.knowact.storage.profile_contexts import (
     ConfirmedProfileContextArtifactError,
     ConfirmedProfileContextNotFoundError,
@@ -139,6 +143,16 @@ class RuntimeEpisodeRepository:
         return _bind_episode_record(
             workspace_root=self._workspace_root,
             record=record,
+        )
+
+    def build_tested_agent_visible_context(
+        self,
+        episode_id: str,
+    ) -> TestedAgentVisibleEpisodeContext:
+        binding = self.load_episode_binding(episode_id)
+        return build_tested_agent_visible_episode_context(
+            manifest=binding.manifest,
+            graph=binding.reviewed_graph.graph,
         )
 
 
