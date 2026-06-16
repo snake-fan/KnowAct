@@ -361,7 +361,7 @@ Recommended development fixture:
 Implementation note:
 
 - Structures to implement: `backend/knowact/runtime/episode_repository.py`, `runtime/episode_loader.py`, `runtime/visibility.py`, storage helpers for runtime episode manifests, and manifest/visibility validation tests.
-- Interfaces to open: stable read-only endpoints for `GET /api/runtime/episodes` and `GET /api/runtime/episodes/{episode_id}` once repositories exist. The detail endpoint may return a tested-agent-visible context preview, but must not return hidden maps, hidden evidence ids, simulator-only context, or profile context payload.
+- Interfaces opened for the Phase 6 read-only slice: `GET /api/runtime/episodes` lists manifest summaries from the runtime registry, and `GET /api/runtime/episodes/{episode_id}` returns a detail envelope with a manifest summary, reviewed artifact binding summary, and tested-agent-visible context preview. The detail endpoint must not return hidden map ids, synthetic user ids, hidden map states, hidden evidence ids, simulator-only context, profile context payload, debug traces, simulator answer blueprints, run triggers, or scoring reports.
 - Run-trigger endpoints should wait until simulator, agent, transcript, and scoring wiring can preserve the visibility boundary.
 - Development API boundary: fixture or smoke endpoints may exist only if clearly separated from formal runtime paths. Formal runtime paths must read `benchmark/runtime/episodes/` and reject candidate graph/map artifacts.
 

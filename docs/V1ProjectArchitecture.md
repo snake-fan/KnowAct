@@ -428,11 +428,12 @@ load Evaluation Episode Manifest from Runtime Episode Registry
 - `GET /maps/{map_id}`
 - `GET /api/runtime/episodes`
 - `GET /api/runtime/episodes/{episode_id}`
-- `POST /api/runtime/episodes/{episode_id}/runs`
 - `GET /runs/{run_id}`
 - `GET /runs/{run_id}/report`
 
 Phase 4 的初始 authoring surface 保持 narrow and functional：profile-context candidate 支持生成、读取、编辑和显式 confirmation；candidate map 支持生成、读取、列出 runs 和显式 promotion，但不提供 map `PUT`，因为 poor candidate maps 应重新生成而不是手工 patch。为支持 workbench selectors 和 simulator 前端入口，允许只读 `GET /api/authoring/benchmark-domains`、reviewed graph/profile list/read、candidate-map run list，以及 reviewed-map list/read；这些接口不创建或修改 benchmark data，也不启动 simulator runtime。调用方显式串联窄接口，使 profile-context editing、confirmation、candidate-map inspection 和 promotion 保持可见 gate；待闭环调通后再考虑更宽的 orchestration 产品形态。
+
+Phase 6 的 runtime surface 先只开放 `GET /api/runtime/episodes` 和 `GET /api/runtime/episodes/{episode_id}`。Detail response 包含 manifest summary、reviewed artifact binding summary 和 tested-agent-visible context preview，但不暴露 hidden map id、synthetic user id、hidden states、hidden evidence、profile context payload、debug traces、simulator answer blueprint、transcript 或 scoring report。`POST /api/runtime/episodes/{episode_id}/runs` 应等到 simulator、tested agent、transcript 和 scoring wiring 都能保护 visibility boundary 后再开放。
 
 `POST /api/authoring/profile-context-candidates` 接收 required `benchmark_domain`、required `rough_description`、optional limited `domain_summary`、optional `run_id` 和 request-level `client_provider`。首版允许 inline `domain_summary`，但其中不得包含 node 或 rubric 明细；后续可由 domain manifest 提供稳定 summary。
 
