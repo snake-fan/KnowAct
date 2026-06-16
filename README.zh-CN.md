@@ -284,11 +284,13 @@ V1 实现已经从 schema 与 validation spine 开始：
 - `backend/knowact/validation/`：用于 graph 引用、map coverage/evidence support 和 episode manifest 约束的跨对象 validator。
 - `backend/knowact/authoring/`：Phase 2 graph authoring workflow spine，包含 node extraction、node rubric authoring、edge proposal、candidate file export 边界，以及分离的 `templates/` 和 `parsers/` 模块来管理 agent prompts 与 raw model outputs。
 - `backend/knowact/simulator/`：Phase 5 user simulator contract，当前包含 usable stateless single-turn API boundary，保持 request 与 response 字段只暴露 tested-agent-visible 信息。
+- `backend/knowact/runtime/`：Phase 6 runtime episode helpers，当前包含用于只读 episode manifest lookup 的 `Runtime Episode Registry` repository。
 - `backend/knowact/llm/`：model-client interface，以及基于 OpenAI 和 DeepSeek SDK 的 clients，用于 text-based authoring steps 和 LLM-backed simulator turns。
 - `backend/knowact/storage/`：local artifact、material path 与 reviewed graph/map promotion helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
 - `backend/knowact/api/` 与 `backend/main.py`：FastAPI 入口，以及可从本地教材 PDF 运行真实 graph authoring workflow 的 authoring API。
 - `frontend/`：React/Vite research workbench，包含顶层 Knowledge Graph 与 User Profile 模块。它支持 candidate graph review，以及 Profile Context generation、编辑、保存与不可变 confirmation gate。
-- `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`：用于 schema 与 validator 检查的 5-node development fixture，不是正式的 reviewed v1 graph。
+- `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`：用于 schema 与 validator 检查的 5-node development fixture，包含 development episode manifest；它不是正式的 reviewed v1 benchmark data。
+- `benchmark/runtime/episodes/`：跨 domain 的 runtime registry，用于存放真实 runnable `Evaluation Episode Manifest` snapshots；development examples 仍放在 `benchmark/fixtures/` 下。
 - `test/`：覆盖公开 schema 与 validation API 的 `unittest` 测试。
 
 本地 OpenAI API 配置可以复制 `.env.example` 为 `.env`，并填写：
