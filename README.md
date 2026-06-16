@@ -284,11 +284,13 @@ The V1 implementation has started with the schema and validation spine:
 - `backend/knowact/validation/`: cross-object validators for graph references, map coverage/evidence support, and episode manifest constraints.
 - `backend/knowact/authoring/`: the Phase 2 graph authoring workflow spine, with node extraction, node rubric authoring, edge proposal, candidate file export boundaries, and separate `templates/` and `parsers/` modules for agent prompts and raw model outputs.
 - `backend/knowact/simulator/`: Phase 5 user simulator contracts with a usable stateless single-turn API that keeps request and response fields tested-agent-visible.
+- `backend/knowact/runtime/`: Phase 6 runtime episode helpers, starting with the `Runtime Episode Registry` repository for read-only episode manifest lookup.
 - `backend/knowact/llm/`: a model-client interface plus OpenAI and DeepSeek SDK-backed clients for text-based authoring steps and LLM-backed simulator turns.
 - `backend/knowact/storage/`: local artifact, material path, and reviewed graph/map promotion helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
 - `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
 - `frontend/`: a React/Vite research workbench with top-level Knowledge Graph and User Profile modules. It supports candidate graph review and the Profile Context generation, editing, save, and immutable-confirmation gate.
-- `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`: a 5-node development fixture for schema and validator checks, not the formal reviewed v1 graph.
+- `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`: a 5-node development fixture for schema and validator checks, including a development episode manifest; it is not formal reviewed v1 benchmark data.
+- `benchmark/runtime/episodes/`: the cross-domain runtime registry for real runnable `Evaluation Episode Manifest` snapshots; development examples stay under `benchmark/fixtures/`.
 - `test/`: `unittest` coverage for the public schema and validation APIs.
 
 Configure local OpenAI API access by copying `.env.example` to `.env` and filling in:

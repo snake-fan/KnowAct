@@ -25,7 +25,9 @@ class V1DevelopmentFixturesTest(unittest.TestCase):
         ]
         graph = KnowledgeGraph(nodes=nodes, edges=edges)
         reviewed_map = KnowledgeMap.model_validate(_load_json("map.json"))
-        manifest = EvaluationEpisodeManifest.model_validate(_load_json("episode_manifest.json"))
+        manifest = EvaluationEpisodeManifest.model_validate(
+            _load_json("episode_manifest.json")
+        )
 
         validate_knowledge_graph(graph)
         validate_knowledge_map(reviewed_map, graph)
