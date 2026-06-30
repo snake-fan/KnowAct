@@ -425,6 +425,7 @@ load Evaluation Episode Manifest from Runtime Episode Registry
 - `GET /graphs`
 - `GET /graphs/{graph_id}`
 - `GET /maps/{map_id}`
+- `POST /api/runtime/episodes`
 - `GET /api/runtime/episodes`
 - `GET /api/runtime/episodes/{episode_id}`
 - `GET /runs/{run_id}`
@@ -432,7 +433,7 @@ load Evaluation Episode Manifest from Runtime Episode Registry
 
 Phase 4 的初始 authoring surface 保持 narrow and functional：profile-context candidate 支持生成、读取、编辑和显式 confirmation；candidate map 支持生成、读取、列出 runs 和显式 promotion，但不提供 map `PUT`，因为 poor candidate maps 应重新生成而不是手工 patch。为支持 workbench selectors 和 simulator 前端入口，允许只读 `GET /api/authoring/benchmark-domains`、reviewed graph/profile list/read、candidate-map run list，以及 reviewed-map list/read；这些接口不创建或修改 benchmark data，也不启动 simulator runtime。调用方显式串联窄接口，使 profile-context editing、confirmation、candidate-map inspection 和 promotion 保持可见 gate；待闭环调通后再考虑更宽的 orchestration 产品形态。
 
-Phase 6 的 runtime surface 先只开放 `GET /api/runtime/episodes` 和 `GET /api/runtime/episodes/{episode_id}`。Detail response 包含 manifest summary、reviewed artifact binding summary 和 tested-agent-visible context preview，但不暴露 hidden map id、synthetic user id、hidden states、hidden evidence、profile context payload、debug traces、simulator answer blueprint、transcript 或 scoring report。`POST /api/runtime/episodes/{episode_id}/runs` 应等到 simulator、tested agent、transcript 和 scoring wiring 都能保护 visibility boundary 后再开放。
+Phase 6 的 runtime surface 开放 `POST /api/runtime/episodes`、`GET /api/runtime/episodes` 和 `GET /api/runtime/episodes/{episode_id}`。`POST /api/runtime/episodes` 执行 `Episode Manifest Registration`，request 只暴露 `episode_id`、`benchmark_domain`、`graph_version`、`hidden_map_id` 和 `max_turns`；runtime service 固定写入 `interaction_rule = single_diagnostic_question_per_turn` 与 `scoring_profile = squared_mastery_distance_v1`，同步加载并校验 reviewed graph 与 reviewed hidden map binding，只有 binding 通过且 `episode_id` 尚不存在时才把 `Evaluation Episode Manifest` 发布到 `Runtime Episode Registry`，不启动 run。Successful registration 返回 `201 Created` 和 runtime management detail envelope；重复 `episode_id` 或 graph/map identity mismatch 返回 `409 Conflict`，reviewed artifact loading failure 返回 `424 Failed Dependency`。Missing confirmed Profile Context 不阻塞 registration；它只作为 runtime management status/warning 返回。Episode registration 不支持 overwrite；修改 graph、map 或 budget 必须注册新的 `episode_id`。Runtime management detail response 面向 benchmark author，可返回 `hidden_map_id`、reviewed map `user_id`、profile-context load status 和 non-leaking missing-profile warning 供前端展示，但不返回 hidden states、hidden evidence、profile context payload、debug traces、simulator answer blueprint、transcript 或 scoring report；profile context 正文应通过 profile/user inspection surface 查看。其中的 tested-agent-visible context preview 是同一 response 中唯一可交付给 tested agent 的子对象，必须排除 `hidden_map_id`、`map_id`、`user_id`、profile-context status、warnings 和任何 hidden payload。不要为了 frontend management 和 tested-agent delivery 拆出两套 Phase 6 HTTP routes；边界靠 response 分层和 runtime 交付选择来保证。`POST /api/runtime/episodes/{episode_id}/runs` 应等到 simulator、tested agent、transcript 和 scoring wiring 都能保护 visibility boundary 后再开放。
 
 `POST /api/authoring/profile-context-candidates` 接收 required `benchmark_domain`、required `rough_description`、optional limited `domain_summary`、optional `run_id` 和 request-level `client_provider`。首版允许 inline `domain_summary`，但其中不得包含 node 或 rubric 明细；后续可由 domain manifest 提供稳定 summary。
 
@@ -549,6 +550,10 @@ frontend/src/
 - Episode runner: 展示 manifest、turn budget、visible context、transcript。
 - Report viewer: 展示 per-node distances、missing prediction、unsupported inference、episode mastery distance。
 - Review helper: 辅助 benchmark author 检查 candidate nodes/edges/maps，但不自动 promote。
+
+当前 `Episodes` frontend module 属于 Runtime navigation，排在 `Simulator` 之后。Create Episode 入口执行 **Episode Manifest Registration**：用户选择 `benchmark_domain` 和一个 reviewed `map_id`，前端从 reviewed map manifest 派生 `graph_version`，再向 `POST /api/runtime/episodes` 提交 `episode_id`、`benchmark_domain`、`graph_version`、`hidden_map_id` 和 `max_turns`。`interaction_rule = single_diagnostic_question_per_turn` 与 `scoring_profile = squared_mastery_distance_v1` 是固定 v1 runtime contract，不作为可编辑表单字段。
+
+Run Episode 在 frontend 先保留为 future boundary。`frontend/src/api/runtime.ts` 保留 `POST /api/runtime/episodes/{episode_id}/runs` 的 typed caller，UI 中的 Run Episode 区域保持 disabled，直到后端 runtime runner、tested-agent protocol、transcript storage 和 scoring report writing 能共同保护 visibility boundary。这个 future run trigger 必须继续与 Episode Manifest Registration 分离。
 
 UI 边界：
 

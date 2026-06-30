@@ -136,6 +136,18 @@ _Avoid_: learning session, tutoring session, conversation
 The configuration record in the **Runtime Episode Registry** that binds an **Evaluation Episode** to one benchmark domain, one reviewed graph version, one hidden **Reviewed Map**, turn budget, interaction rules, and scoring profile.
 _Avoid_: loose runner args, experiment notes, prompt metadata
 
+**Episode Manifest Registration**:
+The benchmark-author publication of a validated **Evaluation Episode Manifest** into the **Runtime Episode Registry** without starting an **Evaluation Runtime** run.
+_Avoid_: create episode run, start simulator episode, loose manifest save
+
+**Runtime Management View**:
+A benchmark-author-facing view of registered **Evaluation Episodes** and their reviewed artifact bindings.
+_Avoid_: tested-agent delivery payload, hidden map payload, simulator prompt
+
+**Tested-Agent-Visible Episode Context**:
+The **Evaluation Episode** payload delivered to the **Tested Agent**, containing only the authored graph, episode rules, and visible dialogue history.
+_Avoid_: whole runtime detail response, hidden map identity, hidden reference data
+
 **Evaluation Runtime**:
 The execution boundary that runs an **Evaluation Episode** by loading its manifest and reviewed benchmark artifacts, constructing the separate visible contexts for the **User Simulator** and **Tested Agent**, and orchestrating calls between them.
 _Avoid_: authoring workflow, simulator preview, scoring-only script, loose test platform
@@ -528,6 +540,14 @@ _Avoid_: ground-truth edge, authored edge
 - **Profile Context** should be consistent with the **Reviewed Map** but is not part of **Episode Mastery Distance**.
 - A v1 **Evaluation Episode** should be declared by an **Evaluation Episode Manifest**.
 - An **Evaluation Episode Manifest** lives in the **Runtime Episode Registry** and selects one **Episode Knowledge Graph** version, one hidden **Reviewed Map**, **Turn Budget**, interaction rules, and scoring profile.
+- **Episode Manifest Registration** creates one registered **Evaluation Episode Manifest** and does not start an **Evaluation Runtime** run.
+- **Episode Manifest Registration** only succeeds when the selected **Episode Knowledge Graph** and hidden **Reviewed Map** form a valid reviewed artifact binding.
+- **Episode Manifest Registration** never overwrites an existing registered episode identity; changing the selected graph, map, or budget requires a new **Evaluation Episode Manifest** identity.
+- A **Runtime Management View** may show reviewed reference artifact identities, synthetic user identity, and profile-context availability to a benchmark author without making those fields part of the **Tested-Agent-Visible Episode Context**.
+- A platform endpoint may return a **Runtime Management View** and a nested **Tested-Agent-Visible Episode Context** together; only the nested tested-agent-visible context may be delivered to a **Tested Agent**.
+- A **Runtime Management View** should not inline **Profile Context** payload; detailed persona inspection belongs to profile-context inspection surfaces.
+- Missing **Confirmed Profile Context Snapshot** availability is a runtime management warning, not a blocker for **Episode Manifest Registration**.
+- A **Tested-Agent-Visible Episode Context** must not contain hidden map identity, synthetic user identity, hidden map state, simulator-only evidence, profile-context status, or profile context payload.
 - The **Evaluation Runtime** derives the relevant **Confirmed Profile Context Snapshot** from the selected **Reviewed Map** rather than duplicating profile identity in the **Evaluation Episode Manifest**.
 - V1 uses one fixed **Scoring Profile**, `squared_mastery_distance_v1`.
 - An **Evaluation Episode Manifest** may reference the v1 **Scoring Profile** but must not override it.
@@ -723,6 +743,8 @@ _Avoid_: ground-truth edge, authored edge
 - "episode score" can imply a reward where higher is better; resolved: v1 primary result is **Episode Mastery Distance**, where lower is better.
 - "turn budget" can be inferred from graph size; resolved: v1 uses an explicit **Turn Budget** configured per **Evaluation Episode**.
 - "episode config" can be scattered across runner arguments; resolved: v1 uses an **Evaluation Episode Manifest**.
+- "create episode" can mean either registering an episode manifest or starting a run; resolved: use **Episode Manifest Registration** for the former and keep run starts separate.
+- "episode detail" can mean either benchmark-author management display or tested-agent delivery; resolved: **Runtime Management View** may show reference identities, while **Tested-Agent-Visible Episode Context** must not.
 - "episode manifests belong to one domain directory" can limit cross-domain experiment orchestration; resolved: v1 stores runnable episode manifests in a **Runtime Episode Registry** while each manifest still selects one domain graph version and one hidden **Reviewed Map**.
 - "scoring profile" can imply per-episode custom metrics; resolved: v1 uses fixed `squared_mastery_distance_v1` for comparability.
 - "benchmark domain" can imply a multi-domain suite; resolved: v1 starts with one domain and defers multi-domain calibration.

@@ -288,7 +288,7 @@ V1 实现已经从 schema 与 validation spine 开始：
 - `backend/knowact/llm/`：model-client interface，以及基于 OpenAI 和 DeepSeek SDK 的 clients，用于 text-based authoring steps 和 LLM-backed simulator turns。
 - `backend/knowact/storage/`：local artifact、material path 与 reviewed graph/map promotion helpers。测试阶段的书本 PDF 可以放在仓库根目录的 `storage/` 下；该目录除 `.gitkeep` 外默认被 git 忽略。
 - `backend/knowact/api/` 与 `backend/main.py`：FastAPI 入口，以及可从本地教材 PDF 运行真实 graph authoring workflow 的 authoring API。
-- `frontend/`：React/Vite research workbench，包含顶层 Knowledge Graph 与 User Profile 模块。它支持 candidate graph review，以及 Profile Context generation、编辑、保存与不可变 confirmation gate。
+- `frontend/`：React/Vite research workbench，包含顶层 Knowledge Graph、User Profile、User Map、Simulator 和 Episodes 模块。它支持 candidate graph review、Profile Context generation/editing/confirmation、Candidate Knowledge Map generation/review/promotion、reviewed-map-grounded simulator turns，以及 Episode Manifest Registration。
 - `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`：用于 schema 与 validator 检查的 5-node development fixture，包含 development episode manifest；它不是正式的 reviewed v1 benchmark data。
 - `benchmark/runtime/episodes/`：跨 domain 的 runtime registry，用于存放真实 runnable `Evaluation Episode Manifest` snapshots；development examples 仍放在 `benchmark/fixtures/` 下。
 - `test/`：覆盖公开 schema 与 validation API 的 `unittest` 测试。
@@ -344,7 +344,7 @@ npm --prefix frontend run dev
 npm --prefix frontend run test:candidate-graph-workbench
 ```
 
-当前前端提供 Knowledge Graph review、Profile Context confirmation、User Map generation/review/promotion 三个 authoring modules，并新增一个 Simulator 入口，用于运行 reviewed-map-grounded single-turn answers，但不启动 simulator episodes。
+当前前端提供 Knowledge Graph review、Profile Context confirmation、User Map generation/review/promotion 三个 authoring modules，并提供 Runtime 下的 Simulator 与 Episodes 入口。Simulator 入口用于运行 reviewed-map-grounded single-turn answers，但不启动 formal episodes。Episodes 入口已按 Phase 6 `POST /api/runtime/episodes` registration contract 对接，并把 `POST /api/runtime/episodes/{episode_id}/runs` 保留为 disabled 的未来 Run Episode boundary。
 
 如果后端运行在非默认端口，可以设置 `VITE_API_PROXY_TARGET`，例如：
 
@@ -352,7 +352,7 @@ npm --prefix frontend run test:candidate-graph-workbench
 VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 ```
 
-然后打开 Vite 输出的前端地址，或打开本地 Swagger UI：`http://127.0.0.1:8000/docs`。当前 API 包含：
+然后打开 Vite 输出的前端地址，或打开本地 Swagger UI：`http://127.0.0.1:8000/docs`。Workbench 依赖的 API surface 包含：
 
 - `POST /api/authoring/source-materials` 和 `GET /api/authoring/source-materials`：把 PDF source material 上传到 `storage/source_materials/{source_id}/original.pdf`，写出 `metadata.json`，并为 workbench 列出已登记 source materials。
 - `GET /api/authoring/benchmark-domains`：为 workbench selector 列出现有 benchmark-domain 目录，不创建或修改 benchmark data。
@@ -370,8 +370,9 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`：返回 candidate-map review 用的 generation-time edge-consistency warnings。
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`：用 reviewed graph 与 confirmed Profile Context 重新校验一份已保存的 Candidate Knowledge Map，将 `kind` 转换为 `ground_truth`，并发布不可变的 `maps/{map_id}/map.json` 与 `map_manifest.json`。已有 `map_id` 返回 `409 Conflict`，generation-time `consistency_warnings.json` 不会复制到 reviewed data，成功发布后的 run 会从 `candidate_maps/` 移除。
 - `GET /api/authoring/maps/{benchmark_domain}` 和 `GET /api/authoring/maps/{benchmark_domain}/{map_id}`：列出和读取 reviewed Knowledge Map snapshots，用于只读 workbench inspection。
+- `POST /api/runtime/episodes`：Episodes 前端用于 Episode Manifest Registration 的接口。它提交 `episode_id`、`benchmark_domain`、`graph_version`、`hidden_map_id` 和 `max_turns`；`interaction_rule` 与 `scoring_profile` 保持 v1 runtime contract 固定值。成功 registration 返回 `201 Created` 和 runtime management detail envelope；重复 episode id 或 graph/map identity mismatch 返回 `409 Conflict`；reviewed artifact loading failure 返回 `424 Failed Dependency`。
 - `GET /api/runtime/episodes`：从 `benchmark/runtime/episodes/` 列出 runtime episode summaries，不暴露 hidden map id 或 profile context payload。
-- `GET /api/runtime/episodes/{episode_id}`：返回只读 detail envelope，包含 manifest summary、reviewed artifact binding summary 和 tested-agent-visible context preview。Preview 包含 episode identity、domain、graph version、turn budget、interaction rule、scoring profile、reviewed graph nodes/edges 和空的 visible dialogue scaffold。Binding summary 只报告 reviewed graph identity/counts 和不带身份信息的 reference-map status，不暴露 hidden map id 或 synthetic user id。这个 endpoint 不会调用 simulator 或 tested agent，也不会返回 hidden map state、hidden evidence、profile context payload、debug traces、answer blueprints、transcripts、run triggers 或 scoring reports。
+- `GET /api/runtime/episodes/{episode_id}`：返回 benchmark-author-facing runtime management detail envelope，包含 manifest summary、reviewed artifact binding summary、warnings 和 tested-agent-visible context preview。Management envelope 可以展示 `hidden_map_id`、reviewed-map `user_id` 和 profile-context load status 供平台检查，但不返回 hidden map state、hidden evidence、simulator-only context、profile context payload、debug traces、answer blueprints、transcripts、run triggers 或 scoring reports。嵌套的 tested-agent-visible context preview 是唯一适合交付给 tested agent 的部分，并排除 hidden ids、profile-context status、warnings 和 hidden payloads。
 - `POST /api/simulator/turn`：返回一个由 reviewed map grounding 的 simulator answer。它接受 `benchmark_domain`、reviewed `map_id`、request-level `client_provider`（`openai` 或 `deepseek`，默认 `openai`）、一个 diagnostic `question`、可选 visible dialogue context，以及可选 debug-trace availability 请求元数据。每次 turn 都会在 `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/` 写出隐藏的本地 debug trace；`turn_options.include_debug_trace` 只控制 response 是否返回 `debug_trace_id` 和 `debug_trace_available`。`/api/simulator/turn-test` 是 workbench/test variant，request 与 visible answer 字段相同，只额外返回 `grounded_node_ids` 供 map highlighting 使用。
 
 ```json
@@ -395,6 +396,7 @@ PDF source material 请求被限制在 `storage/` 内，拒绝绝对路径和 `.
 - [x] Candidate Graph Review Workbench 前端
 - [x] User Map Authoring Workbench 前端
 - [x] Simulator reviewed-map turn API 与 workbench 入口
+- [x] Episodes Workbench 前端，用于 manifest registration 与 run-boundary staging
 - [x] Phase 3 review-gated authored graph promotion 与 graph manifest generation
 - [x] 基于 LLM 的 Profile Context generation 与不可变 confirmation gate
 - [x] Single-batch Candidate Knowledge Map generation tracer bullet

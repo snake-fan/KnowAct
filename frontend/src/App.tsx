@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { CandidateGraphWorkbench } from "./features/candidateGraph/CandidateGraphWorkbench";
+import { EpisodesWorkbench } from "./features/episodes/EpisodesWorkbench";
 import { MapAuthoringWorkbench } from "./features/mapAuthoring/MapAuthoringWorkbench";
 import { SimulatorWorkbench } from "./features/simulator/SimulatorWorkbench";
 import { UserProfileWorkbench } from "./features/userProfile/UserProfileWorkbench";
 
-type WorkbenchModule = "knowledge-graph" | "user-profile" | "user-map" | "simulator";
+type WorkbenchModule = "knowledge-graph" | "user-profile" | "user-map" | "simulator" | "episodes";
 
 export function App() {
   const [activeModule, setActiveModule] = useState<WorkbenchModule>("knowledge-graph");
@@ -67,6 +68,17 @@ export function App() {
               <small>Single-turn answers</small>
             </span>
           </button>
+          <button
+            type="button"
+            className={activeModule === "episodes" ? "module-nav-item active" : "module-nav-item"}
+            onClick={() => setActiveModule("episodes")}
+          >
+            <span className="module-nav-icon" aria-hidden="true">&#9635;</span>
+            <span>
+              <strong>Episodes</strong>
+              <small>Manifests, runs</small>
+            </span>
+          </button>
         </nav>
 
         <div className="sidebar-footer">
@@ -87,6 +99,9 @@ export function App() {
         </div>
         <div className={activeModule === "simulator" ? "module-pane active" : "module-pane"}>
           <SimulatorWorkbench />
+        </div>
+        <div className={activeModule === "episodes" ? "module-pane active" : "module-pane"}>
+          <EpisodesWorkbench />
         </div>
       </div>
     </div>

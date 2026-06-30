@@ -288,7 +288,7 @@ The V1 implementation has started with the schema and validation spine:
 - `backend/knowact/llm/`: a model-client interface plus OpenAI and DeepSeek SDK-backed clients for text-based authoring steps and LLM-backed simulator turns.
 - `backend/knowact/storage/`: local artifact, material path, and reviewed graph/map promotion helpers. Test-stage book PDFs can be placed under the repository-level `storage/` directory, which is git-ignored except for `.gitkeep`.
 - `backend/knowact/api/` and `backend/main.py`: a FastAPI entrypoint with an authoring API that can run the real graph authoring workflow from a local textbook PDF.
-- `frontend/`: a React/Vite research workbench with top-level Knowledge Graph and User Profile modules. It supports candidate graph review and the Profile Context generation, editing, save, and immutable-confirmation gate.
+- `frontend/`: a React/Vite research workbench with top-level Knowledge Graph, User Profile, User Map, Simulator, and Episodes modules. It supports candidate graph review, Profile Context generation/editing/confirmation, Candidate Knowledge Map generation/review/promotion, reviewed-map-grounded simulator turns, and Episode Manifest Registration.
 - `benchmark/fixtures/dev_classical_supervised_ml_algorithms/`: a 5-node development fixture for schema and validator checks, including a development episode manifest; it is not formal reviewed v1 benchmark data.
 - `benchmark/runtime/episodes/`: the cross-domain runtime registry for real runnable `Evaluation Episode Manifest` snapshots; development examples stay under `benchmark/fixtures/`.
 - `test/`: `unittest` coverage for the public schema and validation APIs.
@@ -344,7 +344,7 @@ Run the Candidate Graph Review Workbench model checks with:
 npm --prefix frontend run test:candidate-graph-workbench
 ```
 
-The frontend currently exposes authoring modules for Knowledge Graph review, Profile Context confirmation, and User Map generation/review/promotion, plus a Simulator entry that runs reviewed-map-grounded single-turn answers without starting simulator episodes.
+The frontend currently exposes authoring modules for Knowledge Graph review, Profile Context confirmation, and User Map generation/review/promotion, plus Runtime entries for Simulator and Episodes. The Simulator entry runs reviewed-map-grounded single-turn answers without starting formal episodes. The Episodes entry is wired to the Phase 6 `POST /api/runtime/episodes` registration contract and keeps `POST /api/runtime/episodes/{episode_id}/runs` as a disabled future Run Episode boundary.
 
 If the backend is running on a non-default port, set `VITE_API_PROXY_TARGET`, for example:
 
@@ -352,7 +352,7 @@ If the backend is running on a non-default port, set `VITE_API_PROXY_TARGET`, fo
 VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 ```
 
-Then open the frontend URL printed by Vite, or open the local Swagger UI at `http://127.0.0.1:8000/docs`. The current API includes:
+Then open the frontend URL printed by Vite, or open the local Swagger UI at `http://127.0.0.1:8000/docs`. The workbench API surface includes:
 
 - `POST /api/authoring/source-materials` and `GET /api/authoring/source-materials`, which upload PDF source materials into `storage/source_materials/{source_id}/original.pdf`, write `metadata.json`, and list registered source materials for the workbench.
 - `GET /api/authoring/benchmark-domains`, which lists existing benchmark-domain directories for workbench selectors without creating or mutating benchmark data.
@@ -370,8 +370,9 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/warnings`, which returns generation-time edge-consistency warnings for candidate-map review.
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`, which revalidates one saved Candidate Knowledge Map with its reviewed graph and confirmed Profile Context, converts `kind` to `ground_truth`, and publishes immutable `maps/{map_id}/map.json` plus `map_manifest.json`. Existing `map_id` values return `409 Conflict`, generation-time `consistency_warnings.json` is not copied into reviewed data, and a successfully published run is removed from `candidate_maps/`.
 - `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`, which list and read reviewed Knowledge Map snapshots for read-only workbench inspection.
+- `POST /api/runtime/episodes`, which the Episodes frontend uses for Episode Manifest Registration. It submits `episode_id`, `benchmark_domain`, `graph_version`, `hidden_map_id`, and `max_turns`; `interaction_rule` and `scoring_profile` remain fixed by the v1 runtime contract. Successful registration returns `201 Created` with the runtime management detail envelope. Duplicate episode ids and graph/map identity mismatches return `409 Conflict`; reviewed artifact loading failures return `424 Failed Dependency`.
 - `GET /api/runtime/episodes`, which lists runtime episode summaries from `benchmark/runtime/episodes/` without exposing hidden map ids or profile context payloads.
-- `GET /api/runtime/episodes/{episode_id}`, which returns a read-only detail envelope with a manifest summary, reviewed artifact binding summary, and a tested-agent-visible context preview containing episode identity, domain, graph version, turn budget, interaction rule, scoring profile, reviewed graph nodes/edges, and an empty visible dialogue scaffold. The binding summary reports reviewed graph identity/counts and non-identifying reference-map status only; it does not expose hidden map ids or synthetic user ids. The endpoint does not call the simulator or tested agent, and it does not return hidden map state, hidden evidence, profile context payloads, debug traces, answer blueprints, transcripts, run triggers, or scoring reports.
+- `GET /api/runtime/episodes/{episode_id}`, which returns a benchmark-author-facing runtime management detail envelope with a manifest summary, reviewed artifact binding summary, warnings, and a tested-agent-visible context preview. The management envelope may show `hidden_map_id`, reviewed-map `user_id`, and profile-context load status for platform inspection, but it does not return hidden map state, hidden evidence, simulator-only context, profile context payloads, debug traces, answer blueprints, transcripts, run triggers, or scoring reports. The nested tested-agent-visible context preview is the only portion suitable for tested-agent delivery and excludes hidden ids, profile-context status, warnings, and hidden payloads.
 - `POST /api/simulator/turn`, which returns one reviewed-map-grounded simulator answer. It accepts `benchmark_domain`, reviewed `map_id`, request-level `client_provider` (`openai` or `deepseek`, default `openai`), one diagnostic `question`, optional visible dialogue context, and optional debug-trace availability request metadata. Every turn writes a hidden local debug trace under `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/`; `turn_options.include_debug_trace` only controls whether the response returns `debug_trace_id` and `debug_trace_available`. `/api/simulator/turn-test` is the workbench/test variant with the same request and visible answer fields plus only `grounded_node_ids` for map highlighting.
 
 ```json
@@ -395,6 +396,7 @@ Implemented / planned components include:
 - [x] Candidate Graph Review Workbench frontend
 - [x] User Map Authoring Workbench frontend
 - [x] Simulator reviewed-map turn API and workbench entry
+- [x] Episodes Workbench frontend for manifest registration and run-boundary staging
 - [x] Phase 3 review-gated authored graph promotion with generated manifests
 - [x] LLM-based Profile Context generation and immutable confirmation gate
 - [x] Single-batch Candidate Knowledge Map generation tracer bullet

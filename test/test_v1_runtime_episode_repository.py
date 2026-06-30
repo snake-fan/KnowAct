@@ -5,8 +5,10 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from backend.knowact.core.episode import EvaluationEpisodeManifest
 from backend.knowact.runtime.episode_repository import (
     EPISODE_MANIFEST_FILENAME,
+    RuntimeEpisodeAlreadyExistsError,
     RuntimeEpisodeArtifactError,
     RuntimeEpisodeBindingError,
     RuntimeEpisodeBindingWarningCode,
@@ -40,6 +42,91 @@ class V1RuntimeEpisodeRepositoryTest(unittest.TestCase):
 
         self.assertEqual(["episode_a", "episode_b"], [record.episode_id for record in records])
         self.assertEqual(["episode_a", "episode_b"], [record.manifest.episode_id for record in records])
+
+    def test_register_episode_validates_binding_and_writes_manifest(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            manifest = _registration_manifest("episode_a")
+
+            binding = RuntimeEpisodeRepository(
+                workspace_root=workspace_root
+            ).register_episode(manifest)
+            manifest_path = _episode_dir(workspace_root, "episode_a") / EPISODE_MANIFEST_FILENAME
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual("episode_a", binding.episode_id)
+        self.assertEqual("gt_map_001", binding.hidden_map.manifest.map_id)
+        self.assertEqual(RuntimeProfileContextStatus.LOADED, binding.profile_context.status)
+        self.assertEqual(
+            {
+                "episode_id": "episode_a",
+                "benchmark_domain": "classical_supervised_ml_algorithms",
+                "graph_version": "v1",
+                "hidden_map_id": "gt_map_001",
+                "max_turns": 3,
+                "interaction_rule": "single_diagnostic_question_per_turn",
+                "scoring_profile": "squared_mastery_distance_v1",
+            },
+            payload,
+        )
+
+    def test_register_episode_allows_missing_profile_context_with_warning(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+
+            binding = RuntimeEpisodeRepository(
+                workspace_root=workspace_root
+            ).register_episode(_registration_manifest("episode_a"))
+
+        self.assertEqual(
+            RuntimeProfileContextStatus.MISSING_OPTIONAL,
+            binding.profile_context.status,
+        )
+        self.assertEqual(1, len(binding.warnings))
+        self.assertEqual(
+            RuntimeEpisodeBindingWarningCode.MISSING_PROFILE_CONTEXT,
+            binding.warnings[0].code,
+        )
+
+    def test_register_episode_rejects_existing_episode_id_without_overwrite(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            existing_path = _write_manifest(
+                workspace_root,
+                "episode_a",
+                graph_version="v1",
+                hidden_map_id="gt_map_001",
+                max_turns=5,
+            )
+
+            with self.assertRaises(RuntimeEpisodeAlreadyExistsError):
+                RuntimeEpisodeRepository(
+                    workspace_root=workspace_root
+                ).register_episode(_registration_manifest("episode_a", max_turns=3))
+
+            payload = json.loads(existing_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(5, payload["max_turns"])
+
+    def test_register_episode_rejects_invalid_binding_without_writing_manifest(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root, graph_version="v2")
+
+            with self.assertRaises(RuntimeEpisodeBindingError):
+                RuntimeEpisodeRepository(
+                    workspace_root=workspace_root
+                ).register_episode(_registration_manifest("episode_a"))
+
+            manifest_path = _episode_dir(workspace_root, "episode_a") / EPISODE_MANIFEST_FILENAME
+
+        self.assertFalse(manifest_path.exists())
 
     def test_read_episode_manifest_by_episode_id(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -388,6 +475,25 @@ def _write_manifest(
         payload["scoring_overrides"] = scoring_overrides
     manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return manifest_path
+
+
+def _registration_manifest(
+    episode_id: str,
+    *,
+    benchmark_domain: str = "classical_supervised_ml_algorithms",
+    graph_version: str = "v1",
+    hidden_map_id: str = "gt_map_001",
+    max_turns: int = 3,
+) -> EvaluationEpisodeManifest:
+    return EvaluationEpisodeManifest(
+        episode_id=episode_id,
+        benchmark_domain=benchmark_domain,
+        graph_version=graph_version,
+        hidden_map_id=hidden_map_id,
+        max_turns=max_turns,
+        interaction_rule="single_diagnostic_question_per_turn",
+        scoring_profile="squared_mastery_distance_v1",
+    )
 
 
 def _write_reviewed_graph(workspace_root: Path) -> None:

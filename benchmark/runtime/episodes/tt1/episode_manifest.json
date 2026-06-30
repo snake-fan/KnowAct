@@ -1,0 +1,9 @@
+{
+  "episode_id": "tt1",
+  "benchmark_domain": "classical_supervised_ml_algorithms",
+  "graph_version": "v0.1",
+  "hidden_map_id": "test_01",
+  "max_turns": 3,
+  "interaction_rule": "single_diagnostic_question_per_turn",
+  "scoring_profile": "squared_mastery_distance_v1"
+}

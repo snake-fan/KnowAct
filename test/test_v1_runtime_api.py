@@ -65,6 +65,7 @@ class V1RuntimeApiTest(unittest.TestCase):
         self.assertEqual("episode_a", manifest["episode_id"])
         self.assertEqual("classical_supervised_ml_algorithms", manifest["benchmark_domain"])
         self.assertEqual("v1", manifest["graph_version"])
+        self.assertEqual("gt_map_001", manifest["hidden_map_id"])
         self.assertEqual(3, manifest["max_turns"])
         self.assertEqual("single_diagnostic_question_per_turn", manifest["interaction_rule"])
         self.assertEqual("squared_mastery_distance_v1", manifest["scoring_profile"])
@@ -77,8 +78,18 @@ class V1RuntimeApiTest(unittest.TestCase):
         self.assertEqual(2, reviewed_artifacts["graph"]["node_count"])
         self.assertEqual(1, reviewed_artifacts["graph"]["edge_count"])
         self.assertEqual("loaded", reviewed_artifacts["reference_map"]["status"])
+        self.assertEqual("gt_map_001", reviewed_artifacts["reference_map"]["map_id"])
+        self.assertEqual(
+            "synthetic_user_001",
+            reviewed_artifacts["reference_map"]["user_id"],
+        )
         self.assertEqual("ground_truth", reviewed_artifacts["reference_map"]["kind"])
         self.assertEqual(2, reviewed_artifacts["reference_map"]["covered_node_count"])
+        self.assertEqual(
+            "loaded",
+            reviewed_artifacts["reference_map"]["profile_context_status"],
+        )
+        self.assertEqual([], payload["warnings"])
 
         self.assertEqual("episode_a", preview["episode_id"])
         self.assertEqual("classical_supervised_ml_algorithms", preview["benchmark_domain"])
@@ -93,22 +104,240 @@ class V1RuntimeApiTest(unittest.TestCase):
             preview["graph"]["nodes"][0]["diagnostic_goal"],
         )
 
-        response_text = json.dumps(payload, sort_keys=True)
+        preview_text = json.dumps(preview, sort_keys=True)
         for hidden_fragment in (
             "hidden_map_id",
             "gt_map_001",
             "synthetic_user_001",
+            "profile_context_status",
+            "warnings",
+            "missing_profile_context",
+        ):
+            with self.subTest(hidden_fragment=hidden_fragment):
+                self.assertNotIn(hidden_fragment, preview_text)
+
+        response_text = json.dumps(payload, sort_keys=True)
+        for hidden_fragment in (
             "ev_gt_map_001",
             "mastery_level",
             "evidence_refs",
             "simulator_only",
-            "profile_context",
             "A practical beginner with limited statistical foundations.",
             "answer_blueprint",
             "debug_trace",
         ):
             with self.subTest(hidden_fragment=hidden_fragment):
                 self.assertNotIn(hidden_fragment, response_text)
+
+    def test_register_runtime_episode_creates_manifest_and_returns_management_detail(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/runtime/episodes",
+                json={
+                    "episode_id": "episode_a",
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "hidden_map_id": "gt_map_001",
+                    "max_turns": 4,
+                },
+            )
+            manifest_path = (
+                workspace_root
+                / "benchmark"
+                / "runtime"
+                / "episodes"
+                / "episode_a"
+                / "episode_manifest.json"
+            )
+            manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(201, response.status_code)
+        self.assertEqual(
+            {
+                "episode_id": "episode_a",
+                "benchmark_domain": "classical_supervised_ml_algorithms",
+                "graph_version": "v1",
+                "hidden_map_id": "gt_map_001",
+                "max_turns": 4,
+                "interaction_rule": "single_diagnostic_question_per_turn",
+                "scoring_profile": "squared_mastery_distance_v1",
+            },
+            manifest_payload,
+        )
+        payload = response.json()
+        self.assertEqual("gt_map_001", payload["manifest"]["hidden_map_id"])
+        self.assertEqual("gt_map_001", payload["reviewed_artifacts"]["reference_map"]["map_id"])
+        self.assertEqual(
+            "synthetic_user_001",
+            payload["reviewed_artifacts"]["reference_map"]["user_id"],
+        )
+        self.assertEqual(
+            "loaded",
+            payload["reviewed_artifacts"]["reference_map"]["profile_context_status"],
+        )
+        self.assertEqual([], payload["warnings"])
+
+        preview_text = json.dumps(
+            payload["tested_agent_visible_context_preview"],
+            sort_keys=True,
+        )
+        for hidden_fragment in (
+            "hidden_map_id",
+            "gt_map_001",
+            "synthetic_user_001",
+            "profile_context_status",
+            "warnings",
+        ):
+            with self.subTest(hidden_fragment=hidden_fragment):
+                self.assertNotIn(hidden_fragment, preview_text)
+
+    def test_register_runtime_episode_allows_missing_profile_context_warning(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/runtime/episodes",
+                json={
+                    "episode_id": "episode_a",
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "hidden_map_id": "gt_map_001",
+                    "max_turns": 4,
+                },
+            )
+
+        self.assertEqual(201, response.status_code)
+        payload = response.json()
+        self.assertEqual(
+            "missing_optional",
+            payload["reviewed_artifacts"]["reference_map"]["profile_context_status"],
+        )
+        self.assertEqual(1, len(payload["warnings"]))
+        self.assertEqual("missing_profile_context", payload["warnings"][0]["code"])
+        response_text = json.dumps(payload, sort_keys=True)
+        self.assertNotIn("A practical beginner with limited statistical foundations.", response_text)
+
+        preview_text = json.dumps(
+            payload["tested_agent_visible_context_preview"],
+            sort_keys=True,
+        )
+        self.assertNotIn("missing_profile_context", preview_text)
+        self.assertNotIn("profile_context_status", preview_text)
+
+    def test_register_runtime_episode_rejects_duplicate_episode_id(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(
+                workspace_root,
+                "episode_a",
+                graph_version="v1",
+                hidden_map_id="gt_map_001",
+            )
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/runtime/episodes",
+                json={
+                    "episode_id": "episode_a",
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "hidden_map_id": "gt_map_001",
+                    "max_turns": 4,
+                },
+            )
+
+        self.assertEqual(409, response.status_code)
+        self.assertEqual("episode_already_exists", response.json()["detail"]["error_code"])
+
+    def test_register_runtime_episode_rejects_identity_mismatch_without_write(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root, graph_version="v2")
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/runtime/episodes",
+                json={
+                    "episode_id": "episode_a",
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "hidden_map_id": "gt_map_001",
+                    "max_turns": 4,
+                },
+            )
+            manifest_path = (
+                workspace_root
+                / "benchmark"
+                / "runtime"
+                / "episodes"
+                / "episode_a"
+                / "episode_manifest.json"
+            )
+
+        self.assertEqual(409, response.status_code)
+        self.assertEqual("identity_mismatch", response.json()["detail"]["error_code"])
+        self.assertFalse(manifest_path.exists())
+
+    def test_register_runtime_episode_rejects_missing_reviewed_artifacts_without_write(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/runtime/episodes",
+                json={
+                    "episode_id": "episode_a",
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "hidden_map_id": "gt_map_001",
+                    "max_turns": 4,
+                },
+            )
+            manifest_path = (
+                workspace_root
+                / "benchmark"
+                / "runtime"
+                / "episodes"
+                / "episode_a"
+                / "episode_manifest.json"
+            )
+
+        self.assertEqual(424, response.status_code)
+        self.assertEqual(
+            "reviewed_artifact_loading_failure",
+            response.json()["detail"]["error_code"],
+        )
+        self.assertFalse(manifest_path.exists())
+
+    def test_register_runtime_episode_rejects_fixed_manifest_fields_in_request(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/runtime/episodes",
+                json={
+                    "episode_id": "episode_a",
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "hidden_map_id": "gt_map_001",
+                    "max_turns": 4,
+                    "interaction_rule": "single_diagnostic_question_per_turn",
+                    "scoring_profile": "squared_mastery_distance_v1",
+                },
+            )
+
+        self.assertEqual(422, response.status_code)
 
     def test_read_runtime_episode_reports_not_found_without_hidden_payload(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -222,10 +451,8 @@ class V1RuntimeApiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             client = TestClient(create_app(workspace_root=Path(temp_dir)))
 
-            collection_response = client.post("/api/runtime/episodes")
             run_response = client.post("/api/runtime/episodes/episode_a/runs")
 
-        self.assertEqual(405, collection_response.status_code)
         self.assertEqual(404, run_response.status_code)
 
 

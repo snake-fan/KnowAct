@@ -46,6 +46,10 @@ class RuntimeEpisodeNotFoundError(FileNotFoundError):
     """Raised when a runtime episode or its manifest cannot be found."""
 
 
+class RuntimeEpisodeAlreadyExistsError(FileExistsError):
+    """Raised when registering an episode would overwrite an existing identity."""
+
+
 class RuntimeEpisodeArtifactError(ValueError):
     """Raised when a runtime episode manifest cannot be parsed or validated."""
 
@@ -149,6 +153,51 @@ class RuntimeEpisodeRepository:
 
     def read_episode_manifest(self, episode_id: str) -> EvaluationEpisodeManifest:
         return self.read_episode(episode_id).manifest
+
+    def register_episode(
+        self,
+        manifest: EvaluationEpisodeManifest,
+    ) -> RuntimeEpisodeBinding:
+        episode_id = _validate_safe_id(manifest.episode_id, "episode_id")
+        episode_dir = self._registry_root / episode_id
+        manifest_path = episode_dir / EPISODE_MANIFEST_FILENAME
+        if episode_dir.exists() or manifest_path.exists():
+            raise RuntimeEpisodeAlreadyExistsError(
+                f"Runtime episode {episode_id} already exists"
+            )
+        try:
+            validate_episode_manifest(manifest)
+        except KnowActValidationError as exc:
+            raise RuntimeEpisodeArtifactError(str(exc)) from exc
+
+        record = RuntimeEpisodeRecord(
+            episode_id=episode_id,
+            manifest=manifest,
+            episode_dir=episode_dir,
+            manifest_path=manifest_path,
+        )
+        binding = _bind_episode_record(
+            workspace_root=self._workspace_root,
+            record=record,
+        )
+        try:
+            episode_dir.mkdir(parents=True, exist_ok=False)
+            with manifest_path.open("x", encoding="utf-8") as handle:
+                json.dump(
+                    manifest.model_dump(mode="json", exclude_none=True),
+                    handle,
+                    indent=2,
+                )
+                handle.write("\n")
+        except FileExistsError as exc:
+            raise RuntimeEpisodeAlreadyExistsError(
+                f"Runtime episode {episode_id} already exists"
+            ) from exc
+        except OSError as exc:
+            raise RuntimeEpisodeArtifactError(
+                f"Runtime episode {episode_id} could not be written"
+            ) from exc
+        return binding
 
     def load_episode_binding(self, episode_id: str) -> RuntimeEpisodeBinding:
         record = self.read_episode(episode_id)
