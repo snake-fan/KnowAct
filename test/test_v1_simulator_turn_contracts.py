@@ -122,21 +122,6 @@ class V1SimulatorTurnContractsTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SimulatorTurnRequest.model_validate(hidden_options_payload)
 
-    def test_turn_request_accepts_legacy_preview_options_alias(self):
-        request = SimulatorTurnRequest.model_validate(
-            {
-                "benchmark_domain": "classical_supervised_ml_algorithms",
-                "map_id": "dev_map_001",
-                "question": {
-                    "text": "How would you decide whether linear regression is appropriate?"
-                },
-                "preview_options": {"include_debug_trace": True},
-            }
-        )
-
-        self.assertTrue(request.turn_options.include_debug_trace)
-        self.assertTrue(request.preview_options.include_debug_trace)
-
     def test_turn_request_accepts_client_provider_like_authoring_requests(self):
         payload = {
             "benchmark_domain": "classical_supervised_ml_algorithms",

@@ -335,7 +335,7 @@ visible answer text.
 
 Phase 5 exposes a usable single-turn simulator before formal **Evaluation Episode Manifests** exist. The endpoint is stateless per turn so it does not become a parallel episode runtime.
 
-Current formal single-turn route: `POST /api/simulator/turn`. The workbench/test route `POST /api/simulator/turn-test` uses the same request contract and visible answer fields, but may add only `grounded_node_ids` so the benchmark-author UI can highlight the latest directly grounded **Knowledge Nodes**. The old `POST /api/simulator/preview` route remains a deprecated compatibility alias for the formal turn response.
+Current formal single-turn route: `POST /api/simulator/turn`. The workbench/test route `POST /api/simulator/turn-test` uses the same request contract and visible answer fields, but may add only `grounded_node_ids` so the benchmark-author UI can highlight the latest directly grounded **Knowledge Nodes**.
 
 The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Blueprint** derivation, LLM-backed visible answer generation, LLM-backed answer validation, bounded answer regeneration, persistent local turn debug trace artifacts, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement formal episode persistence yet.
 

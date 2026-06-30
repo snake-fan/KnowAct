@@ -443,9 +443,6 @@ class SimulatorService:
                 )
                 raise
 
-    def answer_preview(self, request: SimulatorTurnRequest) -> SimulatorTurnResponse:
-        return self.answer_turn(request)
-
     def _build_turn_response(
         self,
         *,

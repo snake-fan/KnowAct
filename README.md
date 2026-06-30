@@ -309,7 +309,7 @@ KNOWACT_DEEPSEEK_BASE_URL=https://api.deepseek.com
 KNOWACT_DEEPSEEK_TIMEOUT_SECONDS=120
 ```
 
-The simulator turn endpoint `/api/simulator/turn` accepts request-level `client_provider`, defaulting to `openai`, and uses the selected provider for both answer generation and answer validation. If the selected provider is not configured, the turn endpoint returns a non-leaking configuration error rather than falling back to unvalidated model text. `/api/simulator/preview` remains a deprecated compatibility alias.
+The simulator turn endpoint `/api/simulator/turn` accepts request-level `client_provider`, defaulting to `openai`, and uses the selected provider for both answer generation and answer validation. If the selected provider is not configured, the turn endpoint returns a non-leaking configuration error rather than falling back to unvalidated model text.
 
 The current tests use deterministic fixtures and fake clients; they do not call the OpenAI or DeepSeek APIs.
 
@@ -328,7 +328,7 @@ uv run python scripts/manual_aliyun_oss_smoke.py
 Start the backend development API with:
 
 ```bash
-uv run fastapi dev backend/main.py
+uv run uvicorn backend.main:app --reload
 ```
 
 Start the frontend workbench in a second terminal with:
@@ -372,7 +372,7 @@ Then open the frontend URL printed by Vite, or open the local Swagger UI at `htt
 - `GET /api/authoring/maps/{benchmark_domain}` and `GET /api/authoring/maps/{benchmark_domain}/{map_id}`, which list and read reviewed Knowledge Map snapshots for read-only workbench inspection.
 - `GET /api/runtime/episodes`, which lists runtime episode summaries from `benchmark/runtime/episodes/` without exposing hidden map ids or profile context payloads.
 - `GET /api/runtime/episodes/{episode_id}`, which returns a read-only detail envelope with a manifest summary, reviewed artifact binding summary, and a tested-agent-visible context preview containing episode identity, domain, graph version, turn budget, interaction rule, scoring profile, reviewed graph nodes/edges, and an empty visible dialogue scaffold. The binding summary reports reviewed graph identity/counts and non-identifying reference-map status only; it does not expose hidden map ids or synthetic user ids. The endpoint does not call the simulator or tested agent, and it does not return hidden map state, hidden evidence, profile context payloads, debug traces, answer blueprints, transcripts, run triggers, or scoring reports.
-- `POST /api/simulator/turn`, which returns one reviewed-map-grounded simulator answer. It accepts `benchmark_domain`, reviewed `map_id`, request-level `client_provider` (`openai` or `deepseek`, default `openai`), one diagnostic `question`, optional visible dialogue context, and optional debug-trace availability request metadata. Every turn writes a hidden local debug trace under `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/`; `turn_options.include_debug_trace` only controls whether the response returns `debug_trace_id` and `debug_trace_available`. `/api/simulator/turn-test` is the workbench/test variant with the same request and visible answer fields plus only `grounded_node_ids` for map highlighting. `/api/simulator/preview` remains a deprecated compatibility alias.
+- `POST /api/simulator/turn`, which returns one reviewed-map-grounded simulator answer. It accepts `benchmark_domain`, reviewed `map_id`, request-level `client_provider` (`openai` or `deepseek`, default `openai`), one diagnostic `question`, optional visible dialogue context, and optional debug-trace availability request metadata. Every turn writes a hidden local debug trace under `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/`; `turn_options.include_debug_trace` only controls whether the response returns `debug_trace_id` and `debug_trace_available`. `/api/simulator/turn-test` is the workbench/test variant with the same request and visible answer fields plus only `grounded_node_ids` for map highlighting.
 
 ```json
 {

@@ -309,7 +309,7 @@ KNOWACT_DEEPSEEK_BASE_URL=https://api.deepseek.com
 KNOWACT_DEEPSEEK_TIMEOUT_SECONDS=120
 ```
 
-Simulator turn endpoint `/api/simulator/turn` 接受 request-level `client_provider`，默认值为 `openai`，并用选中的 provider 同时进行 answer generation 和 answer validation。如果选中的 provider 没有配置好，turn endpoint 会返回不泄露内部细节的配置错误，而不是暴露未验证的模型输出。`/api/simulator/preview` 保留为 deprecated compatibility alias。
+Simulator turn endpoint `/api/simulator/turn` 接受 request-level `client_provider`，默认值为 `openai`，并用选中的 provider 同时进行 answer generation 和 answer validation。如果选中的 provider 没有配置好，turn endpoint 会返回不泄露内部细节的配置错误，而不是暴露未验证的模型输出。
 
 当前测试使用 deterministic fixtures 和 fake clients，不会调用 OpenAI 或 DeepSeek API。
 
@@ -328,7 +328,7 @@ uv run python scripts/manual_aliyun_oss_smoke.py
 启动后端开发 API：
 
 ```bash
-uv run fastapi dev backend/main.py
+uv run uvicorn backend.main:app --reload
 ```
 
 在第二个终端启动前端 workbench：
@@ -372,7 +372,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm --prefix frontend run dev
 - `GET /api/authoring/maps/{benchmark_domain}` 和 `GET /api/authoring/maps/{benchmark_domain}/{map_id}`：列出和读取 reviewed Knowledge Map snapshots，用于只读 workbench inspection。
 - `GET /api/runtime/episodes`：从 `benchmark/runtime/episodes/` 列出 runtime episode summaries，不暴露 hidden map id 或 profile context payload。
 - `GET /api/runtime/episodes/{episode_id}`：返回只读 detail envelope，包含 manifest summary、reviewed artifact binding summary 和 tested-agent-visible context preview。Preview 包含 episode identity、domain、graph version、turn budget、interaction rule、scoring profile、reviewed graph nodes/edges 和空的 visible dialogue scaffold。Binding summary 只报告 reviewed graph identity/counts 和不带身份信息的 reference-map status，不暴露 hidden map id 或 synthetic user id。这个 endpoint 不会调用 simulator 或 tested agent，也不会返回 hidden map state、hidden evidence、profile context payload、debug traces、answer blueprints、transcripts、run triggers 或 scoring reports。
-- `POST /api/simulator/turn`：返回一个由 reviewed map grounding 的 simulator answer。它接受 `benchmark_domain`、reviewed `map_id`、request-level `client_provider`（`openai` 或 `deepseek`，默认 `openai`）、一个 diagnostic `question`、可选 visible dialogue context，以及可选 debug-trace availability 请求元数据。每次 turn 都会在 `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/` 写出隐藏的本地 debug trace；`turn_options.include_debug_trace` 只控制 response 是否返回 `debug_trace_id` 和 `debug_trace_available`。`/api/simulator/turn-test` 是 workbench/test variant，request 与 visible answer 字段相同，只额外返回 `grounded_node_ids` 供 map highlighting 使用。`/api/simulator/preview` 保留为 deprecated compatibility alias。
+- `POST /api/simulator/turn`：返回一个由 reviewed map grounding 的 simulator answer。它接受 `benchmark_domain`、reviewed `map_id`、request-level `client_provider`（`openai` 或 `deepseek`，默认 `openai`）、一个 diagnostic `question`、可选 visible dialogue context，以及可选 debug-trace availability 请求元数据。每次 turn 都会在 `benchmark/domains/{benchmark_domain}/simulator/{map_id}/{question_id_or_auto}/` 写出隐藏的本地 debug trace；`turn_options.include_debug_trace` 只控制 response 是否返回 `debug_trace_id` 和 `debug_trace_available`。`/api/simulator/turn-test` 是 workbench/test variant，request 与 visible answer 字段相同，只额外返回 `grounded_node_ids` 供 map highlighting 使用。
 
 ```json
 {

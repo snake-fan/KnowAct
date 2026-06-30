@@ -200,14 +200,14 @@ class V1SimulatorGroundedAmbiguityRegressionTest(unittest.TestCase):
             self.assertIn("partial", payload["answer"]["text"].lower())
             _assert_visible_response_has_no_hidden_artifacts(self, payload)
 
-    def test_preview_no_grounding_and_multi_question_are_visible_non_content_answers(self):
+    def test_turn_no_grounding_and_multi_question_are_visible_non_content_answers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_grounded_ambiguity_fixture(workspace_root, include_map_artifact=False)
             client = _simulator_client(workspace_root)
 
             no_grounding_response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": BENCHMARK_DOMAIN,
                     "map_id": MAP_ID,
@@ -215,7 +215,7 @@ class V1SimulatorGroundedAmbiguityRegressionTest(unittest.TestCase):
                 },
             )
             multi_question_response = client.post(
-                "/api/simulator/preview",
+                "/api/simulator/turn",
                 json={
                     "benchmark_domain": BENCHMARK_DOMAIN,
                     "map_id": MAP_ID,

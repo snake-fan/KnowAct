@@ -2,7 +2,6 @@ from enum import StrEnum
 import re
 
 from pydantic import (
-    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -39,14 +38,7 @@ class SimulatorTurnRequest(BaseModel):
     client_provider: SimulatorClientProvider = DEFAULT_SIMULATOR_CLIENT_PROVIDER
     question: DiagnosticQuestion
     visible_dialogue_context: VisibleDialogueContext | None = None
-    turn_options: SimulatorTurnOptions = Field(
-        default_factory=SimulatorTurnOptions,
-        validation_alias=AliasChoices("turn_options", "preview_options"),
-    )
-
-    @property
-    def preview_options(self) -> SimulatorTurnOptions:
-        return self.turn_options
+    turn_options: SimulatorTurnOptions = Field(default_factory=SimulatorTurnOptions)
 
     @field_validator("benchmark_domain", "map_id")
     @classmethod

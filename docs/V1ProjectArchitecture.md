@@ -289,7 +289,6 @@ core
 - `debug_trace.py`: local hidden turn trace writing, filesystem-safe trace ids, repeated question-directory overwrite behavior, and request-scoped raw/parser artifact capture for LLM-backed simulator steps.
 - `service.py`: simulator turn orchestration; wires grounding, context building, answer policy, generation, validation, fallback, and hidden debug trace production.
 - `turn.py`: stateless single-turn DTO/API boundary. The formal turn response selects reviewed artifacts by identity and exposes only visible answer data, coarse turn metadata, non-leaking warnings, and optional debug trace handles. A separate workbench/test response may add only directly grounded node ids for map highlighting.
-- `preview.py`: deprecated compatibility re-export for old preview DTO imports.
 
 边界：
 

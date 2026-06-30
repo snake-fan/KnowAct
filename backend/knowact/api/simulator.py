@@ -113,15 +113,6 @@ def build_simulator_router(
     def answer_turn_test(request: SimulatorTurnRequest) -> SimulatorTurnTestResponse:
         return _answer_turn_test(request)
 
-    @router.post(
-        "/preview",
-        response_model=SimulatorTurnResponse,
-        summary="Deprecated compatibility alias for one simulator turn.",
-        deprecated=True,
-    )
-    def answer_preview(request: SimulatorTurnRequest) -> SimulatorTurnResponse:
-        return _answer_turn(request)
-
     return router
 
 
