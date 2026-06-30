@@ -120,9 +120,41 @@ _Avoid_: manual map correction, automatic acceptance, graph-style candidate edit
 The **Knowledge Map** inferred by the tested agent through interaction.
 _Avoid_: generated user graph, inferred graph structure, reconstructed knowledge graph
 
+**Agent Working Knowledge Map**:
+A tested-agent-owned intermediate **Knowledge Map** used during an **Evaluation Episode** to guide active diagnosis before final submission.
+_Avoid_: final reconstructed map, reviewed map, hidden belief, ground-truth map
+
+**Assessed Mastery Level**:
+The **Tested Agent**'s current working judgment of a user's mastery for one **Knowledge Node** during an **Evaluation Episode**.
+_Avoid_: ground-truth mastery, authored mastery, simulator label
+
+**Diagnostic Confidence**:
+The **Tested Agent**'s degree of confidence in one working user-state judgment during active diagnosis.
+_Avoid_: curation confidence, edge confidence, benchmark confidence
+
+**Assessment Note**:
+A concise tested-agent-visible note explaining the basis for one **Agent Working Knowledge Map** judgment.
+_Avoid_: hidden rationale, chain-of-thought, source enum, simulator-only evidence
+
+**Supporting Turn Reference**:
+A reference from an **Agent Working Knowledge Map** judgment to a visible **Interaction Turn** used by the **Tested Agent** as support.
+_Avoid_: hidden evidence reference, simulator trace id, automatic proof
+
+**Indirect Working Assessment**:
+An **Agent Working Knowledge Map** judgment inferred from visible observations about other **Knowledge Nodes** and visible **Authored Knowledge Graph** relationships.
+_Avoid_: hidden-state lookup, direct user answer, unsupported ground truth
+
 **Final Reconstructed Knowledge Map**:
 The required **Reconstructed Knowledge Map** submitted by the **Tested Agent** after an **Evaluation Episode** ends.
 _Avoid_: per-turn snapshot, intermediate belief state, trace
+
+**Forced Finalization**:
+The end-of-budget phase where the **Tested Agent** must submit a **Final Reconstructed Knowledge Map** without asking further diagnostic questions.
+_Avoid_: extra interaction turn, runtime inference, automatic scoring shortcut
+
+**Forced Finalization Fallback**:
+A marked fallback final submission mechanically exported from supported non-unknown judgments in the current **Agent Working Knowledge Map** when the **Tested Agent** fails to submit during **Forced Finalization**.
+_Avoid_: runtime-inferred reconstruction, hidden-map repair, successful agent finalization
 
 **Reconstruction Trace**:
 Optional per-turn snapshots or notes showing how the **Tested Agent** updated its inferred **Knowledge Map**.
@@ -540,6 +572,7 @@ _Avoid_: ground-truth edge, authored edge
 - **Profile Context** should be consistent with the **Reviewed Map** but is not part of **Episode Mastery Distance**.
 - A v1 **Evaluation Episode** should be declared by an **Evaluation Episode Manifest**.
 - An **Evaluation Episode Manifest** lives in the **Runtime Episode Registry** and selects one **Episode Knowledge Graph** version, one hidden **Reviewed Map**, **Turn Budget**, interaction rules, and scoring profile.
+- The hidden **Reviewed Map** selected by an **Evaluation Episode Manifest** exists before the **Evaluation Episode** starts and remains static during the episode.
 - **Episode Manifest Registration** creates one registered **Evaluation Episode Manifest** and does not start an **Evaluation Runtime** run.
 - **Episode Manifest Registration** only succeeds when the selected **Episode Knowledge Graph** and hidden **Reviewed Map** form a valid reviewed artifact binding.
 - **Episode Manifest Registration** never overwrites an existing registered episode identity; changing the selected graph, map, or budget requires a new **Evaluation Episode Manifest** identity.
@@ -557,6 +590,33 @@ _Avoid_: ground-truth edge, authored edge
 - The first v1 graph should contain enough **Knowledge Nodes** to distinguish different user knowledge structures.
 - The first v1 graph targets 30-50 **Knowledge Nodes**.
 - A **Reviewed Map** and a **Reconstructed Knowledge Map** are compared over the same **Authored Knowledge Graph** in v1.
+- An **Agent Working Knowledge Map** may evolve during an **Evaluation Episode** and is distinct from the **Final Reconstructed Knowledge Map** used for primary scoring.
+- An **Agent Working Knowledge Map** is initialized over every **Knowledge Node** in the **Episode Knowledge Graph**.
+- An **Agent Working Knowledge Map** may record an **Assessed Mastery Level** and **Diagnostic Confidence** for a **Knowledge Node**.
+- An **Agent Working Knowledge Map** may use an **Assessment Note** to describe the visible basis for a working judgment.
+- An **Agent Working Knowledge Map** may cite **Supporting Turn References** for working judgments.
+- The initial Phase 7 **Agent Working Knowledge Map** tracks mastery assessment and support only, not structured misconception or unknown reconstruction.
+- An **Assessment Note** is required when an **Agent Working Knowledge Map** records a non-unknown **Assessed Mastery Level**.
+- At least one visible **Supporting Turn Reference** is required when an **Agent Working Knowledge Map** records a non-unknown **Assessed Mastery Level**.
+- **Assessed Mastery Level** uses `unknown` for unjudged working-map nodes and otherwise reuses the L0-L5 mastery scale.
+- V1 **Diagnostic Confidence** uses the categorical levels `unknown`, `low`, `medium`, and `high`.
+- A **Tested Agent** may update an unasked node in its **Agent Working Knowledge Map** through an **Indirect Working Assessment**.
+- A **Tested Agent** updates its **Agent Working Knowledge Map** judgments but does not add, delete, or modify **Knowledge Nodes** or **Knowledge Edges**.
+- **Final Reconstructed Knowledge Map** submission omits working-map nodes whose **Assessed Mastery Level** remains `unknown`; scoring treats those omitted nodes as **Missing Predictions**.
+- During finalization, a non-unknown working-map judgment without **Supporting Turn References** is downgraded to `unknown`, omitted from the **Final Reconstructed Knowledge Map**, and reported as a warning.
+- The **Tested Agent** is responsible for building its **Agent Working Knowledge Map** and submitting a **Final Reconstructed Knowledge Map** from tested-agent-visible information.
+- The **Tested Agent** is responsible for selecting the tested-agent-visible support for its final reconstructed states.
+- The **Evaluation Runtime** may validate that **Supporting Turn References** point to visible turns, but it does not judge whether the referenced turns semantically prove the **Tested Agent**'s assessment.
+- During finalization, the **Evaluation Runtime** may mechanically wrap the **Tested Agent**'s **Supporting Turn References** into tested-agent-visible **Evidence Records** without inferring mastery.
+- The **Evaluation Runtime** does not infer mastery or automatically fill final reconstructed states for the **Tested Agent**.
+- A **Tested Agent** may submit a **Final Reconstructed Knowledge Map** before exhausting the **Turn Budget**, and that submission ends the **Evaluation Episode**.
+- **Turn Budget** is a maximum number of allowed **Interaction Turns**, not a required number of turns.
+- When the **Turn Budget** is exhausted without final submission, the **Evaluation Runtime** enters **Forced Finalization**.
+- During **Forced Finalization**, the **Tested Agent** may inspect tested-agent-visible context and submit a **Final Reconstructed Knowledge Map**, but it may not ask another **Diagnostic Question**.
+- If **Forced Finalization** fails, the **Evaluation Runtime** may create a **Forced Finalization Fallback** by exporting supported non-unknown judgments from the current **Agent Working Knowledge Map**.
+- The first **Interaction Turn** starts from the visible graph and an initial **Agent Working Knowledge Map** without a prior simulator answer.
+- After the first turn, the **Tested Agent** updates its **Agent Working Knowledge Map** after receiving the latest visible simulator answer, then either asks the next **Diagnostic Question** or finalizes.
+- The **Tested Agent** does not update its **Agent Working Knowledge Map** while waiting for a simulator answer.
 - In v1, each **User Knowledge State** in a **Reconstructed Knowledge Map** should be backed by one or more tested-agent-visible **Evidence Records**.
 - V1 scoring uses the **Final Reconstructed Knowledge Map**.
 - A **Reconstruction Trace** is optional and not required for primary v1 scoring.
@@ -568,7 +628,7 @@ _Avoid_: ground-truth edge, authored edge
 - **Exact Mastery Bonus** may be derived from zero **Mastery Level Distance**.
 - In v1, **Structured Map Comparison** scores every **Knowledge Node** in the **Episode Knowledge Graph**.
 - In v1, the **Reviewed Map** must satisfy the **Map Coverage Requirement**.
-- In v1, the **Final Reconstructed Knowledge Map** should satisfy the **Map Coverage Requirement**; missing nodes are handled as **Missing Predictions**.
+- In v1, the **Final Reconstructed Knowledge Map** may omit **Knowledge Nodes**; omitted scored nodes are handled as **Missing Predictions**.
 - A v1 **Evaluation Episode** has an explicit **Turn Budget**.
 - The v1 **Turn Budget** is not derived from the number of **Knowledge Nodes** in the **Episode Knowledge Graph**.
 - A v1 **Interaction Turn** contains one primary **Diagnostic Question**.
@@ -813,12 +873,17 @@ _Avoid_: ground-truth edge, authored edge
 - "foundational node" can sound like a stored node attribute; resolved: foundation is a derived **Candidate Graph Review Foundation Score** for layout only.
 - "edge type weight" can sound like domain scoring; resolved: edge type weighting is a review layout heuristic, with `prerequisite_for` stronger than `part_of`, and `part_of` stronger than `supports`.
 - "confidence" can sound like a user-state field; resolved: v1 stores **Curation Confidence** only on edges and omits user-state confidence until a precise need emerges.
+- "tested-agent confidence" should not reuse **Curation Confidence**; resolved: use **Diagnostic Confidence** for confidence in an **Agent Working Knowledge Map** judgment.
+- "assessment source" can over-structure the tested agent's working state; resolved: use a flexible **Assessment Note** rather than a source enum for the judgment basis.
 - "candidate curation confidence" can sound like final author judgment; resolved: candidate values may be agent suggestions, while authored values are benchmark-author reviewed.
 - "weight" can mean relationship strength or author confidence; resolved: **Knowledge Edge Weight** means relationship strength, while **Curation Confidence** means confidence in validity.
 - "evidence" can mean real human observation or generated benchmark support; resolved: **Synthetic Evidence** is allowed in v1 but must remain traceable simulated data.
 - "ground-truth evidence schema" and "interaction observation schema" can drift apart; resolved: v1 uses one shared **Evidence Record** structure with different type and visibility values.
 - "reconstructed state" can mean an unsupported guess; resolved: v1 **Reconstructed Knowledge Map** states must cite tested-agent-visible **Evidence Records**.
+- "unsupported inference" can sound like a map-authoring validation issue; resolved: **Unsupported Inference** remains a final reconstruction reporting concept for predictions lacking tested-agent-visible evidence.
 - "reconstruction trace" can be mistaken for required scoring output; resolved: v1 requires only the **Final Reconstructed Knowledge Map** for primary scoring.
+- "belief map" can sound like a hidden benchmark reference or freeform chain-of-thought; resolved: use **Agent Working Knowledge Map** for the tested agent's mutable intermediate map and **Final Reconstructed Knowledge Map** for the submitted scoring artifact.
+- "working map" can sound like a sparse ad hoc note set; resolved: an **Agent Working Knowledge Map** starts as a full-graph shell and only the tested agent's node-level judgments evolve.
 - "baseline" can expand into many comparison agents; resolved: v1 uses only fixed-question, random-question, and simple LLM baselines.
 - "evidence type" and "evidence visibility" can be conflated; resolved: type describes role or origin, while visibility describes access boundary.
 - "evidence kind" and "evidence type" can be conflated; resolved: kind describes observable diagnostic form, while type describes origin or lifecycle role.

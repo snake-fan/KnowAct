@@ -381,24 +381,52 @@ Implementation note:
 
 Goal: make agent comparison possible through a shared protocol.
 
+Decision reference: `docs/adr/0051-v1-tested-agents-use-working-map-semantic-tools.md`.
+
 Milestone M7:
 
 - A tested agent can receive the visible graph, episode rules, and dialogue history.
+- A tested agent starts with an `Agent Working Knowledge Map` shell covering every node in the episode graph.
 - A tested agent can produce one diagnostic question per turn.
+- The first turn starts without a prior simulator answer; after that, each cycle updates the working map from the latest visible answer before asking the next question or finalizing.
+- A tested agent can update node-level working-map judgments with assessed mastery, diagnostic confidence, an assessment note, and supporting turn references through semantic tools.
+- Phase 7 working-map node state contains only `node_id`, `assessed_mastery_level`, `diagnostic_confidence`, `assessment_note`, and `supporting_turn_ids`; defer structured misconception and unknown reconstruction.
 - A tested agent submits one `Final Reconstructed Knowledge Map` after the episode ends.
+- Finalization omits working-map nodes that still have `unknown` assessed mastery; scoring handles the omitted nodes as `Missing Prediction` rather than coercing them to L0.
+- If finalization sees a non-unknown working-map judgment without `supporting_turn_ids`, downgrade that judgment to unknown, omit it from the final reconstructed map, and emit a warning rather than rejecting finalization.
+- Initial finalization exports empty `misconceptions` and `unknowns` arrays for submitted states.
+- Initial finalization mechanically wraps agent-selected `supporting_turn_ids` into reconstructed-map `EvidenceRecord` objects with `evidence_type = interaction_observation`, `visibility = tested_agent`, `turn_id` set to the cited visible turn, and `evidence_kind = prior_answer` by default.
+- A tested agent may finalize before using all allowed turns; `max_turns` is an upper bound, not a required turn count.
+- A tested agent, not the runtime platform, is responsible for constructing the final reconstructed map and selecting tested-agent-visible support for reconstructed states.
 - Reconstructed user states cite tested-agent-visible evidence records.
 - The fixed-question, random-question, and simple LLM baselines can complete the same episode contract.
 
 Baseline boundaries:
 
-- Fixed-question baseline uses a predefined question order.
+- Fixed-question baseline uses a predefined question order and serves as a minimal deterministic floor for regression and smoke testing.
 - Random-question baseline selects diagnostic questions randomly within episode constraints.
-- Simple LLM agent sees the authored graph and dialogue history, then chooses questions and submits a final map.
+- Simple LLM agent sees the authored graph, dialogue history, and working map, then chooses questions, updates the working map through the same semantic tools, and submits a final map through finalization.
 - Oracle, passive summarization, teaching, and complex ToM agents stay out of the v1 baseline set.
+- All v1 baselines should use the same working-map and finalization tool path so comparison differences come from question selection and update policy rather than output plumbing.
+- Simple LLM agent may update multiple node assessments after one turn, including indirectly inferred nodes, but must not bypass the working map by producing final reconstructed-map JSON directly from the transcript.
 
 Implementation note:
 
-- Structures to implement: `backend/knowact/agents/protocol.py`, fixed/random/simple LLM baseline modules, question-bank support, and reconstructed-map assembly helpers.
+- Structures to implement: `backend/knowact/agents/protocol.py`, `working_map.py`, `tools.py`, fixed/random/simple LLM baseline modules, question-bank support, and reconstructed-map assembly helpers.
+- Tested-agent tools should be semantic operations such as `read_episode_graph`, `read_working_map`, `update_node_assessments`, `ask_diagnostic_question`, and `finalize_reconstructed_map`; do not expose generic JSON patch or CRUD over graph/map artifacts.
+- `update_node_assessments` should accept a batch of node-level assessment updates; single-node updates are represented as a batch of one.
+- Non-unknown `update_node_assessments` items should require a nonblank assessment note and at least one visible `supporting_turn_id`; unknown items may leave both fields empty.
+- Runtime may validate submitted reconstructed-map references and compute scoring, but it should not infer mastery or auto-fill reconstructed states for the tested agent.
+- Runtime validation of supporting turn references should check only that referenced turns exist in the tested-agent-visible transcript.
+- Runtime should enforce the answer-driven update cycle: after the first turn, working-map updates happen after receiving the latest visible answer, and the tested agent cannot update while waiting for a simulator answer.
+- `update_node_assessments` should be atomic: if any item in the batch is invalid, the whole batch is rejected and the working map remains unchanged.
+- Rejected working-map tool calls do not consume an interaction turn; the tested agent may inspect the validation error, reorganize the update batch, and retry within the same agent decision phase.
+- Each agent decision phase should cap rejected working-map update retries, initially `max_tool_retries = 3`. When exhausted, mark the run or trace with `tool_retry_exhausted = true` and continue the phase without applying that update batch.
+- Rejected finalization attempts may be retried with the same `max_tool_retries = 3` limit. If early finalization retry is exhausted while turns remain, the agent returns to the normal question/update loop; if forced-finalization retry is exhausted, the runner uses forced finalization fallback.
+- The runtime runner should end an episode immediately after a valid final reconstructed map is submitted, even if unused turns remain.
+- If `max_turns` is exhausted without final submission, the runner should enter a forced-finalization phase where the agent may read visible context and submit the final map but cannot ask another diagnostic question.
+- If forced finalization fails or times out, the runner may mechanically export the current working map into a fallback final reconstructed map by omitting unknown nodes and preserving supported non-unknown judgments. Mark the run output with `forced_finalization_fallback = true`.
+- Run output should persist the latest agent working map as `working_map.json` and append-only tested-agent tool calls plus validation outcomes as `agent_tool_trace.json`. Do not persist full per-turn working-map snapshots by default in Phase 7.
 - Interfaces to open: no direct agent-control API is required at first; agents should be selected through episode run requests after the runtime contract exists.
 - Development API boundary: future baseline smoke-test endpoints may exist, but they must expose only tested-agent-visible context.
 
@@ -449,7 +477,7 @@ Minimum review questions for the report:
 
 Implementation note:
 
-- Structures to implement: `backend/knowact/runtime/runner.py`, `runtime/turn_loop.py`, `runtime/transcript.py`, `experiments/runs/` output snapshots, and experiment-level report documents.
+- Structures to implement: `backend/knowact/runtime/runner.py`, `runtime/turn_loop.py`, `runtime/transcript.py`, `experiments/runs/` output snapshots including `working_map.json` and `agent_tool_trace.json`, and experiment-level report documents.
 - Interfaces to open: `POST /api/runtime/episodes/{episode_id}/runs`, `GET /runs/{run_id}`, and `GET /runs/{run_id}/report` once reviewed artifacts, simulator, agents, and scoring are wired.
 - Development API boundary: end-to-end fixture runs can appear in development-only routes first, but formal v1 runs should use stable routes and reviewed artifacts only.
 
