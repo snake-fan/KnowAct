@@ -65,6 +65,50 @@ The ground-truth user profile is hidden from the tested agent. The agent must in
 
 ---
 
+## Running the Project Locally
+
+Prerequisites:
+
+- Python 3.12, matching `.python-version`
+- `uv` for Python dependency management
+- Node.js and `npm` for the React workbench
+
+From the repository root, install backend dependencies and prepare local environment variables:
+
+```bash
+uv sync
+test -f .env || cp .env.example .env
+```
+
+Fill in `.env` only for workflows that call external services, such as LLM-backed graph authoring, simulator turns, MinerU parsing, or Aliyun OSS staging. The backend can still be started for health checks and local UI/API wiring without real secrets.
+
+Start the FastAPI backend:
+
+```bash
+uv run uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+The backend listens on `http://127.0.0.1:8000` by default. Useful development URLs include `http://127.0.0.1:8000/health` and `http://127.0.0.1:8000/docs`.
+
+In a second terminal, install and start the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the Vite URL printed by the command, usually `http://localhost:5173`. The Vite dev server proxies `/api` and `/health` to `http://127.0.0.1:8000`; if the backend runs elsewhere, start the frontend with `VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm run dev`.
+
+Basic verification commands:
+
+```bash
+uv run python -m unittest
+cd frontend && npm run build
+```
+
+---
+
 ## Benchmark Design
 
 KnowAct uses a semi-synthetic benchmark construction process:
