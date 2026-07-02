@@ -10,6 +10,15 @@ from backend.knowact.agents.protocol import (
     TestedAgentDecision,
 )
 from backend.knowact.agents.agents.simple_llm import SimpleLLMTestedAgent
+from backend.knowact.agents.llm_agent import (
+    TestedAgentConfigurationError,
+    build_simple_llm_tested_agent,
+    build_simple_llm_tested_agent_for_provider,
+)
+from backend.knowact.agents.providers import (
+    DEFAULT_TESTED_AGENT_CLIENT_PROVIDER,
+    TestedAgentClientProvider,
+)
 from backend.knowact.agents.tools import (
     FinalizationWarning,
     FinalizationWarningCode,
@@ -39,12 +48,17 @@ __all__ = [
     "FinalizationWarningCode",
     "FinalizedReconstructedMap",
     "FinalizeReconstructionDecision",
+    "DEFAULT_TESTED_AGENT_CLIENT_PROVIDER",
     "SimpleLLMTestedAgent",
     "TestedAgent",
+    "TestedAgentClientProvider",
+    "TestedAgentConfigurationError",
     "TestedAgentDecision",
     "WorkingMapNodeAssessmentUpdate",
     "WorkingMapNodeAssessment",
     "finalize_reconstructed_map",
+    "build_simple_llm_tested_agent",
+    "build_simple_llm_tested_agent_for_provider",
     "initialize_working_map",
     "update_node_assessments",
     "validate_working_map",

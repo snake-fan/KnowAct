@@ -9,6 +9,10 @@ from backend.knowact.api.simulator import (
     SimulatorServiceFactory,
     build_simulator_router,
 )
+from backend.knowact.api.tested_agents import (
+    SimpleLLMTestedAgentFactory,
+    build_tested_agents_router,
+)
 from backend.knowact.api.runtime import build_runtime_router
 from backend.knowact.authoring.openai_workflow import (
     GraphAuthoringClientProvider,
@@ -50,6 +54,7 @@ def create_app(
     profile_context_authoring_workflow_factory: ProfileContextAuthoringWorkflowFactory | None = None,
     candidate_map_authoring_workflow_factory: CandidateMapAuthoringWorkflowFactory | None = None,
     simulator_service_factory: SimulatorServiceFactory | None = None,
+    simple_llm_tested_agent_factory: SimpleLLMTestedAgentFactory | None = None,
     source_parser: SourceParser | None = None,
     workspace_root: Path | None = None,
 ) -> FastAPI:
@@ -85,6 +90,14 @@ def create_app(
         ),
         prefix="/api/simulator",
         tags=["simulator"],
+    )
+    app.include_router(
+        build_tested_agents_router(
+            workspace_root=workspace_root,
+            simple_llm_tested_agent_factory=simple_llm_tested_agent_factory,
+        ),
+        prefix="/api/tested-agents",
+        tags=["tested-agents"],
     )
     app.include_router(
         build_runtime_router(workspace_root=workspace_root),

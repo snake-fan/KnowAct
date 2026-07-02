@@ -265,7 +265,7 @@ core
 - prompt templates 输入输出尽量结构化，并优先放在调用方所属 workflow 的 `templates/` 目录中。
 - model client 返回原始模型文本；workflow-specific parser 负责把输出解析成 domain schema。
 - hidden map、hidden evidence、visible transcript 的边界在调用前显式构造。
-- Phase 2 初始实现使用 OpenAI Python SDK-compatible adapters，通过 `.env.example` 中记录的环境变量配置 OpenAI 或 DeepSeek API key、model、base URL 和 timeout；`POST /api/authoring/graph-candidates` 和 `POST /api/simulator/turn` 通过 `client_provider` 在请求级选择 provider，默认 `openai`。
+- Phase 2 初始实现使用 OpenAI Python SDK-compatible adapters，通过 `.env.example` 中记录的环境变量配置 OpenAI 或 DeepSeek API key、model、base URL 和 timeout；`POST /api/authoring/graph-candidates`、`POST /api/simulator/turn` 和 `POST /api/tested-agents/simple-llm/turn-test` 通过 `client_provider` 在请求级选择 provider，默认 `openai`。
 - 测试阶段的 PDF source material 可以放在仓库根目录 `storage/` 下，由 `/api/authoring` 按相对路径选择；authoring source preparation 先复用或生成同目录同 stem 的 `Parsed Source Markdown`，再通过普通 text `ModelClient` 发送给 LLM。
 - v1 graph authoring 不使用 PDF base64 `input_file`、OpenAI Files API `file_id` 或 PDF-specific LLM client path；MinerU 解析属于 `authoring/sources.py` 的 source preparation。
 - MinerU standard mode 通过私有阿里云 OSS bucket 的临时 staging object 生成短期 signed URL，再将 URL 提交给 MinerU v4；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会先在本地拆分为多个 chunk，逐块解析后按页码顺序拼接为一个 `Parsed Source Markdown`；OSS object 默认 best-effort 删除，signed URL 不进入 API response、workflow log 或 candidate graph artifacts。
@@ -320,6 +320,8 @@ Decision reference: `docs/adr/0051-v1-tested-agents-use-working-map-semantic-too
 - `agents/random_question.py`: `Random-Question Baseline`。
 - `agents/simple_llm.py`: `Simple LLM Agent`。
 - `templates/`: prompt/message builders for tested-agent implementations.
+- `providers.py`: tested-agent LLM provider vocabulary.
+- `llm_agent.py`: provider-backed simple LLM tested-agent wiring.
 - `working_map.py`: agent-owned full-graph working map schemas and update helpers for assessed mastery, diagnostic confidence, and assessment notes.
 - `tools.py`: semantic tested-agent tool boundary for reading visible context, updating the working map, asking diagnostic questions, and finalizing reconstruction.
 - `question_bank.py`: fixed baseline 的问题来源。
@@ -468,12 +470,15 @@ load Evaluation Episode Manifest from Runtime Episode Registry
 - `POST /api/runtime/episodes`
 - `GET /api/runtime/episodes`
 - `GET /api/runtime/episodes/{episode_id}`
+- `POST /api/tested-agents/simple-llm/turn-test`
 - `GET /runs/{run_id}`
 - `GET /runs/{run_id}/report`
 
 Phase 4 的初始 authoring surface 保持 narrow and functional：profile-context candidate 支持生成、读取、编辑和显式 confirmation；candidate map 支持生成、读取、列出 runs 和显式 promotion，但不提供 map `PUT`，因为 poor candidate maps 应重新生成而不是手工 patch。为支持 workbench selectors 和 simulator 前端入口，允许只读 `GET /api/authoring/benchmark-domains`、reviewed graph/profile list/read、candidate-map run list，以及 reviewed-map list/read；这些接口不创建或修改 benchmark data，也不启动 simulator runtime。调用方显式串联窄接口，使 profile-context editing、confirmation、candidate-map inspection 和 promotion 保持可见 gate；待闭环调通后再考虑更宽的 orchestration 产品形态。
 
 Phase 6 的 runtime surface 开放 `POST /api/runtime/episodes`、`GET /api/runtime/episodes` 和 `GET /api/runtime/episodes/{episode_id}`。`POST /api/runtime/episodes` 执行 `Episode Manifest Registration`，request 只暴露 `episode_id`、`benchmark_domain`、`graph_version`、`hidden_map_id` 和 `max_turns`；runtime service 固定写入 `interaction_rule = single_diagnostic_question_per_turn` 与 `scoring_profile = squared_mastery_distance_v1`，同步加载并校验 reviewed graph 与 reviewed hidden map binding，只有 binding 通过且 `episode_id` 尚不存在时才把 `Evaluation Episode Manifest` 发布到 `Runtime Episode Registry`，不启动 run。Successful registration 返回 `201 Created` 和 runtime management detail envelope；重复 `episode_id` 或 graph/map identity mismatch 返回 `409 Conflict`，reviewed artifact loading failure 返回 `424 Failed Dependency`。Missing confirmed Profile Context 不阻塞 registration；它只作为 runtime management status/warning 返回。Episode registration 不支持 overwrite；修改 graph、map 或 budget 必须注册新的 `episode_id`。Runtime management detail response 面向 benchmark author，可返回 `hidden_map_id`、reviewed map `user_id`、profile-context load status 和 non-leaking missing-profile warning 供前端展示，但不返回 hidden states、hidden evidence、profile context payload、debug traces、simulator answer blueprint、transcript 或 scoring report；profile context 正文应通过 profile/user inspection surface 查看。其中的 tested-agent-visible context preview 是同一 response 中唯一可交付给 tested agent 的子对象，必须排除 `hidden_map_id`、`map_id`、`user_id`、profile-context status、warnings 和任何 hidden payload。不要为了 frontend management 和 tested-agent delivery 拆出两套 Phase 6 HTTP routes；边界靠 response 分层和 runtime 交付选择来保证。`POST /api/runtime/episodes/{episode_id}/runs` 应等到 simulator、tested agent、transcript 和 scoring wiring 都能保护 visibility boundary 后再开放。
+
+Phase 7 的 development/test surface 允许 `POST /api/tested-agents/simple-llm/turn-test` 直接调用 `Simple LLM Agent` 做人工调试。该 route stateless 地加载 reviewed graph，接收 tested-agent-visible `VisibleDialogueContext` 和可选 `AgentWorkingKnowledgeMap`，必要时初始化 working map，应用本轮 working-map updates，然后返回下一步 tested-agent decision。它不读取 hidden map、不调用 simulator、不写 transcript、不注册 runtime run，也不产生 scoring report。
 
 `POST /api/authoring/profile-context-candidates` 接收 required `benchmark_domain`、required `rough_description`、optional limited `domain_summary`、optional `run_id` 和 request-level `client_provider`。首版允许 inline `domain_summary`，但其中不得包含 node 或 rubric 明细；后续可由 domain manifest 提供稳定 summary。
 
