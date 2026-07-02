@@ -144,6 +144,18 @@ _Avoid_: hidden evidence reference, simulator trace id, automatic proof
 An **Agent Working Knowledge Map** judgment inferred from visible observations about other **Knowledge Nodes** and visible **Authored Knowledge Graph** relationships.
 _Avoid_: hidden-state lookup, direct user answer, unsupported ground truth
 
+**Tested Agent Decision Phase**:
+A runtime-controlled point in an **Evaluation Episode** where the **Tested Agent** may make a **Tested Agent Decision** under the current episode phase constraints.
+_Avoid_: interaction turn, simulator turn, agent-owned episode state
+
+**Decision Phase Context**:
+The tested-agent-visible structured context that states the current **Tested Agent Decision Phase** and **Remaining Diagnostic Turns**.
+_Avoid_: prompt-only instruction, hidden runtime state, freeform phase note
+
+**Tested Agent Decision**:
+A **Tested Agent** choice in one **Tested Agent Decision Phase** to either ask one **Diagnostic Question** or end by submitting a **Final Reconstructed Knowledge Map**.
+_Avoid_: nullable question, hidden runtime action, implicit finalization
+
 **Final Reconstructed Knowledge Map**:
 The required **Reconstructed Knowledge Map** submitted by the **Tested Agent** after an **Evaluation Episode** ends.
 _Avoid_: per-turn snapshot, intermediate belief state, trace
@@ -211,6 +223,10 @@ _Avoid_: partial map, sampled nodes, scoring subset
 **Turn Budget**:
 The explicitly configured maximum number of interaction turns allowed in an **Evaluation Episode**.
 _Avoid_: graph-derived budget, unlimited conversation, implicit budget
+
+**Remaining Diagnostic Turns**:
+The number of **Diagnostic Questions** the **Tested Agent** may still ask from the current **Tested Agent Decision Phase**.
+_Avoid_: remaining conversation rounds, final turn flag, finalization turn
 
 **Interaction Turn**:
 One tested-agent diagnostic question followed by one user simulator answer.
@@ -611,11 +627,17 @@ _Avoid_: ground-truth edge, authored edge
 - The **Evaluation Runtime** does not infer mastery or automatically fill final reconstructed states for the **Tested Agent**.
 - A **Tested Agent** may submit a **Final Reconstructed Knowledge Map** before exhausting the **Turn Budget**, and that submission ends the **Evaluation Episode**.
 - **Turn Budget** is a maximum number of allowed **Interaction Turns**, not a required number of turns.
+- **Remaining Diagnostic Turns** counts future allowed **Diagnostic Questions**, not finalization opportunities.
 - When the **Turn Budget** is exhausted without final submission, the **Evaluation Runtime** enters **Forced Finalization**.
 - During **Forced Finalization**, the **Tested Agent** may inspect tested-agent-visible context and submit a **Final Reconstructed Knowledge Map**, but it may not ask another **Diagnostic Question**.
 - If **Forced Finalization** fails, the **Evaluation Runtime** may create a **Forced Finalization Fallback** by exporting supported non-unknown judgments from the current **Agent Working Knowledge Map**.
 - The first **Interaction Turn** starts from the visible graph and an initial **Agent Working Knowledge Map** without a prior simulator answer.
-- After the first turn, the **Tested Agent** updates its **Agent Working Knowledge Map** after receiving the latest visible simulator answer, then either asks the next **Diagnostic Question** or finalizes.
+- After the first turn, the **Tested Agent** updates its **Agent Working Knowledge Map** after receiving the latest visible simulator answer, then makes a **Tested Agent Decision** in a **Tested Agent Decision Phase**.
+- The **Evaluation Runtime** applies accepted working-map updates before the **Tested Agent** makes the next **Tested Agent Decision**.
+- A **Tested Agent Decision** is either asking one **Diagnostic Question** or finalizing the current **Agent Working Knowledge Map** into a **Final Reconstructed Knowledge Map**.
+- A finalizing **Tested Agent Decision** does not carry a freeform **Final Reconstructed Knowledge Map**; it submits the current accepted **Agent Working Knowledge Map** through finalization.
+- The **Evaluation Runtime** controls **Tested Agent Decision Phase** boundaries; a **Tested Agent Decision Phase** is not an **Interaction Turn** by itself.
+- The **Evaluation Runtime** provides **Decision Phase Context** to the **Tested Agent** as structured visible context, and LLM-backed agents may render it into prompts.
 - The **Tested Agent** does not update its **Agent Working Knowledge Map** while waiting for a simulator answer.
 - In v1, each **User Knowledge State** in a **Reconstructed Knowledge Map** should be backed by one or more tested-agent-visible **Evidence Records**.
 - V1 scoring uses the **Final Reconstructed Knowledge Map**.
@@ -802,6 +824,7 @@ _Avoid_: ground-truth edge, authored edge
 - "mastery distance" can imply linear penalty over L0-L5; resolved: v1 uses squared distance over explicit L0-L5 scores.
 - "episode score" can imply a reward where higher is better; resolved: v1 primary result is **Episode Mastery Distance**, where lower is better.
 - "turn budget" can be inferred from graph size; resolved: v1 uses an explicit **Turn Budget** configured per **Evaluation Episode**.
+- "remaining turns" can confuse question opportunities with finalization; resolved: use **Remaining Diagnostic Turns** to count how many more **Diagnostic Questions** may be asked.
 - "episode config" can be scattered across runner arguments; resolved: v1 uses an **Evaluation Episode Manifest**.
 - "create episode" can mean either registering an episode manifest or starting a run; resolved: use **Episode Manifest Registration** for the former and keep run starts separate.
 - "episode detail" can mean either benchmark-author management display or tested-agent delivery; resolved: **Runtime Management View** may show reference identities, while **Tested-Agent-Visible Episode Context** must not.
@@ -884,6 +907,9 @@ _Avoid_: ground-truth edge, authored edge
 - "reconstruction trace" can be mistaken for required scoring output; resolved: v1 requires only the **Final Reconstructed Knowledge Map** for primary scoring.
 - "belief map" can sound like a hidden benchmark reference or freeform chain-of-thought; resolved: use **Agent Working Knowledge Map** for the tested agent's mutable intermediate map and **Final Reconstructed Knowledge Map** for the submitted scoring artifact.
 - "working map" can sound like a sparse ad hoc note set; resolved: an **Agent Working Knowledge Map** starts as a full-graph shell and only the tested agent's node-level judgments evolve.
+- "next question" can obscure early finalization; resolved: use **Tested Agent Decision** for the choice between asking one **Diagnostic Question** and submitting the **Final Reconstructed Knowledge Map**.
+- "agent response" can hide separate responsibilities; resolved: the **Evaluation Runtime** accepts or rejects working-map updates before the **Tested Agent** makes the next **Tested Agent Decision**.
+- "finalization payload" can bypass the working map; resolved: a finalizing **Tested Agent Decision** submits the current accepted **Agent Working Knowledge Map**, not a separate reconstructed-map object.
 - "baseline" can expand into many comparison agents; resolved: v1 uses only fixed-question, random-question, and simple LLM baselines.
 - "evidence type" and "evidence visibility" can be conflated; resolved: type describes role or origin, while visibility describes access boundary.
 - "evidence kind" and "evidence type" can be conflated; resolved: kind describes observable diagnostic form, while type describes origin or lifecycle role.

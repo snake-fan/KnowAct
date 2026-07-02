@@ -1,5 +1,15 @@
 """Tested-agent contracts and working-map helpers."""
 
+from backend.knowact.agents.base import BaseTestedAgent
+from backend.knowact.agents.protocol import (
+    AskDiagnosticQuestionDecision,
+    DecisionPhase,
+    DecisionPhaseContext,
+    FinalizeReconstructionDecision,
+    TestedAgent,
+    TestedAgentDecision,
+)
+from backend.knowact.agents.agents.simple_llm import SimpleLLMTestedAgent
 from backend.knowact.agents.tools import (
     FinalizationWarning,
     FinalizationWarningCode,
@@ -19,11 +29,19 @@ from backend.knowact.agents.working_map import (
 
 __all__ = [
     "AgentWorkingKnowledgeMap",
+    "AskDiagnosticQuestionDecision",
     "AssessedMasteryLevel",
+    "BaseTestedAgent",
+    "DecisionPhase",
+    "DecisionPhaseContext",
     "DiagnosticConfidence",
     "FinalizationWarning",
     "FinalizationWarningCode",
     "FinalizedReconstructedMap",
+    "FinalizeReconstructionDecision",
+    "SimpleLLMTestedAgent",
+    "TestedAgent",
+    "TestedAgentDecision",
     "WorkingMapNodeAssessmentUpdate",
     "WorkingMapNodeAssessment",
     "finalize_reconstructed_map",

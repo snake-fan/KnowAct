@@ -412,7 +412,7 @@ Baseline boundaries:
 
 Implementation note:
 
-- Structures to implement: `backend/knowact/agents/protocol.py`, `working_map.py`, `tools.py`, fixed/random/simple LLM baseline modules, question-bank support, and reconstructed-map assembly helpers.
+- Structures to implement: `backend/knowact/agents/protocol.py`, `base.py`, `working_map.py`, `tools.py`, concrete fixed/random/simple LLM baseline modules under `agents/`, tested-agent prompt templates under `templates/`, question-bank support, and reconstructed-map assembly helpers.
 - Tested-agent tools should be semantic operations such as `read_episode_graph`, `read_working_map`, `update_node_assessments`, `ask_diagnostic_question`, and `finalize_reconstructed_map`; do not expose generic JSON patch or CRUD over graph/map artifacts.
 - `update_node_assessments` should accept a batch of node-level assessment updates; single-node updates are represented as a batch of one.
 - Non-unknown `update_node_assessments` items should require a nonblank assessment note and at least one visible `supporting_turn_id`; unknown items may leave both fields empty.

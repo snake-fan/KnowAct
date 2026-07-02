@@ -315,9 +315,11 @@ Decision reference: `docs/adr/0051-v1-tested-agents-use-working-map-semantic-too
 建议模块：
 
 - `protocol.py`: tested-agent interface。
-- `fixed_question.py`: `Fixed-Question Baseline`。
-- `random_question.py`: `Random-Question Baseline`。
-- `simple_llm.py`: `Simple LLM Agent`。
+- `base.py`: phase-aware base class shared by fixed, random, and LLM tested agents.
+- `agents/fixed_question.py`: `Fixed-Question Baseline`。
+- `agents/random_question.py`: `Random-Question Baseline`。
+- `agents/simple_llm.py`: `Simple LLM Agent`。
+- `templates/`: prompt/message builders for tested-agent implementations.
 - `working_map.py`: agent-owned full-graph working map schemas and update helpers for assessed mastery, diagnostic confidence, and assessment notes.
 - `tools.py`: semantic tested-agent tool boundary for reading visible context, updating the working map, asking diagnostic questions, and finalizing reconstruction.
 - `question_bank.py`: fixed baseline 的问题来源。
