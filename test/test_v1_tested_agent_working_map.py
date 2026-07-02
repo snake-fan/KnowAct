@@ -154,7 +154,25 @@ class V1TestedAgentWorkingMapTest(unittest.TestCase):
         )
 
         reconstructed_map = result.knowledge_map
+        submission = result.submission
         self.assertEqual((), result.warnings)
+        self.assertEqual("episode_a", submission.episode_id)
+        self.assertEqual(
+            ("train_test_split", "linear_regression"),
+            tuple(prediction.node_id for prediction in submission.predictions),
+        )
+        self.assertEqual(
+            "L3",
+            submission.prediction_by_node_id[
+                "train_test_split"
+            ].predicted_mastery,
+        )
+        self.assertEqual(
+            "unknown",
+            submission.prediction_by_node_id[
+                "linear_regression"
+            ].predicted_mastery,
+        )
         self.assertEqual("reconstructed_episode_a", reconstructed_map.user_id)
         self.assertEqual("reconstructed", reconstructed_map.kind)
         self.assertEqual(1, len(reconstructed_map.states))
@@ -174,7 +192,7 @@ class V1TestedAgentWorkingMapTest(unittest.TestCase):
         self.assertIn("Answer:", evidence.signal)
         validate_knowledge_map(reconstructed_map, graph)
 
-    def test_finalize_reconstructed_map_downgrades_unsupported_judgment(self):
+    def test_finalize_reconstructed_map_reports_unsupported_judgment(self):
         graph = _graph()
         working_map = AgentWorkingKnowledgeMap(
             episode_id="episode_a",
@@ -198,11 +216,17 @@ class V1TestedAgentWorkingMapTest(unittest.TestCase):
             visible_dialogue_context=_dialogue(),
         )
 
+        train_test_prediction = result.submission.prediction_by_node_id[
+            "train_test_split"
+        ]
+        self.assertEqual("L3", train_test_prediction.predicted_mastery)
+        self.assertEqual((), train_test_prediction.evidence_refs)
+        self.assertEqual("unknown", result.submission.prediction_by_node_id["linear_regression"].predicted_mastery)
         self.assertEqual((), result.knowledge_map.states)
         self.assertEqual((), result.knowledge_map.evidence)
         self.assertEqual(1, len(result.warnings))
         self.assertEqual(
-            FinalizationWarningCode.MISSING_SUPPORT_DOWNGRADED,
+            FinalizationWarningCode.MISSING_SUPPORT_UNSUPPORTED,
             result.warnings[0].code,
         )
         validate_knowledge_map(result.knowledge_map, graph)

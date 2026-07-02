@@ -16,7 +16,7 @@ Authoritative Source
   -> Map authoring and review
   -> Evaluation Episode Manifest
   -> User Simulator + Tested Agent interaction
-  -> Final Reconstructed Knowledge Map
+  -> Final Reconstruction Submission
   -> Structured Map Comparison
   -> Evaluation Report
 ```
@@ -338,18 +338,18 @@ Decision reference: `docs/adr/0051-v1-tested-agents-use-working-map-semantic-too
 - `update_node_assessments` is atomic: if any item is invalid, the whole batch is rejected and the working map remains unchanged.
 - A rejected working-map tool call does not consume an interaction turn. The tested agent may inspect the validation error, reorganize its update batch, and call the tool again within the same agent decision phase.
 - Each agent decision phase should cap rejected working-map update retries, initially `max_tool_retries = 3`. When exhausted, mark the run or trace with `tool_retry_exhausted = true` and continue the phase without applying that update batch.
-- `finalize_reconstructed_map` omits working-map nodes that still have unknown assessed mastery so scoring can report them as missing predictions; it must not coerce unknown to L0.
-- If finalization sees a non-unknown working-map judgment without `supporting_turn_ids`, downgrade that judgment to unknown, omit it from the final reconstructed map, and emit a warning rather than rejecting finalization.
+- `finalize_reconstructed_map` exports a full-graph `FinalReconstructionSubmission`; working-map nodes that still have unknown assessed mastery remain `unknown` so scoring can report them as missing predictions without coercing unknown to L0.
+- If finalization sees a non-unknown working-map judgment without valid `supporting_turn_ids`, keep that non-unknown prediction in the `FinalReconstructionSubmission`, omit it from the evidence-backed `Final Reconstructed Knowledge Map` view, and emit a warning so scoring can report it as an unsupported inference.
 - Initial `finalize_reconstructed_map` exports empty `misconceptions` and `unknowns` arrays for submitted states because Phase 7 working maps do not yet track those fields.
 - Initial `finalize_reconstructed_map` mechanically wraps agent-selected `supporting_turn_ids` into reconstructed-map `EvidenceRecord` objects with `evidence_type = interaction_observation`, `visibility = tested_agent`, `turn_id` set to the cited visible turn, and `evidence_kind = prior_answer` by default. This is schema assembly, not runtime inference.
 - Rejected finalization attempts may be retried with the same `max_tool_retries = 3` limit. If early finalization retry is exhausted while turns remain, the agent returns to the normal question/update loop; if forced-finalization retry is exhausted, the runner uses forced finalization fallback.
-- The tested agent is responsible for constructing the final reconstructed map and choosing tested-agent-visible support for its reconstructed states. Runtime may validate references, but it must not infer mastery or auto-fill reconstructed states on the agent's behalf.
+- The tested agent is responsible for constructing the full-graph final reconstruction submission and choosing tested-agent-visible support for its reconstructed states. Runtime may validate references, but it must not infer mastery or auto-fill reconstructed states on the agent's behalf.
 - Runtime validation of `supporting_turn_ids` is visibility and existence checking only; it does not judge whether the cited turns semantically prove the assessment.
 - The runner follows an answer-driven update cycle: after the first question, the tested agent updates its working map only after receiving the latest visible simulator answer, then asks the next question or finalizes.
 - The tested agent should not update its working map while waiting for a simulator answer.
-- A tested agent may finalize before exhausting `max_turns`; the runner ends the episode once a valid final reconstructed map is submitted.
+- A tested agent may finalize before exhausting `max_turns`; the runner ends the episode once a valid final reconstruction submission is submitted.
 - If `max_turns` is exhausted without a final submission, the runner enters forced finalization: the tested agent may read visible context and submit the final map, but it may not ask another diagnostic question.
-- If forced finalization fails or times out, the runner may mechanically export the current working map into a fallback final reconstructed map by omitting unknown nodes and preserving supported non-unknown judgments. Mark the run output with `forced_finalization_fallback = true`.
+- If forced finalization fails or times out, the runner may mechanically export the current working map into a fallback full-graph final reconstruction submission. Mark the run output with `forced_finalization_fallback = true`.
 - Fixed, random, and simple LLM baselines all use the same working-map and finalization tool path; fixed-question exists as a deterministic floor for regression and smoke testing.
 - Simple LLM agents may update multiple node assessments after a turn, including indirectly inferred nodes, but they must still use the semantic working-map tools rather than producing final reconstructed-map JSON directly from the transcript.
 - v1 baseline set 不包含 oracle、passive summarization、teaching agent 或复杂 ToM agent。
@@ -405,8 +405,8 @@ load Evaluation Episode Manifest from Runtime Episode Registry
        agent either asks one next Diagnostic Question or finalizes
        if a question is asked, simulator answers naturally
        runtime records visible Interaction Observation
-  -> agent submits Final Reconstructed Knowledge Map
-  -> scoring compares final map with hidden map
+  -> agent submits Final Reconstruction Submission
+  -> scoring compares final submission with hidden map
   -> report is written
 ```
 
@@ -418,7 +418,7 @@ load Evaluation Episode Manifest from Runtime Episode Registry
 
 - `profiles.py`: `squared_mastery_distance_v1` definition。
 - `distance.py`: L0-L5 to 0-5, squared distance, missing prediction penalty 36。
-- `compare.py`: per-node map comparison。
+- `compare.py`: per-node comparison between a full-graph `FinalReconstructionSubmission` and the hidden reviewed map。
 - `unsupported.py`: unsupported inference detection。
 - `aggregate.py`: episode-level metrics。
 
@@ -435,7 +435,9 @@ load Evaluation Episode Manifest from Runtime Episode Registry
 建议输出：
 
 - per-node comparison table。
+- per-node signed mastery error。
 - episode mastery distance。
+- exact mastery match rate。
 - missing prediction rate。
 - unsupported inference rate。
 - optional misconception diagnostics。

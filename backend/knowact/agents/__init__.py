@@ -22,6 +22,7 @@ from backend.knowact.agents.providers import (
 from backend.knowact.agents.tools import (
     FinalizationWarning,
     FinalizationWarningCode,
+    FinalizedReconstruction,
     FinalizedReconstructedMap,
     WorkingMapNodeAssessmentUpdate,
     finalize_reconstructed_map,
@@ -46,6 +47,7 @@ __all__ = [
     "DiagnosticConfidence",
     "FinalizationWarning",
     "FinalizationWarningCode",
+    "FinalizedReconstruction",
     "FinalizedReconstructedMap",
     "FinalizeReconstructionDecision",
     "DEFAULT_TESTED_AGENT_CLIENT_PROVIDER",

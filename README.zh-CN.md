@@ -208,19 +208,20 @@ KnowAct 区分用户无关的 **知识图谱** 与用户相关的 **知识地图
 
 ## 评估维度
 
-KnowAct v1 将评估重点放在隐藏的真实知识地图与被测 agent 重建出的知识地图之间的自动比较。
+KnowAct v1 将评估重点放在隐藏的真实知识地图与被测 agent 最终重建提交之间的自动比较。
 
 ### 1. 画像重建准确率
 
-将 agent 重建出的知识地图与真实知识地图中的结构化用户状态字段进行比较。v1 的主结果是 `episode_mastery_distance`：episode 使用的 authored knowledge graph 中所有 nodes 的预测 `mastery_level` 与隐藏参考之间的平均平方距离。越低越好。
+被测 agent 提交覆盖全图的最终重建结果，为每个 node 给出一个 `unknown|L0|...|L5` mastery 预测。v1 的主结果是 `episode_mastery_distance`：episode 使用的 authored knowledge graph 中所有 nodes 的预测 `mastery_level` 与隐藏参考之间的平均平方距离。提交的 `unknown` 视为 missing prediction，距离罚分为 `36`。越低越好。
 
 可能的辅助指标包括：
 
-- 误解检测准确率
 - missing prediction 比例
 - unsupported inference 比例，即缺少可见 evidence 引用的推断比例
+- exact mastery match 比例
+- per-node signed mastery error
 
-v1 的主评分不引入额外 evaluator agent 或 LLM judge。Evidence record 的作用是让重建更有依据、更可审计，而不是增加另一层主观评价。Unsupported inference 与 mastery-level distance 分开报告。
+v1 的主评分不引入额外 evaluator agent 或 LLM judge。Evidence record 的作用是让重建更有依据、更可审计，而不是增加另一层主观评价。Unsupported inference 与 mastery-level distance 分开报告，misconceptions / unknowns 文本不进入第一版自动评分。
 
 ### 2. 交互效率
 

@@ -21,6 +21,11 @@ from backend.knowact.core.map import (
     KnowledgeMapKind,
     UserKnowledgeState,
 )
+from backend.knowact.core.scoring import (
+    FinalReconstructionPrediction,
+    FinalReconstructionSubmission,
+    SubmittedMasteryLevel,
+)
 from backend.knowact.validation.exceptions import KnowActValidationError
 from backend.knowact.validation.map import validate_knowledge_map
 
@@ -61,8 +66,8 @@ class WorkingMapNodeAssessmentUpdate(BaseModel):
 
 
 class FinalizationWarningCode(StrEnum):
-    MISSING_NOTE_DOWNGRADED = "missing_note_downgraded"
-    MISSING_SUPPORT_DOWNGRADED = "missing_support_downgraded"
+    MISSING_NOTE_REPORTED = "missing_note_reported"
+    MISSING_SUPPORT_UNSUPPORTED = "missing_support_unsupported"
     INVALID_SUPPORT_DROPPED = "invalid_support_dropped"
 
 
@@ -81,11 +86,15 @@ class FinalizationWarning(BaseModel):
         return value
 
 
-class FinalizedReconstructedMap(BaseModel):
+class FinalizedReconstruction(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    submission: FinalReconstructionSubmission
     knowledge_map: KnowledgeMap
     warnings: tuple[FinalizationWarning, ...] = Field(default_factory=tuple)
+
+
+FinalizedReconstructedMap = FinalizedReconstruction
 
 
 def validate_working_map(
@@ -147,32 +156,40 @@ def finalize_reconstructed_map(
     graph: KnowledgeGraph,
     visible_dialogue_context: VisibleDialogueContext,
     reconstructed_user_id: str | None = None,
-) -> FinalizedReconstructedMap:
+) -> FinalizedReconstruction:
     validate_working_map(working_map, graph)
     visible_turns_by_id = _visible_turns_by_id(visible_dialogue_context)
     user_id = reconstructed_user_id or f"reconstructed_{working_map.episode_id}"
 
     states: list[UserKnowledgeState] = []
     evidence: list[EvidenceRecord] = []
+    predictions: list[FinalReconstructionPrediction] = []
     warnings: list[FinalizationWarning] = []
     evidence_ids: set[str] = set()
+    assessments_by_node_id = working_map.assessment_by_node_id
 
-    for assessment in working_map.states:
+    for node in graph.nodes:
+        assessment = assessments_by_node_id[node.id]
         if assessment.assessed_mastery_level == AssessedMasteryLevel.UNKNOWN:
+            predictions.append(
+                FinalReconstructionPrediction(
+                    node_id=assessment.node_id,
+                    predicted_mastery=SubmittedMasteryLevel.UNKNOWN,
+                )
+            )
             continue
 
         if not assessment.assessment_note:
             warnings.append(
                 FinalizationWarning(
-                    code=FinalizationWarningCode.MISSING_NOTE_DOWNGRADED,
+                    code=FinalizationWarningCode.MISSING_NOTE_REPORTED,
                     node_id=assessment.node_id,
                     message=(
-                        "Working-map judgment was omitted because it has no "
-                        "assessment note."
+                        "Working-map judgment has no assessment note; scoring "
+                        "will still use its submitted mastery prediction."
                     ),
                 )
             )
-            continue
 
         valid_turn_ids, invalid_turn_ids = _split_valid_supporting_turn_ids(
             assessment.supporting_turn_ids,
@@ -192,15 +209,14 @@ def finalize_reconstructed_map(
         if not valid_turn_ids:
             warnings.append(
                 FinalizationWarning(
-                    code=FinalizationWarningCode.MISSING_SUPPORT_DOWNGRADED,
+                    code=FinalizationWarningCode.MISSING_SUPPORT_UNSUPPORTED,
                     node_id=assessment.node_id,
                     message=(
-                        "Working-map judgment was omitted because it has no "
-                        "visible supporting turns."
+                        "Working-map judgment has no visible supporting turns; "
+                        "scoring will report it as an unsupported inference."
                     ),
                 )
             )
-            continue
 
         state_evidence_ids: list[str] = []
         for turn_id in valid_turn_ids:
@@ -224,16 +240,35 @@ def finalize_reconstructed_map(
                 )
             )
 
-        states.append(
-            UserKnowledgeState(
+        submitted_mastery = SubmittedMasteryLevel(
+            assessment.assessed_mastery_level.value
+        )
+        predictions.append(
+            FinalReconstructionPrediction(
                 node_id=assessment.node_id,
-                mastery_level=assessment.assessed_mastery_level.to_mastery_level(),
+                predicted_mastery=submitted_mastery,
                 evidence_refs=tuple(state_evidence_ids),
-                misconceptions=(),
-                unknowns=(),
             )
         )
+        if state_evidence_ids:
+            states.append(
+                UserKnowledgeState(
+                    node_id=assessment.node_id,
+                    mastery_level=submitted_mastery.to_mastery_level(),
+                    evidence_refs=tuple(state_evidence_ids),
+                    misconceptions=(),
+                    unknowns=(),
+                )
+            )
 
+    submission = FinalReconstructionSubmission(
+        episode_id=working_map.episode_id,
+        benchmark_domain=working_map.benchmark_domain,
+        graph_version=working_map.graph_version,
+        reconstructed_user_id=user_id,
+        predictions=tuple(predictions),
+        evidence=tuple(evidence),
+    )
     knowledge_map = KnowledgeMap(
         user_id=user_id,
         kind=KnowledgeMapKind.RECONSTRUCTED,
@@ -241,7 +276,8 @@ def finalize_reconstructed_map(
         evidence=tuple(evidence),
     )
     validate_knowledge_map(knowledge_map, graph)
-    return FinalizedReconstructedMap(
+    return FinalizedReconstruction(
+        submission=submission,
         knowledge_map=knowledge_map,
         warnings=tuple(warnings),
     )

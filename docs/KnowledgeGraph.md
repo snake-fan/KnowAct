@@ -1299,6 +1299,8 @@ valid prediction distance = squared distance
 missing_prediction_distance = 36
 episode_mastery_distance = mean node distance
 unsupported_inference_rate = separately reported
+exact_match_rate = separately reported
+signed_mastery_error = predicted score - ground-truth score
 ```
 
 `mastery_level_distance` 是 v1 的主比较信号。v1 默认使用简单的平方距离：先将 L0-L5 映射为 0-5 分，再计算预测等级与真实等级的距离平方。
@@ -1338,12 +1340,12 @@ scoring scope = Episode Knowledge Graph.nodes
 Reviewed Map
 = must contain User Knowledge State for every node in Episode Knowledge Graph
 
-Final Reconstructed Knowledge Map
-= should contain User Knowledge State for every node in Episode Knowledge Graph
-= missing nodes are accepted by the runner but scored as missing_prediction
+FinalReconstructionSubmission
+= must contain one mastery prediction for every node in Episode Knowledge Graph
+= `unknown` predictions are scored as missing_prediction
 ```
 
-也就是说，reviewed map 如果缺少 episode graph 中的 node，应视为 benchmark data validation failure；final reconstructed map 如果缺少 node，则进入 scoring，并按 `missing_prediction_distance = 36` 处理。
+也就是说，reviewed map 如果缺少 episode graph 中的 node，应视为 benchmark data validation failure；final submission 如果某个 node 是 `unknown`，则进入 scoring，并按 `missing_prediction_distance = 36` 处理。
 
 每个 `Evaluation Episode` 应显式配置 `max_turns` 作为 turn budget。v1 不从 graph node 数量自动推导 `max_turns`，因为图谱粒度和交互预算是两个不同设计维度。benchmark author 应根据 episode 难度、目标领域和诊断成本设置最大轮次。
 
@@ -1426,4 +1428,4 @@ mastery_level_distance =
 unsupported_inference = 1
 ```
 
-v1 只要求被测 agent 在 episode 结束后提交 `Final Reconstructed Knowledge Map`，主评分只使用这个最终 map。每轮 inferred map snapshot、uncertainty notes 或 question selection rationale 可以作为 `Reconstruction Trace` 保留，用于调试和错误分析，但不是 v1 主评分的必需输入。
+v1 只要求被测 agent 在 episode 结束后提交覆盖全图的 `FinalReconstructionSubmission`，主评分只使用这个最终提交中的 mastery 预测。提交的 `unknown` 视为 missing prediction，unsupported inference 单独报告且不覆盖 mastery distance。每轮 inferred map snapshot、uncertainty notes 或 question selection rationale 可以作为 `Reconstruction Trace` 保留，用于调试和错误分析，但不是 v1 主评分的必需输入。

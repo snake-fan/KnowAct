@@ -392,13 +392,13 @@ Milestone M7:
 - The first turn starts without a prior simulator answer; after that, each cycle updates the working map from the latest visible answer before asking the next question or finalizing.
 - A tested agent can update node-level working-map judgments with assessed mastery, diagnostic confidence, an assessment note, and supporting turn references through semantic tools.
 - Phase 7 working-map node state contains only `node_id`, `assessed_mastery_level`, `diagnostic_confidence`, `assessment_note`, and `supporting_turn_ids`; defer structured misconception and unknown reconstruction.
-- A tested agent submits one `Final Reconstructed Knowledge Map` after the episode ends.
-- Finalization omits working-map nodes that still have `unknown` assessed mastery; scoring handles the omitted nodes as `Missing Prediction` rather than coercing them to L0.
-- If finalization sees a non-unknown working-map judgment without `supporting_turn_ids`, downgrade that judgment to unknown, omit it from the final reconstructed map, and emit a warning rather than rejecting finalization.
+- A tested agent submits one full-graph `FinalReconstructionSubmission` after the episode ends.
+- Finalization keeps working-map nodes that still have `unknown` assessed mastery as `unknown` predictions; scoring handles them as `Missing Prediction` rather than coercing them to L0.
+- If finalization sees a non-unknown working-map judgment without valid `supporting_turn_ids`, keep that non-unknown prediction in the final submission, omit it from the evidence-backed reconstructed-map view, and emit a warning so scoring can report it as unsupported inference.
 - Initial finalization exports empty `misconceptions` and `unknowns` arrays for submitted states.
 - Initial finalization mechanically wraps agent-selected `supporting_turn_ids` into reconstructed-map `EvidenceRecord` objects with `evidence_type = interaction_observation`, `visibility = tested_agent`, `turn_id` set to the cited visible turn, and `evidence_kind = prior_answer` by default.
 - A tested agent may finalize before using all allowed turns; `max_turns` is an upper bound, not a required turn count.
-- A tested agent, not the runtime platform, is responsible for constructing the final reconstructed map and selecting tested-agent-visible support for reconstructed states.
+- A tested agent, not the runtime platform, is responsible for constructing the full-graph final reconstruction submission and selecting tested-agent-visible support for reconstructed states.
 - Reconstructed user states cite tested-agent-visible evidence records.
 - The fixed-question, random-question, and simple LLM baselines can complete the same episode contract.
 
@@ -424,9 +424,9 @@ Implementation note:
 - Rejected working-map tool calls do not consume an interaction turn; the tested agent may inspect the validation error, reorganize the update batch, and retry within the same agent decision phase.
 - Each agent decision phase should cap rejected working-map update retries, initially `max_tool_retries = 3`. When exhausted, mark the run or trace with `tool_retry_exhausted = true` and continue the phase without applying that update batch.
 - Rejected finalization attempts may be retried with the same `max_tool_retries = 3` limit. If early finalization retry is exhausted while turns remain, the agent returns to the normal question/update loop; if forced-finalization retry is exhausted, the runner uses forced finalization fallback.
-- The runtime runner should end an episode immediately after a valid final reconstructed map is submitted, even if unused turns remain.
-- If `max_turns` is exhausted without final submission, the runner should enter a forced-finalization phase where the agent may read visible context and submit the final map but cannot ask another diagnostic question.
-- If forced finalization fails or times out, the runner may mechanically export the current working map into a fallback final reconstructed map by omitting unknown nodes and preserving supported non-unknown judgments. Mark the run output with `forced_finalization_fallback = true`.
+- The runtime runner should end an episode immediately after a valid final reconstruction submission is submitted, even if unused turns remain.
+- If `max_turns` is exhausted without final submission, the runner should enter a forced-finalization phase where the agent may read visible context and submit the final reconstruction submission but cannot ask another diagnostic question.
+- If forced finalization fails or times out, the runner may mechanically export the current working map into a fallback full-graph final reconstruction submission. Mark the run output with `forced_finalization_fallback = true`.
 - Run output should persist the latest agent working map as `working_map.json` and append-only tested-agent tool calls plus validation outcomes as `agent_tool_trace.json`. Do not persist full per-turn working-map snapshots by default in Phase 7.
 - Interfaces opened for development testing: `POST /api/tested-agents/simple-llm/turn-test` calls the provider-backed Simple LLM Agent against a reviewed graph and request-carried tested-agent-visible context. Formal agent selection should still happen through future episode run requests after runtime runner wiring exists.
 - Development API boundary: baseline smoke-test endpoints must expose only tested-agent-visible context, must remain separate from formal `/api/runtime/episodes/{episode_id}/runs`, and must not load hidden maps or write experiment run artifacts.
@@ -437,8 +437,9 @@ Goal: compute reproducible structured comparison results.
 
 Milestone M8:
 
-- Scoring compares the final reconstructed map against the hidden reviewed map over every node in the episode graph.
+- Scoring compares the full-graph final reconstruction submission against the hidden reviewed map over every node in the episode graph.
 - `mastery_level` values map L0-L5 to 0-5 and use squared distance.
+- Submitted `unknown` mastery values are missing predictions.
 - Missing predictions receive distance penalty 36 and are reported separately.
 - Unsupported inference does not override mastery distance, but is reported as a separate rate.
 - Episode-level primary result is mean `Episode Mastery Distance`, where lower is better.
@@ -446,8 +447,9 @@ Milestone M8:
 Report contents:
 
 - Episode metadata and scoring profile version.
-- Per-node predicted vs ground-truth mastery distance.
+- Per-node predicted vs ground-truth mastery distance and signed mastery error.
 - Mean episode mastery distance.
+- Exact mastery match rate.
 - Missing prediction rate.
 - Unsupported inference rate.
 - Optional misconception diagnostics.

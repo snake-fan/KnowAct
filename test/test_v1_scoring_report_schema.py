@@ -14,21 +14,26 @@ class V1ScoringReportSchemaTest(unittest.TestCase):
                     ground_truth_mastery="L3",
                     predicted_mastery="L2",
                     mastery_distance=1.0,
+                    signed_mastery_error=-1,
                     missing_prediction=False,
                     unsupported_inference=True,
+                    exact_match=False,
                 ),
                 NodeComparison(
                     node_id="train_test_split",
                     ground_truth_mastery="L2",
                     predicted_mastery=None,
                     mastery_distance=36.0,
+                    signed_mastery_error=None,
                     missing_prediction=True,
                     unsupported_inference=False,
+                    exact_match=False,
                 ),
             ],
             episode_mastery_distance=18.5,
             missing_prediction_rate=0.5,
             unsupported_inference_rate=0.5,
+            exact_match_rate=0.0,
         )
 
         self.assertEqual(report.scoring_profile, "squared_mastery_distance_v1")

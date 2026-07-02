@@ -208,19 +208,20 @@ The graph and map can support both evaluation and agent decision-making.
 
 ## Evaluation
 
-KnowAct v1 keeps evaluation focused on automatic comparison between the hidden ground-truth knowledge map and the tested agent's reconstructed knowledge map.
+KnowAct v1 keeps evaluation focused on automatic comparison between the hidden ground-truth knowledge map and the tested agent's final reconstruction submission.
 
 ### 1. Profile Reconstruction Accuracy
 
-The agent's reconstructed map is compared with the hidden map over structured user-state fields. The primary v1 result is `episode_mastery_distance`: the mean squared distance between inferred and hidden `mastery_level` values across all nodes in the episode's authored knowledge graph. Lower is better.
+The agent submits a full-graph final reconstruction with one `unknown|L0|...|L5` mastery prediction for every node. The primary v1 result is `episode_mastery_distance`: the mean squared distance between inferred and hidden `mastery_level` values across all nodes in the episode's authored knowledge graph. Submitted `unknown` values are missing predictions with distance `36`. Lower is better.
 
 Possible supporting metrics include:
 
-* Misconception detection accuracy
 * Missing prediction rate
 * Unsupported inference rate, based on missing visible evidence references
+* Exact mastery match rate
+* Per-node signed mastery error
 
-V1 does not require a separate evaluator agent or LLM judge for primary scoring. Evidence records are used to make reconstruction more grounded and auditable, not to add another subjective evaluation layer. Unsupported inference is reported separately from mastery-level distance.
+V1 does not require a separate evaluator agent or LLM judge for primary scoring. Evidence records are used to make reconstruction more grounded and auditable, not to add another subjective evaluation layer. Unsupported inference is reported separately from mastery-level distance, and misconception/unknown text is not part of the initial automatic score.
 
 ### 2. Interaction Efficiency
 

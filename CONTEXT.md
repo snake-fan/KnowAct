@@ -153,19 +153,23 @@ The tested-agent-visible structured context that states the current **Tested Age
 _Avoid_: prompt-only instruction, hidden runtime state, freeform phase note
 
 **Tested Agent Decision**:
-A **Tested Agent** choice in one **Tested Agent Decision Phase** to either ask one **Diagnostic Question** or end by submitting a **Final Reconstructed Knowledge Map**.
+A **Tested Agent** choice in one **Tested Agent Decision Phase** to either ask one **Diagnostic Question** or end by submitting a **Final Reconstruction Submission**.
 _Avoid_: nullable question, hidden runtime action, implicit finalization
 
+**Final Reconstruction Submission**:
+The full-graph final artifact submitted by the **Tested Agent** after an **Evaluation Episode**, containing one predicted mastery value for every **Knowledge Node** and allowing `unknown`.
+_Avoid_: sparse reconstructed map, freeform final profile, working-map snapshot
+
 **Final Reconstructed Knowledge Map**:
-The required **Reconstructed Knowledge Map** submitted by the **Tested Agent** after an **Evaluation Episode** ends.
+The evidence-backed **Reconstructed Knowledge Map** view derived from supported non-unknown predictions in a **Final Reconstruction Submission**.
 _Avoid_: per-turn snapshot, intermediate belief state, trace
 
 **Forced Finalization**:
-The end-of-budget phase where the **Tested Agent** must submit a **Final Reconstructed Knowledge Map** without asking further diagnostic questions.
+The end-of-budget phase where the **Tested Agent** must submit a **Final Reconstruction Submission** without asking further diagnostic questions.
 _Avoid_: extra interaction turn, runtime inference, automatic scoring shortcut
 
 **Forced Finalization Fallback**:
-A marked fallback final submission mechanically exported from supported non-unknown judgments in the current **Agent Working Knowledge Map** when the **Tested Agent** fails to submit during **Forced Finalization**.
+A marked fallback **Final Reconstruction Submission** mechanically exported from the current **Agent Working Knowledge Map** when the **Tested Agent** fails to submit during **Forced Finalization**.
 _Avoid_: runtime-inferred reconstruction, hidden-map repair, successful agent finalization
 
 **Reconstruction Trace**:
@@ -256,6 +260,10 @@ _Avoid_: per-episode scoring override, evaluator prompt, custom metric bundle
 The distance assigned by the **Mastery Distance Function** between predicted and ground-truth mastery levels for the same **Knowledge Node**.
 _Avoid_: subjective similarity, LLM-judged closeness, graph distance
 
+**Signed Mastery Error**:
+The predicted mastery score minus the ground-truth mastery score for one scored **Knowledge Node**.
+_Avoid_: penalty, distance, reward
+
 **Episode Mastery Distance**:
 The mean **Mastery Level Distance** across all **Knowledge Nodes** in an **Episode Knowledge Graph**.
 _Avoid_: accuracy, reward, subjective score
@@ -267,6 +275,10 @@ _Avoid_: linear penalty, LLM judge, subjective similarity
 **Exact Mastery Bonus**:
 An optional reward applied when **Mastery Level Distance** is zero.
 _Avoid_: primary exact-match metric, separate evaluator score
+
+**Exact Mastery Match Rate**:
+The proportion of **Episode Knowledge Graph** nodes whose predicted mastery level exactly matches the ground-truth mastery level.
+_Avoid_: primary score, reward, non-missing-only accuracy
 
 **Missing Prediction**:
 A scored **Knowledge Node** for which the **Reconstructed Knowledge Map** provides no **User Knowledge State**.
@@ -606,7 +618,7 @@ _Avoid_: ground-truth edge, authored edge
 - The first v1 graph should contain enough **Knowledge Nodes** to distinguish different user knowledge structures.
 - The first v1 graph targets 30-50 **Knowledge Nodes**.
 - A **Reviewed Map** and a **Reconstructed Knowledge Map** are compared over the same **Authored Knowledge Graph** in v1.
-- An **Agent Working Knowledge Map** may evolve during an **Evaluation Episode** and is distinct from the **Final Reconstructed Knowledge Map** used for primary scoring.
+- An **Agent Working Knowledge Map** may evolve during an **Evaluation Episode** and is distinct from the **Final Reconstruction Submission** used for primary scoring.
 - An **Agent Working Knowledge Map** is initialized over every **Knowledge Node** in the **Episode Knowledge Graph**.
 - An **Agent Working Knowledge Map** may record an **Assessed Mastery Level** and **Diagnostic Confidence** for a **Knowledge Node**.
 - An **Agent Working Knowledge Map** may use an **Assessment Note** to describe the visible basis for a working judgment.
@@ -618,39 +630,49 @@ _Avoid_: ground-truth edge, authored edge
 - V1 **Diagnostic Confidence** uses the categorical levels `unknown`, `low`, `medium`, and `high`.
 - A **Tested Agent** may update an unasked node in its **Agent Working Knowledge Map** through an **Indirect Working Assessment**.
 - A **Tested Agent** updates its **Agent Working Knowledge Map** judgments but does not add, delete, or modify **Knowledge Nodes** or **Knowledge Edges**.
-- **Final Reconstructed Knowledge Map** submission omits working-map nodes whose **Assessed Mastery Level** remains `unknown`; scoring treats those omitted nodes as **Missing Predictions**.
-- During finalization, a non-unknown working-map judgment without **Supporting Turn References** is downgraded to `unknown`, omitted from the **Final Reconstructed Knowledge Map**, and reported as a warning.
-- The **Tested Agent** is responsible for building its **Agent Working Knowledge Map** and submitting a **Final Reconstructed Knowledge Map** from tested-agent-visible information.
+- **Final Reconstruction Submission** covers every **Knowledge Node** in the **Episode Knowledge Graph**.
+- **Final Reconstruction Submission** uses `unknown` for nodes where the **Tested Agent** has no mastery judgment.
+- Scoring treats `unknown` items in a **Final Reconstruction Submission** as **Missing Predictions**.
+- The **Final Reconstructed Knowledge Map** is derived from a **Final Reconstruction Submission** by retaining supported non-unknown mastery predictions as **User Knowledge States**.
+- During finalization, a non-unknown working-map judgment without **Supporting Turn References** remains a non-unknown prediction in the **Final Reconstruction Submission** and is reported as an **Unsupported Inference** by scoring.
+- The **Tested Agent** is responsible for building its **Agent Working Knowledge Map** and submitting a **Final Reconstruction Submission** from tested-agent-visible information.
 - The **Tested Agent** is responsible for selecting the tested-agent-visible support for its final reconstructed states.
 - The **Evaluation Runtime** may validate that **Supporting Turn References** point to visible turns, but it does not judge whether the referenced turns semantically prove the **Tested Agent**'s assessment.
+- The **Evaluation Runtime** validates final support references before scoring; v1 scoring does not read the visible transcript to revalidate support.
 - During finalization, the **Evaluation Runtime** may mechanically wrap the **Tested Agent**'s **Supporting Turn References** into tested-agent-visible **Evidence Records** without inferring mastery.
 - The **Evaluation Runtime** does not infer mastery or automatically fill final reconstructed states for the **Tested Agent**.
-- A **Tested Agent** may submit a **Final Reconstructed Knowledge Map** before exhausting the **Turn Budget**, and that submission ends the **Evaluation Episode**.
+- A **Tested Agent** may submit a **Final Reconstruction Submission** before exhausting the **Turn Budget**, and that submission ends the **Evaluation Episode**.
 - **Turn Budget** is a maximum number of allowed **Interaction Turns**, not a required number of turns.
 - **Remaining Diagnostic Turns** counts future allowed **Diagnostic Questions**, not finalization opportunities.
 - When the **Turn Budget** is exhausted without final submission, the **Evaluation Runtime** enters **Forced Finalization**.
-- During **Forced Finalization**, the **Tested Agent** may inspect tested-agent-visible context and submit a **Final Reconstructed Knowledge Map**, but it may not ask another **Diagnostic Question**.
-- If **Forced Finalization** fails, the **Evaluation Runtime** may create a **Forced Finalization Fallback** by exporting supported non-unknown judgments from the current **Agent Working Knowledge Map**.
+- During **Forced Finalization**, the **Tested Agent** may inspect tested-agent-visible context and submit a **Final Reconstruction Submission**, but it may not ask another **Diagnostic Question**.
+- If **Forced Finalization** fails, the **Evaluation Runtime** may create a **Forced Finalization Fallback** by exporting the current **Agent Working Knowledge Map** into a full-graph **Final Reconstruction Submission**.
 - The first **Interaction Turn** starts from the visible graph and an initial **Agent Working Knowledge Map** without a prior simulator answer.
 - After the first turn, the **Tested Agent** updates its **Agent Working Knowledge Map** after receiving the latest visible simulator answer, then makes a **Tested Agent Decision** in a **Tested Agent Decision Phase**.
 - The **Evaluation Runtime** applies accepted working-map updates before the **Tested Agent** makes the next **Tested Agent Decision**.
-- A **Tested Agent Decision** is either asking one **Diagnostic Question** or finalizing the current **Agent Working Knowledge Map** into a **Final Reconstructed Knowledge Map**.
+- A **Tested Agent Decision** is either asking one **Diagnostic Question** or finalizing the current **Agent Working Knowledge Map** into a **Final Reconstruction Submission**.
 - A finalizing **Tested Agent Decision** does not carry a freeform **Final Reconstructed Knowledge Map**; it submits the current accepted **Agent Working Knowledge Map** through finalization.
 - The **Evaluation Runtime** controls **Tested Agent Decision Phase** boundaries; a **Tested Agent Decision Phase** is not an **Interaction Turn** by itself.
 - The **Evaluation Runtime** provides **Decision Phase Context** to the **Tested Agent** as structured visible context, and LLM-backed agents may render it into prompts.
 - The **Tested Agent** does not update its **Agent Working Knowledge Map** while waiting for a simulator answer.
 - In v1, each **User Knowledge State** in a **Reconstructed Knowledge Map** should be backed by one or more tested-agent-visible **Evidence Records**.
-- V1 scoring uses the **Final Reconstructed Knowledge Map**.
+- V1 scoring uses the **Final Reconstruction Submission**.
 - A **Reconstruction Trace** is optional and not required for primary v1 scoring.
 - V1 scoring uses **Structured Map Comparison** rather than a separate evaluator agent.
 - **Structured Map Comparison** focuses on quantifiable **User Knowledge State** fields such as mastery level.
 - **Mastery Level Distance** is the primary v1 comparison signal for mastery-level scoring.
+- **Signed Mastery Error** may be reported per node to distinguish mastery overestimation from underestimation, but it does not change **Mastery Level Distance**.
 - **Episode Mastery Distance** is the primary v1 episode-level result and lower is better.
+- **Episode Mastery Distance** is the unweighted mean **Mastery Level Distance** across all **Knowledge Nodes** in the **Episode Knowledge Graph**.
 - The v1 **Mastery Distance Function** maps L0-L5 to scores 0-5 and uses squared score distance.
 - **Exact Mastery Bonus** may be derived from zero **Mastery Level Distance**.
+- **Exact Mastery Match Rate** may be reported as a supporting metric over all **Episode Knowledge Graph** nodes; **Missing Predictions** count as non-matches.
+- V1 scoring rates use the **Episode Knowledge Graph** node count as the denominator.
 - In v1, **Structured Map Comparison** scores every **Knowledge Node** in the **Episode Knowledge Graph**.
+- V1 primary scoring compares `mastery_level` only; reconstructed misconceptions and unknowns are not automatic scoring fields in the initial scoring profile.
 - In v1, the **Reviewed Map** must satisfy the **Map Coverage Requirement**.
-- In v1, the **Final Reconstructed Knowledge Map** may omit **Knowledge Nodes**; omitted scored nodes are handled as **Missing Predictions**.
+- In v1, the **Final Reconstruction Submission** must cover every **Knowledge Node** in the **Episode Knowledge Graph**; submitted `unknown` mastery items are handled as **Missing Predictions**.
+- A **Final Reconstruction Submission** must use exactly the **Episode Knowledge Graph** node-id set and must not add, omit, rename, or restructure **Knowledge Nodes**.
 - A v1 **Evaluation Episode** has an explicit **Turn Budget**.
 - The v1 **Turn Budget** is not derived from the number of **Knowledge Nodes** in the **Episode Knowledge Graph**.
 - A v1 **Interaction Turn** contains one primary **Diagnostic Question**.
@@ -693,8 +715,11 @@ _Avoid_: ground-truth edge, authored edge
 - **Simulator Answer Ambiguity** must not change the user's hidden mastery state or evade all diagnosis.
 - A **Missing Prediction** receives the maximum penalty defined by the **Mastery Distance Function**.
 - The v1 **Missing Prediction** distance penalty is 36.
+- Submitted `unknown` mastery items in a **Final Reconstruction Submission** receive the v1 **Missing Prediction** distance penalty.
+- A **Missing Prediction** has no **Signed Mastery Error**.
 - A **Missing Prediction** must not be treated as L0 because L0 is a real **User Knowledge State**.
 - An **Unsupported Inference** does not override **Mastery Level Distance** in v1.
+- An `unknown` item in a **Final Reconstruction Submission** is a **Missing Prediction**, not an **Unsupported Inference**.
 - **Unsupported Inference** is reported as a separate diagnostic or penalty metric.
 - V1 baselines are **Fixed-Question Baseline**, **Random-Question Baseline**, and **Simple LLM Agent**.
 - Oracle, passive summarization, teaching, and complex ToM architectures are outside the v1 baseline set.
@@ -904,12 +929,13 @@ _Avoid_: ground-truth edge, authored edge
 - "ground-truth evidence schema" and "interaction observation schema" can drift apart; resolved: v1 uses one shared **Evidence Record** structure with different type and visibility values.
 - "reconstructed state" can mean an unsupported guess; resolved: v1 **Reconstructed Knowledge Map** states must cite tested-agent-visible **Evidence Records**.
 - "unsupported inference" can sound like a map-authoring validation issue; resolved: **Unsupported Inference** remains a final reconstruction reporting concept for predictions lacking tested-agent-visible evidence.
-- "reconstruction trace" can be mistaken for required scoring output; resolved: v1 requires only the **Final Reconstructed Knowledge Map** for primary scoring.
-- "belief map" can sound like a hidden benchmark reference or freeform chain-of-thought; resolved: use **Agent Working Knowledge Map** for the tested agent's mutable intermediate map and **Final Reconstructed Knowledge Map** for the submitted scoring artifact.
+- "reconstruction trace" can be mistaken for required scoring output; resolved: v1 requires only the **Final Reconstruction Submission** for primary scoring.
+- "belief map" can sound like a hidden benchmark reference or freeform chain-of-thought; resolved: use **Agent Working Knowledge Map** for the tested agent's mutable intermediate map and **Final Reconstruction Submission** for the submitted scoring artifact.
 - "working map" can sound like a sparse ad hoc note set; resolved: an **Agent Working Knowledge Map** starts as a full-graph shell and only the tested agent's node-level judgments evolve.
-- "next question" can obscure early finalization; resolved: use **Tested Agent Decision** for the choice between asking one **Diagnostic Question** and submitting the **Final Reconstructed Knowledge Map**.
+- "next question" can obscure early finalization; resolved: use **Tested Agent Decision** for the choice between asking one **Diagnostic Question** and submitting the **Final Reconstruction Submission**.
 - "agent response" can hide separate responsibilities; resolved: the **Evaluation Runtime** accepts or rejects working-map updates before the **Tested Agent** makes the next **Tested Agent Decision**.
-- "finalization payload" can bypass the working map; resolved: a finalizing **Tested Agent Decision** submits the current accepted **Agent Working Knowledge Map**, not a separate reconstructed-map object.
+- "finalization payload" can bypass the working map; resolved: a finalizing **Tested Agent Decision** submits the current accepted **Agent Working Knowledge Map** through full-graph **Final Reconstruction Submission**.
+- "final reconstructed map" can imply the agent submits a sparse map directly; resolved: the **Tested Agent** submits a full-graph **Final Reconstruction Submission**, and the evidence-backed **Final Reconstructed Knowledge Map** is derived from supported non-unknown predictions.
 - "baseline" can expand into many comparison agents; resolved: v1 uses only fixed-question, random-question, and simple LLM baselines.
 - "evidence type" and "evidence visibility" can be conflated; resolved: type describes role or origin, while visibility describes access boundary.
 - "evidence kind" and "evidence type" can be conflated; resolved: kind describes observable diagnostic form, while type describes origin or lifecycle role.
