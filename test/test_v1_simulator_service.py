@@ -29,7 +29,11 @@ from backend.knowact.simulator.generators import (
     ModelClientAnswerGenerator,
     RuleBasedAnswerGenerator,
 )
-from backend.knowact.simulator.grounding import QuestionGroundingResult
+from backend.knowact.simulator.grounding import (
+    ModelClientQuestionGrounder,
+    QuestionGroundingResult,
+)
+from backend.knowact.simulator.llm_service import build_simulator_service
 from backend.knowact.simulator.policy import (
     ModelClientAnswerPolicy,
     RuleBasedAnswerPolicy,
@@ -545,6 +549,108 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertEqual(VisibleObservationKind.NON_ANSWER, response.observation.kind)
             self.assertNotIn("fold", response.answer.text.lower())
             self.assertNotIn("validation", response.answer.text.lower())
+
+    def test_model_client_grounding_accepts_valid_no_grounding_without_rule_based_override(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(
+                workspace_root,
+                include_profile_context=True,
+                include_map_artifact=False,
+            )
+            fake_model_client = FixtureSimulatorAnswerModelClient(
+                json.dumps(
+                    {
+                        "grounded_node_ids": [],
+                        "is_multiple_question": False,
+                        "is_label_seeking": False,
+                    }
+                )
+            )
+            service = SimulatorService(
+                workspace_root=workspace_root,
+                grounder=ModelClientQuestionGrounder(model_client=fake_model_client),
+            )
+
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "question_id": "q_model_no_grounding",
+                            "text": "How would you decide whether a train/test split is appropriate?",
+                        },
+                        "turn_options": {"include_debug_trace": True},
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.NON_ANSWER, response.observation.kind)
+            self.assertIn("which concept", response.answer.text.lower())
+            self.assertNotIn("held-out", response.answer.text.lower())
+            self.assertEqual(1, len(fake_model_client.calls))
+            trace_payload = _read_json(
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "simulator"
+                / "gt_map_001"
+                / "q_model_no_grounding"
+                / "debug_trace.json"
+            )
+            self.assertEqual("model_client", trace_payload["workflow"]["grounding"]["grounding_source"])
+            self.assertEqual([], trace_payload["workflow"]["grounding"]["grounded_node_ids"])
+
+    def test_model_client_grounding_falls_back_to_rule_based_on_unknown_node_id(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            fake_model_client = FixtureSimulatorAnswerModelClient(
+                json.dumps(
+                    {
+                        "grounded_node_ids": ["unknown_node"],
+                        "is_multiple_question": False,
+                        "is_label_seeking": False,
+                    }
+                )
+            )
+            service = SimulatorService(
+                workspace_root=workspace_root,
+                grounder=ModelClientQuestionGrounder(model_client=fake_model_client),
+            )
+
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "question_id": "q_model_fallback_grounding",
+                            "text": "How would you decide whether a train/test split is appropriate?",
+                        },
+                        "turn_options": {"include_debug_trace": True},
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
+            self.assertIn("held-out", response.answer.text.lower())
+            trace_payload = _read_json(
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "simulator"
+                / "gt_map_001"
+                / "q_model_fallback_grounding"
+                / "debug_trace.json"
+            )
+            grounding_trace = trace_payload["workflow"]["grounding"]
+            self.assertEqual("rule_based_fallback", grounding_trace["grounding_source"])
+            self.assertEqual("ModelClientError", grounding_trace["fallback_reason"])
+            self.assertEqual(["train_test_split"], grounding_trace["grounded_node_ids"])
 
     def test_no_grounding_turn_does_not_load_hidden_reviewed_map_content(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1460,6 +1566,110 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 trace_payload["model_steps"][
                     "answer_validation.attempt_001"
                 ]["parser_status"],
+            )
+
+    def test_provider_backed_simulator_uses_model_client_question_grounding(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
+            fake_model_client = SequenceSimulatorModelClient(
+                (
+                    json.dumps(
+                        {
+                            "grounded_node_ids": ["cross_validation"],
+                            "is_multiple_question": False,
+                            "is_label_seeking": False,
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "primary_stance": "misconception",
+                            "answer_shape": {
+                                "voice": "first_person",
+                                "integration_mode": "single_node",
+                                "max_sentences": 2,
+                            },
+                            "answer_strategy": "Answer with a misconception about folds.",
+                            "content_units": [
+                                {
+                                    "node_name": "Cross-Validation",
+                                    "stance": "misconception",
+                                    "core_claim": None,
+                                    "boundary": None,
+                                    "mistaken_belief": "Each fold is a final test set.",
+                                    "uncertainty": None,
+                                    "supporting_cues": [],
+                                    "avoid_overclaiming": [],
+                                }
+                            ],
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "answer": (
+                                "I tend to think each cross-validation fold is "
+                                "a separate final test set."
+                            )
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "passed": True,
+                            "blocking_safety_reasons": [],
+                            "blueprint_coverage_notes": ["Safe and grounded."],
+                            "fallback_guidance": None,
+                        }
+                    ),
+                )
+            )
+            service = build_simulator_service(
+                workspace_root=workspace_root,
+                model_client=fake_model_client,
+            )
+
+            response = service.answer_turn(
+                SimulatorTurnRequest.model_validate(
+                    {
+                        "benchmark_domain": "classical_supervised_ml_algorithms",
+                        "map_id": "gt_map_001",
+                        "question": {
+                            "question_id": "q_provider_grounding",
+                            "text": "How do folds rotate validation data?",
+                        },
+                        "turn_options": {"include_debug_trace": True},
+                    }
+                )
+            )
+
+            self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
+            self.assertIn("cross-validation", response.answer.text.lower())
+            self.assertEqual(4, len(fake_model_client.calls))
+            grounding_prompt = "\n".join(
+                message.content for message in fake_model_client.calls[0]
+            )
+            self.assertIn("cross_validation", grounding_prompt)
+            self.assertNotIn("diagnostic_goal", grounding_prompt)
+            trace_payload = _read_json(
+                workspace_root
+                / "benchmark"
+                / "domains"
+                / "classical_supervised_ml_algorithms"
+                / "simulator"
+                / "gt_map_001"
+                / "q_provider_grounding"
+                / "debug_trace.json"
+            )
+            self.assertEqual(
+                ["cross_validation"],
+                trace_payload["workflow"]["grounding"]["grounded_node_ids"],
+            )
+            self.assertEqual(
+                "model_client",
+                trace_payload["workflow"]["grounding"]["grounding_source"],
+            )
+            self.assertEqual(
+                "succeeded",
+                trace_payload["model_steps"]["question_grounding"]["parser_status"],
             )
 
 

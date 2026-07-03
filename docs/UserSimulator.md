@@ -80,7 +80,6 @@ Question Grounding must not use hidden **Reviewed Map** state or hidden **Ground
 The grounding contract should produce:
 
 - grounded node ids
-- optional grounding confidence for debug use
 - whether the question is an **Integrated Diagnostic Question**
 - whether the turn contains multiple independent diagnostic questions
 - whether the question asks for hidden benchmark labels or other unsupported structured state
@@ -88,7 +87,37 @@ The grounding contract should produce:
 
 Question Grounding is a contract, not a required implementation mechanism. It may start as rule-based matching, explicit node-id matching in development fixtures, or LLM-assisted classification.
 
-Grounding confidence may be recorded for simulator debugging, but it must not be exposed to the **Tested Agent** or used as a scoring signal. Low confidence may lead the simulator to ask for clarification and should be reflected in hidden debug trace.
+Provider-backed simulator construction may use LLM-assisted semantic grounding,
+while direct deterministic service construction used by tests and fixtures may
+keep the rule-based grounder. The API should not expose a separate grounding
+strategy switch in the initial slice; provider-backed grounding is part of
+simulator service wiring.
+
+LLM-assisted grounding should stay simple: it maps the question to reviewed graph
+nodes by intended concept meaning and does not introduce a grounding-confidence
+contract. Its initial node payload should include only `node_id`, `name`, and
+`definition`; it should not receive diagnostic goals, diagnostic signals,
+rubrics, simulator behavior, edges, hidden user state, or hidden evidence. Its
+structured output should cover `grounded_node_ids`, `is_multiple_question`, and
+`is_label_seeking`; service code can continue deriving the integrated-question
+flag from multiple grounded nodes that are not a multiple-question violation.
+If the model-backed grounding step fails, times out, returns malformed JSON,
+returns unknown node ids, or fails schema validation, the simulator may fall
+back to rule-based grounding so local behavior remains non-oracular and the
+hidden map loading boundary is preserved. A valid model-backed no-grounding
+result should remain no-grounding rather than being overridden by rule-based
+matching.
+
+For follow-up wording, LLM-assisted grounding may receive at most the latest
+visible dialogue turn's question and answer text. That context is only for
+resolving references such as "say that again" or "can you expand on that"; it
+should not become long-term simulator memory or widen grounding beyond the
+current turn's intended concept.
+
+Question Grounding should not introduce a grounding-confidence field or
+threshold in the initial slice. Ambiguous or unsupported grounding should be
+represented through the existing grounded node ids, integrated-question flag,
+multiple-question flag, label-seeking flag, and no-grounding behavior.
 
 Grounding identifies no-grounding, multiple-question, label-seeking, and integrated-question conditions, but it does not decide the final response mode. The **Simulator Answer Policy** decides how the simulator should respond to those grounded conditions.
 
@@ -285,7 +314,7 @@ Policy and answer fallback paths should still produce or consume the same **Simu
 
 The simulator may record a hidden **Simulator Debug Trace** for benchmark-author debugging.
 
-This trace may include grounding, grounding confidence, grounded node ids, answer blueprint, validation results, fallback reason, and generator metadata. It must remain separate from visible transcript data, must not be shown to the tested agent, and must not be used as primary scoring input.
+This trace may include grounding source, grounded node ids, answer blueprint, validation results, fallback reason, and generator metadata. It must remain separate from visible transcript data, must not be shown to the tested agent, and must not be used as primary scoring input.
 
 No-grounding and multiple-question flags belong in this hidden debug trace, not in the visible observation text.
 

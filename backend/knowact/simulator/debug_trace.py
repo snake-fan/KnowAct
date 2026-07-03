@@ -17,6 +17,7 @@ MODEL_RAW_OUTPUT_FILENAME = "model_raw_output.txt"
 PARSER_OUTPUT_FILENAME = "parser_output.json"
 
 ANSWER_POLICY_STEP = "answer_policy"
+QUESTION_GROUNDING_STEP = "question_grounding"
 ANSWER_GENERATION_STEP = "answer_generation"
 ANSWER_VALIDATION_STEP = "answer_validation"
 
