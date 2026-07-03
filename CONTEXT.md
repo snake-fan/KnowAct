@@ -249,8 +249,8 @@ A single **Diagnostic Question** that probes multiple **Knowledge Nodes** throug
 _Avoid_: multi-question batch, compound questionnaire, question list
 
 **Question Grounding**:
-The interpretation of a **Diagnostic Question** into the **Knowledge Nodes** it is intended to probe.
-_Avoid_: question selection, question router, agent policy
+The semantic interpretation of a **Diagnostic Question** into the **Knowledge Nodes** it is intended to probe.
+_Avoid_: keyword match, question selection, question router, agent policy
 
 **Structured Map Comparison**:
 An automatic comparison between a **Reviewed Map** and a **Reconstructed Knowledge Map** over quantifiable user-state fields.
@@ -691,6 +691,7 @@ _Avoid_: ground-truth edge, authored edge
 - **Question Grounding** does not select the **Diagnostic Question** for the **Tested Agent**.
 - **Question Grounding** does not add neighboring **Knowledge Nodes** merely because of **Knowledge Edges**.
 - **Question Grounding** defines a semantic interpretation contract, not a required implementation mechanism.
+- **Question Grounding** maps a diagnostic question by intended concept meaning, not by exact wording alone.
 - **Question Grounding** must not use hidden **Reviewed Map** state or hidden **Ground-Truth Evidence**.
 - When a **Diagnostic Question** has no **Question Grounding**, the **User Simulator** should give a natural clarification or non-answer without using hidden map content.
 - The **User Simulator** uses hidden map and evidence to generate natural answers, not structured benchmark labels.

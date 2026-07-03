@@ -1,6 +1,11 @@
 import unittest
 
-from backend.knowact.core.interaction import VisibleSimulatorAnswer
+from backend.knowact.core.graph import KnowledgeGraph, KnowledgeNode
+from backend.knowact.core.interaction import (
+    DiagnosticQuestion,
+    VisibleDialogueContext,
+    VisibleSimulatorAnswer,
+)
 from backend.knowact.simulator.grounding import QuestionGroundingResult
 from backend.knowact.simulator.policy import (
     NodeAnswerBlueprint,
@@ -20,9 +25,89 @@ from backend.knowact.simulator.templates.answer_generation import (
 from backend.knowact.simulator.templates.answer_validation import (
     build_answer_validation_messages,
 )
+from backend.knowact.simulator.templates.question_grounding import (
+    build_question_grounding_messages,
+)
 
 
 class V1SimulatorPromptTemplatesTest(unittest.TestCase):
+    def test_question_grounding_template_uses_minimal_visible_node_payload(self):
+        messages = build_question_grounding_messages(
+            question=DiagnosticQuestion(text="Can you say that again?"),
+            graph=KnowledgeGraph(
+                nodes=(
+                    KnowledgeNode.model_validate(
+                        {
+                            "id": "cross_validation",
+                            "name": "Cross-Validation",
+                            "type": "concept",
+                            "definition": "Repeated validation using folds.",
+                            "diagnostic_goal": "SECRET_DIAGNOSTIC_GOAL",
+                            "levels": {"L0": "SECRET_RUBRIC"},
+                            "diagnostic_signals": ["SECRET_SIGNAL"],
+                            "simulator_behavior": "SECRET_SIMULATOR_BEHAVIOR",
+                        }
+                    ),
+                )
+            ),
+            visible_dialogue_context=VisibleDialogueContext.model_validate(
+                {
+                    "turns": [
+                        {
+                            "turn_id": "visible_turn_001",
+                            "question": {"text": "Older question"},
+                            "answer": {"text": "Older answer"},
+                            "observation": {"kind": "answer"},
+                        },
+                        {
+                            "turn_id": "visible_turn_002",
+                            "question": {"text": "How do folds rotate?"},
+                            "answer": {"text": "I mixed up validation folds."},
+                            "observation": {"kind": "answer"},
+                        },
+                    ]
+                }
+            ),
+        )
+
+        self.assertEqual(2, len(messages))
+        developer_prompt = messages[0].content
+        for section in (
+            "Purpose:",
+            "Upstream Context Handling:",
+            "Agent Operating Frame:",
+            "Responsibility Boundary:",
+            "Reasoning Protocol:",
+            "Task Execution Flow:",
+            "Constraint Notes:",
+            "Deliverable Specification:",
+            "Output contract:",
+            "Final check before output:",
+        ):
+            with self.subTest(section=section):
+                self.assertIn(section, developer_prompt)
+        user_payload = messages[1].content
+        self.assertIn("cross_validation", user_payload)
+        self.assertIn("Cross-Validation", user_payload)
+        self.assertIn("Repeated validation using folds.", user_payload)
+        self.assertIn("How do folds rotate?", user_payload)
+        self.assertIn("I mixed up validation folds.", user_payload)
+        for forbidden_fragment in (
+            "SECRET_DIAGNOSTIC_GOAL",
+            "SECRET_RUBRIC",
+            "SECRET_SIGNAL",
+            "SECRET_SIMULATOR_BEHAVIOR",
+            "Older question",
+            "Older answer",
+            "diagnostic_goal",
+            "diagnostic_signals",
+            "simulator_behavior",
+            "levels",
+            "edges",
+        ):
+            with self.subTest(forbidden_fragment=forbidden_fragment):
+                self.assertNotIn(forbidden_fragment, user_payload)
+
     def test_answer_policy_template_is_structured_and_hidden_input_bounded(self):
         simulator_context = _empty_simulator_context()
         fallback_intent = RuleBasedAnswerPolicy().derive(

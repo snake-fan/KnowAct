@@ -20,6 +20,7 @@ from backend.knowact.simulator.debug_trace import (
     ANSWER_GENERATION_STEP,
     ANSWER_POLICY_STEP,
     ANSWER_VALIDATION_STEP,
+    QUESTION_GROUNDING_STEP,
     SimulatorDebugTraceRecorder,
     active_simulator_debug_trace,
     current_debug_trace_recorder,
@@ -34,7 +35,10 @@ from backend.knowact.simulator.generators import (
     RuleBasedAnswerGenerator,
     SimulatorAnswerGenerator,
 )
-from backend.knowact.simulator.grounding import RuleBasedQuestionGrounder
+from backend.knowact.simulator.grounding import (
+    QuestionGrounder,
+    RuleBasedQuestionGrounder,
+)
 from backend.knowact.simulator.policy import (
     RuleBasedAnswerPolicy,
     SimulatorAnswerBlueprint,
@@ -69,12 +73,13 @@ class SimulatorService:
         self,
         *,
         workspace_root: Path,
+        grounder: QuestionGrounder | None = None,
         policy: SimulatorAnswerPolicy | None = None,
         generator: SimulatorAnswerGenerator | None = None,
         validator: SimulatorAnswerValidator | None = None,
     ) -> None:
         self._workspace_root = workspace_root
-        self._grounder = RuleBasedQuestionGrounder()
+        self._grounder = grounder or RuleBasedQuestionGrounder()
         self._context_builder = SimulatorContextBuilder()
         self._fallback_policy = RuleBasedAnswerPolicy()
         self._policy = policy or self._fallback_policy
@@ -192,15 +197,18 @@ class SimulatorService:
                     manifest.map_id,
                     visible_turns,
                 )
-                grounding = self._grounder.ground(
-                    question=request.question,
-                    graph=graph_artifacts.graph,
-                    visible_dialogue_context=request.visible_dialogue_context,
-                )
+                with simulator_model_step(QUESTION_GROUNDING_STEP):
+                    grounding = self._grounder.ground(
+                        question=request.question,
+                        graph=graph_artifacts.graph,
+                        visible_dialogue_context=request.visible_dialogue_context,
+                    )
                 trace_recorder.set_workflow_section(
                     "grounding",
                     {
                         **grounding.model_dump(mode="json"),
+                        "grounding_source": grounding.grounding_source,
+                        "fallback_reason": grounding.fallback_reason,
                         "has_grounding": grounding.has_grounding,
                         "grounded_node_count": len(grounding.grounded_node_ids),
                     },
