@@ -188,6 +188,10 @@ _Avoid_: loose runner args, experiment notes, prompt metadata
 The benchmark-author publication of a validated **Evaluation Episode Manifest** into the **Runtime Episode Registry** without starting an **Evaluation Runtime** run.
 _Avoid_: create episode run, start simulator episode, loose manifest save
 
+**Episode Run**:
+One execution of a registered **Evaluation Episode** by the **Evaluation Runtime** for a selected **Tested Agent**, producing a visible interaction record, a final reconstruction submission, and a score report.
+_Avoid_: episode manifest, episode registration, simulator turn-test, authoring workflow
+
 **Runtime Management View**:
 A benchmark-author-facing view of registered **Evaluation Episodes** and their reviewed artifact bindings.
 _Avoid_: tested-agent delivery payload, hidden map payload, simulator prompt
@@ -299,6 +303,10 @@ _Avoid_: learned state, updated user knowledge
 **Tested Agent**:
 The agent evaluated by trying to infer a **Reconstructed Knowledge Map** through an **Evaluation Episode**.
 _Avoid_: user simulator, benchmark author, evaluator
+
+**Tested Agent Kind**:
+The selected category of **Tested Agent** used for one **Episode Run**; it chooses a concrete agent implementation while preserving the same **Evaluation Runtime** turn loop, working-map tools, finalization path, and scoring path.
+_Avoid_: runner mode, simulator type, scoring profile, prompt-only setting
 
 **Fixed-Question Baseline**:
 A baseline that asks diagnostic questions in a predefined order without adapting to user answers.

@@ -7,6 +7,10 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from backend.knowact.api.app import create_app
+from backend.knowact.agents.agents.simple_llm import SimpleLLMTestedAgent
+from backend.knowact.llm.client import ModelClientMetadata
+from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage
+from backend.knowact.simulator.service import SimulatorService
 from backend.knowact.validation.exceptions import KnowActValidationError
 from test.test_v1_runtime_episode_repository import (
     _write_confirmed_profile_context,
@@ -447,13 +451,206 @@ class V1RuntimeApiTest(unittest.TestCase):
             response.json()["detail"]["error_code"],
         )
 
-    def test_runtime_api_does_not_expose_episode_run_trigger(self):
+    def test_run_runtime_episode_starts_episode_run_and_returns_report(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(
+                workspace_root,
+                "episode_a",
+                graph_version="v1",
+                hidden_map_id="gt_map_001",
+                max_turns=1,
+            )
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            model_client = _FakeModelClient(
+                responses=(
+                    _ask_train_test_split_question_output(),
+                    _train_test_split_l4_update_output(),
+                )
+            )
+            client = TestClient(
+                create_app(
+                    workspace_root=workspace_root,
+                    simple_llm_tested_agent_factory=lambda provider, temperature: SimpleLLMTestedAgent(
+                        model_client=model_client,
+                        temperature=temperature,
+                    ),
+                    simulator_service_factory=lambda provider, root: SimulatorService(
+                        workspace_root=root
+                    ),
+                )
+            )
+
+            response = client.post(
+                "/api/runtime/episodes/episode_a/runs",
+                json={
+                    "run_id": "run_api_001",
+                    "agent_kind": "simple_llm_agent",
+                    "tested_agent_client_provider": "deepseek",
+                    "simulator_client_provider": "openai",
+                    "tested_agent_temperature": 0.1,
+                },
+            )
+            payload = response.json()
+            transcript_path = workspace_root / payload["artifacts"]["transcript"]
+            scoring_report_path = workspace_root / payload["artifacts"]["scoring_report"]
+            transcript_exists = transcript_path.exists()
+            scoring_report_exists = scoring_report_path.exists()
+            transcript_response = client.get("/api/runtime/runs/run_api_001/transcript")
+            transcript_payload = transcript_response.json()
+
+        self.assertEqual(201, response.status_code)
+        self.assertEqual("run_api_001", payload["run_id"])
+        self.assertEqual("episode_a", payload["episode_id"])
+        self.assertEqual("simple_llm_agent", payload["agent_kind"])
+        self.assertEqual(1, payload["turn_count"])
+        self.assertTrue(payload["forced_finalization"])
+        self.assertFalse(payload["forced_finalization_fallback"])
+        self.assertEqual(
+            "experiments/runs/run_api_001/scoring_report.json",
+            payload["artifacts"]["scoring_report"],
+        )
+        self.assertEqual(
+            "squared_mastery_distance_v1",
+            payload["scoring_report"]["scoring_profile"],
+        )
+        self.assertAlmostEqual(18.0, payload["scoring_report"]["episode_mastery_distance"])
+        self.assertTrue(transcript_exists)
+        self.assertTrue(scoring_report_exists)
+        self.assertEqual(200, transcript_response.status_code)
+        self.assertEqual(1, len(transcript_payload["turns"]))
+        self.assertEqual("turn_001", transcript_payload["turns"][0]["turn_id"])
+        self.assertEqual(
+            "How would you decide whether a Train/Test Split is appropriate?",
+            transcript_payload["turns"][0]["question"]["text"],
+        )
+        self.assertEqual("answer", transcript_payload["turns"][0]["observation"]["kind"])
+        response_text = json.dumps(payload, sort_keys=True)
+        for hidden_fragment in (
+            "gt_map_001",
+            "synthetic_user_001",
+            "debug_trace",
+            "answer_blueprint",
+            "simulator_only",
+        ):
+            with self.subTest(hidden_fragment=hidden_fragment):
+                self.assertNotIn(hidden_fragment, response_text)
+                self.assertNotIn(
+                    hidden_fragment,
+                    json.dumps(transcript_payload, sort_keys=True),
+                )
+
+    def test_run_runtime_episode_rejects_duplicate_run_id(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            (workspace_root / "experiments" / "runs" / "run_api_001").mkdir(
+                parents=True
+            )
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.post(
+                "/api/runtime/episodes/episode_a/runs",
+                json={
+                    "run_id": "run_api_001",
+                    "agent_kind": "simple_llm_agent",
+                },
+            )
+
+        self.assertEqual(409, response.status_code)
+        self.assertEqual(
+            "episode_run_already_exists",
+            response.json()["detail"]["error_code"],
+        )
+
+    def test_read_runtime_run_transcript_reports_missing_run(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             client = TestClient(create_app(workspace_root=Path(temp_dir)))
 
-            run_response = client.post("/api/runtime/episodes/episode_a/runs")
+            response = client.get("/api/runtime/runs/missing_run/transcript")
 
-        self.assertEqual(404, run_response.status_code)
+        self.assertEqual(404, response.status_code)
+        self.assertEqual(
+            "episode_run_not_found",
+            response.json()["detail"]["error_code"],
+        )
+
+    def test_read_runtime_run_transcript_rejects_malformed_artifact(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            transcript_path = (
+                workspace_root
+                / "experiments"
+                / "runs"
+                / "run_bad_transcript"
+                / "transcript.json"
+            )
+            transcript_path.parent.mkdir(parents=True)
+            transcript_path.write_text("{not valid json", encoding="utf-8")
+            client = TestClient(create_app(workspace_root=workspace_root))
+
+            response = client.get("/api/runtime/runs/run_bad_transcript/transcript")
+
+        self.assertEqual(422, response.status_code)
+        self.assertEqual(
+            "malformed_run_transcript",
+            response.json()["detail"]["error_code"],
+        )
+
+
+class _FakeModelClient:
+    message_profile = OPENAI_MESSAGE_PROFILE
+    metadata = ModelClientMetadata(
+        provider="fake",
+        model_name="fake-simple-llm-agent",
+        message_profile=OPENAI_MESSAGE_PROFILE.name,
+    )
+
+    def __init__(self, *, responses: tuple[str, ...]) -> None:
+        self._responses = list(responses)
+        self.messages: list[tuple[ModelMessage, ...]] = []
+        self.temperatures: list[float | None] = []
+
+    def complete(
+        self,
+        *,
+        messages,
+        temperature: float | None = None,
+    ) -> str:
+        self.messages.append(tuple(messages))
+        self.temperatures.append(temperature)
+        if not self._responses:
+            raise AssertionError("No fake model response configured")
+        return self._responses.pop(0)
+
+
+def _ask_train_test_split_question_output() -> str:
+    return json.dumps(
+        {
+            "action": "ask_diagnostic_question",
+            "question": {
+                "text": "How would you decide whether a Train/Test Split is appropriate?",
+                "question_id": "q_train_test_split",
+            },
+        }
+    )
+
+
+def _train_test_split_l4_update_output() -> str:
+    return json.dumps(
+        {
+            "updates": [
+                {
+                    "node_id": "train_test_split",
+                    "assessed_mastery_level": "L4",
+                    "diagnostic_confidence": "high",
+                    "assessment_note": "The user gave a held-out evaluation answer.",
+                    "supporting_turn_ids": ["turn_001"],
+                }
+            ]
+        }
+    )
 
 
 if __name__ == "__main__":

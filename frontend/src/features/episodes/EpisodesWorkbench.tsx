@@ -11,12 +11,16 @@ import {
   RUNTIME_SCORING_PROFILE,
   RuntimeEpisodeAgentKind,
   RuntimeEpisodeDetail,
+  RuntimeEpisodeRunResponse,
   RuntimeEpisodeSummary,
+  TestedAgentClientProvider,
   listRuntimeEpisodes,
+  readRuntimeRunTranscript,
   readRuntimeEpisode,
-  registerRuntimeEpisode
+  registerRuntimeEpisode,
+  startRuntimeEpisodeRun
 } from "../../api/runtime";
-import type { SimulatorClientProvider } from "../../api/simulator";
+import type { SimulatorClientProvider, VisibleDialogueContext } from "../../api/simulator";
 
 export function EpisodesWorkbench() {
   const [benchmarkDomains, setBenchmarkDomains] = useState<string[]>([]);
@@ -29,9 +33,12 @@ export function EpisodesWorkbench() {
   const [episodes, setEpisodes] = useState<RuntimeEpisodeSummary[]>([]);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState("");
   const [episodeDetail, setEpisodeDetail] = useState<RuntimeEpisodeDetail | null>(null);
-  const [runAgentKind, setRunAgentKind] = useState<RuntimeEpisodeAgentKind>("fixed_question_baseline");
-  const [runClientProvider, setRunClientProvider] = useState<SimulatorClientProvider>("openai");
+  const [runAgentKind, setRunAgentKind] = useState<RuntimeEpisodeAgentKind>("simple_llm_agent");
+  const [testedAgentClientProvider, setTestedAgentClientProvider] = useState<TestedAgentClientProvider>("openai");
+  const [simulatorClientProvider, setSimulatorClientProvider] = useState<SimulatorClientProvider>("openai");
   const [runId, setRunId] = useState("");
+  const [episodeRunResult, setEpisodeRunResult] = useState<RuntimeEpisodeRunResponse | null>(null);
+  const [episodeRunTranscript, setEpisodeRunTranscript] = useState<VisibleDialogueContext | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +144,8 @@ export function EpisodesWorkbench() {
       setEpisodes(runtimeEpisodes);
       setSelectedEpisodeId(detail.manifest.episode_id);
       setEpisodeDetail(detail);
+      setEpisodeRunResult(null);
+      setEpisodeRunTranscript(null);
       setEpisodeId("");
       setNotice(`Registered Evaluation Episode ${detail.manifest.episode_id}.`);
     });
@@ -147,7 +156,40 @@ export function EpisodesWorkbench() {
       const detail = await readRuntimeEpisode(episode.episode_id);
       setSelectedEpisodeId(episode.episode_id);
       setEpisodeDetail(detail);
+      setEpisodeRunResult(null);
+      setEpisodeRunTranscript(null);
       setNotice(`Loaded Evaluation Episode ${episode.episode_id}.`);
+    });
+  }
+
+  async function handleRunEpisode() {
+    if (!selectedEpisodeId) {
+      setError("Select an episode first.");
+      return;
+    }
+
+    const episodeIdToRun = selectedEpisodeId;
+    const trimmedRunId = runId.trim();
+    await runTask("run episode", async () => {
+      setEpisodeRunResult(null);
+      setEpisodeRunTranscript(null);
+      const result = await startRuntimeEpisodeRun({
+        episodeId: episodeIdToRun,
+        request: {
+          run_id: trimmedRunId || null,
+          agent_kind: runAgentKind,
+          tested_agent_client_provider: testedAgentClientProvider,
+          simulator_client_provider: simulatorClientProvider,
+          max_tool_retries: 3
+        }
+      });
+      const transcript = await readRuntimeRunTranscript(result.run_id);
+      setSelectedEpisodeId(episodeIdToRun);
+      setEpisodeDetail(await readRuntimeEpisode(episodeIdToRun));
+      setEpisodeRunResult(result);
+      setEpisodeRunTranscript(transcript);
+      setRunId("");
+      setNotice(`Episode run ${result.run_id} completed.`);
     });
   }
 
@@ -170,7 +212,7 @@ export function EpisodesWorkbench() {
         <div>
           <p className="eyebrow">Runtime</p>
           <h1>Episodes</h1>
-          <p>Register Evaluation Episode manifests, inspect visible context previews, and stage the future run boundary.</p>
+          <p>Register Evaluation Episode manifests, inspect visible context previews, and run the initial tested-agent loop.</p>
         </div>
         <div className="status-strip" aria-live="polite">
           {busy && <span className="status busy">Working: {busy}</span>}
@@ -284,28 +326,33 @@ export function EpisodesWorkbench() {
           <section className="episode-run-panel">
             <div>
               <p className="eyebrow">Run Episode</p>
-              <h2>Run Boundary</h2>
+              <h2>Episode Run</h2>
             </div>
             <label>
               Agent
               <select value={runAgentKind} onChange={(event) => setRunAgentKind(event.target.value as RuntimeEpisodeAgentKind)} disabled>
-                <option value="fixed_question_baseline">Fixed-Question Baseline</option>
-                <option value="random_question_baseline">Random-Question Baseline</option>
                 <option value="simple_llm_agent">Simple LLM Agent</option>
               </select>
             </label>
             <label>
-              Provider
-              <select value={runClientProvider} onChange={(event) => setRunClientProvider(event.target.value as SimulatorClientProvider)} disabled>
+              Tested agent provider
+              <select value={testedAgentClientProvider} onChange={(event) => setTestedAgentClientProvider(event.target.value as TestedAgentClientProvider)} disabled={busy !== null}>
+                <option value="openai">OpenAI</option>
+                <option value="deepseek">DeepSeek</option>
+              </select>
+            </label>
+            <label>
+              Simulator provider
+              <select value={simulatorClientProvider} onChange={(event) => setSimulatorClientProvider(event.target.value as SimulatorClientProvider)} disabled={busy !== null}>
                 <option value="openai">OpenAI</option>
                 <option value="deepseek">DeepSeek</option>
               </select>
             </label>
             <label>
               Run ID
-              <input value={runId} onChange={(event) => setRunId(event.target.value)} placeholder="Optional" disabled />
+              <input value={runId} onChange={(event) => setRunId(event.target.value)} placeholder="Optional" disabled={busy !== null} />
             </label>
-            <button type="button" disabled>
+            <button type="button" onClick={() => void handleRunEpisode()} disabled={busy !== null || !selectedEpisodeId}>
               Run Episode
             </button>
             <p className="episode-run-note">POST /api/runtime/episodes/{selectedEpisodeId || "{episode_id}"}/runs</p>
@@ -313,7 +360,11 @@ export function EpisodesWorkbench() {
         </section>
 
         {episodeDetail ? (
-          <EpisodeDetailPanel detail={episodeDetail} />
+          <EpisodeDetailPanel
+            detail={episodeDetail}
+            runResult={episodeRunResult}
+            runTranscript={episodeRunTranscript}
+          />
         ) : (
           <section className="episode-empty-panel">
             <p className="eyebrow">Episode Detail</p>
@@ -326,7 +377,15 @@ export function EpisodesWorkbench() {
   );
 }
 
-function EpisodeDetailPanel({ detail }: { detail: RuntimeEpisodeDetail }) {
+function EpisodeDetailPanel({
+  detail,
+  runResult,
+  runTranscript
+}: {
+  detail: RuntimeEpisodeDetail;
+  runResult: RuntimeEpisodeRunResponse | null;
+  runTranscript: VisibleDialogueContext | null;
+}) {
   const preview = detail.tested_agent_visible_context_preview;
   return (
     <section className="episode-detail-panel">
@@ -395,7 +454,158 @@ function EpisodeDetailPanel({ detail }: { detail: RuntimeEpisodeDetail }) {
           )}
         </div>
       </section>
+
+      {runResult && <EpisodeRunResultPanel runResult={runResult} transcript={runTranscript} />}
     </section>
+  );
+}
+
+function EpisodeRunResultPanel({
+  runResult,
+  transcript
+}: {
+  runResult: RuntimeEpisodeRunResponse;
+  transcript: VisibleDialogueContext | null;
+}) {
+  const report = runResult.scoring_report;
+  const artifacts = [
+    ["Run Dir", runResult.artifacts.run_dir],
+    ["Transcript", runResult.artifacts.transcript],
+    ["Working Map", runResult.artifacts.working_map],
+    ["Agent Tool Trace", runResult.artifacts.agent_tool_trace],
+    ["Agent Output", runResult.artifacts.agent_output],
+    ["Scoring Report", runResult.artifacts.scoring_report],
+    ["Manifest Snapshot", runResult.artifacts.episode_manifest_snapshot]
+  ];
+
+  return (
+    <section className="episode-preview-card episode-run-result-panel">
+      <div className="episode-run-result-header">
+        <div>
+          <p className="eyebrow">Latest Run Result</p>
+          <h3>{runResult.run_id}</h3>
+        </div>
+        <div className="map-review-actions">
+          <span className="lifecycle-badge confirmed">{runResult.agent_kind}</span>
+          <span className={runResult.forced_finalization ? "warning-count active" : "warning-count"}>
+            {runResult.forced_finalization ? "Forced Final" : "Finalized"}
+          </span>
+        </div>
+      </div>
+
+      <div className="episode-run-metrics">
+        <EpisodeMetric label="Turns" value={String(runResult.turn_count)} />
+        <EpisodeMetric label="Mastery Distance" value={formatScore(report.episode_mastery_distance)} />
+        <EpisodeMetric label="Exact Match" value={formatRatio(report.exact_match_rate)} />
+        <EpisodeMetric label="Missing Prediction" value={formatRatio(report.missing_prediction_rate)} />
+        <EpisodeMetric label="Unsupported Inference" value={formatRatio(report.unsupported_inference_rate)} />
+        <EpisodeMetric label="Forced Fallback" value={runResult.forced_finalization_fallback ? "Yes" : "No"} />
+      </div>
+
+      <div className="episode-run-transcript">
+        <div className="episode-run-subheader">
+          <div>
+            <p className="eyebrow">Run Transcript</p>
+            <h4>{transcript?.turns.length ?? 0} visible turns</h4>
+          </div>
+          <span className="warning-count">Visible Only</span>
+        </div>
+        {transcript && transcript.turns.length > 0 ? (
+          <div className="episode-run-transcript-list">
+            {transcript.turns.map((turn, index) => (
+              <article key={turn.turn_id ?? index} className="episode-run-turn">
+                <div>
+                  <strong>{turn.turn_id ?? `turn_${String(index + 1).padStart(3, "0")}`}</strong>
+                  <span className="simulator-turn-kind">{turn.observation.kind}</span>
+                </div>
+                <p className="episode-run-question">{turn.question.text}</p>
+                <p>{turn.answer.text}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="empty">No visible transcript turns are available for this run.</p>
+        )}
+      </div>
+
+      <div className="episode-score-table-wrap">
+        <table className="episode-score-table">
+          <thead>
+            <tr>
+              <th>Node</th>
+              <th>Ground Truth</th>
+              <th>Prediction</th>
+              <th>Distance</th>
+              <th>Error</th>
+              <th>Flags</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.per_node.map((node) => (
+              <tr key={node.node_id}>
+                <td>{node.node_id}</td>
+                <td>{node.ground_truth_mastery}</td>
+                <td>{node.predicted_mastery ?? "Missing"}</td>
+                <td>{formatScore(node.mastery_distance)}</td>
+                <td>{node.signed_mastery_error === null ? "-" : formatScore(node.signed_mastery_error)}</td>
+                <td>
+                  <ScoreFlags
+                    exactMatch={node.exact_match}
+                    missingPrediction={node.missing_prediction}
+                    unsupportedInference={node.unsupported_inference}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="episode-run-artifacts">
+        <p className="eyebrow">Artifacts</p>
+        {artifacts.map(([label, value]) => (
+          <div key={label} className="episode-run-artifact-row">
+            <span>{label}</span>
+            <code>{value}</code>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function EpisodeMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="episode-run-metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function ScoreFlags({
+  exactMatch,
+  missingPrediction,
+  unsupportedInference
+}: {
+  exactMatch: boolean;
+  missingPrediction: boolean;
+  unsupportedInference: boolean;
+}) {
+  const flags = [
+    exactMatch ? "Exact" : null,
+    missingPrediction ? "Missing" : null,
+    unsupportedInference ? "Unsupported" : null
+  ].filter((flag): flag is string => flag !== null);
+
+  if (flags.length === 0) {
+    return <span className="score-flag neutral">Distance</span>;
+  }
+
+  return (
+    <span className={exactMatch ? "score-flag ok" : "score-flag warning"}>
+      {flags.join(" / ")}
+    </span>
   );
 }
 
@@ -406,4 +616,12 @@ function EpisodeMeta({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function formatScore(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(3);
+}
+
+function formatRatio(value: number) {
+  return `${(value * 100).toFixed(1)}%`;
 }

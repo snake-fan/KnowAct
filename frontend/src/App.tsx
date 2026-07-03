@@ -1,14 +1,44 @@
-import { useState } from "react";
-import { CandidateGraphWorkbench } from "./features/candidateGraph/CandidateGraphWorkbench";
-import { EpisodesWorkbench } from "./features/episodes/EpisodesWorkbench";
-import { MapAuthoringWorkbench } from "./features/mapAuthoring/MapAuthoringWorkbench";
-import { SimulatorWorkbench } from "./features/simulator/SimulatorWorkbench";
-import { UserProfileWorkbench } from "./features/userProfile/UserProfileWorkbench";
+import { Suspense, lazy, useState } from "react";
 
 type WorkbenchModule = "knowledge-graph" | "user-profile" | "user-map" | "simulator" | "episodes";
 
+const CandidateGraphWorkbench = lazy(() =>
+  import("./features/candidateGraph/CandidateGraphWorkbench").then((module) => ({
+    default: module.CandidateGraphWorkbench
+  }))
+);
+const UserProfileWorkbench = lazy(() =>
+  import("./features/userProfile/UserProfileWorkbench").then((module) => ({
+    default: module.UserProfileWorkbench
+  }))
+);
+const MapAuthoringWorkbench = lazy(() =>
+  import("./features/mapAuthoring/MapAuthoringWorkbench").then((module) => ({
+    default: module.MapAuthoringWorkbench
+  }))
+);
+const SimulatorWorkbench = lazy(() =>
+  import("./features/simulator/SimulatorWorkbench").then((module) => ({
+    default: module.SimulatorWorkbench
+  }))
+);
+const EpisodesWorkbench = lazy(() =>
+  import("./features/episodes/EpisodesWorkbench").then((module) => ({
+    default: module.EpisodesWorkbench
+  }))
+);
+
+const WORKBENCH_COMPONENTS = {
+  "knowledge-graph": CandidateGraphWorkbench,
+  "user-profile": UserProfileWorkbench,
+  "user-map": MapAuthoringWorkbench,
+  simulator: SimulatorWorkbench,
+  episodes: EpisodesWorkbench
+};
+
 export function App() {
   const [activeModule, setActiveModule] = useState<WorkbenchModule>("knowledge-graph");
+  const ActiveWorkbench = WORKBENCH_COMPONENTS[activeModule];
 
   return (
     <div className="workbench-frame">
@@ -88,20 +118,10 @@ export function App() {
       </aside>
 
       <div className="module-surface">
-        <div className={activeModule === "knowledge-graph" ? "module-pane active" : "module-pane"}>
-          <CandidateGraphWorkbench />
-        </div>
-        <div className={activeModule === "user-profile" ? "module-pane active" : "module-pane"}>
-          <UserProfileWorkbench />
-        </div>
-        <div className={activeModule === "user-map" ? "module-pane active" : "module-pane"}>
-          <MapAuthoringWorkbench />
-        </div>
-        <div className={activeModule === "simulator" ? "module-pane active" : "module-pane"}>
-          <SimulatorWorkbench />
-        </div>
-        <div className={activeModule === "episodes" ? "module-pane active" : "module-pane"}>
-          <EpisodesWorkbench />
+        <div className="module-pane active">
+          <Suspense fallback={<div className="module-loading">Loading...</div>}>
+            <ActiveWorkbench />
+          </Suspense>
         </div>
       </div>
     </div>

@@ -100,7 +100,11 @@ def create_app(
         tags=["tested-agents"],
     )
     app.include_router(
-        build_runtime_router(workspace_root=workspace_root),
+        build_runtime_router(
+            workspace_root=workspace_root,
+            simple_llm_tested_agent_factory=simple_llm_tested_agent_factory,
+            simulator_service_factory=simulator_service_factory,
+        ),
         prefix="/api/runtime",
         tags=["runtime"],
     )

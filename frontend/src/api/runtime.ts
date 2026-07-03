@@ -80,27 +80,59 @@ export type RuntimeEpisodeRegistrationRequest = {
   max_turns: number;
 };
 
-export type RuntimeEpisodeAgentKind =
-  | "fixed_question_baseline"
-  | "random_question_baseline"
-  | "simple_llm_agent";
+export type TestedAgentClientProvider = "openai" | "deepseek";
+
+export type RuntimeEpisodeAgentKind = "simple_llm_agent";
 
 export type RuntimeEpisodeRunRequest = {
   run_id?: string | null;
   agent_kind: RuntimeEpisodeAgentKind;
-  client_provider?: SimulatorClientProvider | null;
+  tested_agent_client_provider?: TestedAgentClientProvider | null;
+  simulator_client_provider?: SimulatorClientProvider | null;
+  tested_agent_temperature?: number | null;
+  max_tool_retries?: number | null;
 };
 
-export type RuntimeEpisodeRunStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "failed";
+export type RuntimeNodeComparison = {
+  node_id: string;
+  ground_truth_mastery: string;
+  predicted_mastery: string | null;
+  mastery_distance: number;
+  signed_mastery_error: number | null;
+  missing_prediction: boolean;
+  unsupported_inference: boolean;
+  exact_match: boolean;
+};
 
-export type RuntimeEpisodeRunSummary = {
+export type RuntimeEpisodeScoreReport = {
+  episode_id: string;
+  scoring_profile: RuntimeScoringProfile;
+  per_node: RuntimeNodeComparison[];
+  episode_mastery_distance: number;
+  missing_prediction_rate: number;
+  unsupported_inference_rate: number;
+  exact_match_rate: number;
+};
+
+export type RuntimeEpisodeRunArtifactsSummary = {
+  run_dir: string;
+  episode_manifest_snapshot: string;
+  transcript: string;
+  working_map: string;
+  agent_tool_trace: string;
+  agent_output: string;
+  scoring_report: string;
+};
+
+export type RuntimeEpisodeRunResponse = {
   run_id: string;
   episode_id: string;
-  status: RuntimeEpisodeRunStatus;
+  agent_kind: RuntimeEpisodeAgentKind;
+  turn_count: number;
+  forced_finalization: boolean;
+  forced_finalization_fallback: boolean;
+  artifacts: RuntimeEpisodeRunArtifactsSummary;
+  scoring_report: RuntimeEpisodeScoreReport;
 };
 
 export async function listRuntimeEpisodes(): Promise<RuntimeEpisodeSummary[]> {
@@ -128,13 +160,21 @@ export async function registerRuntimeEpisode(
 export async function startRuntimeEpisodeRun(input: {
   episodeId: string;
   request: RuntimeEpisodeRunRequest;
-}): Promise<RuntimeEpisodeRunSummary> {
-  return requestJson<RuntimeEpisodeRunSummary>(
+}): Promise<RuntimeEpisodeRunResponse> {
+  return requestJson<RuntimeEpisodeRunResponse>(
     `/api/runtime/episodes/${encodeURIComponent(input.episodeId)}/runs`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input.request)
     }
+  );
+}
+
+export async function readRuntimeRunTranscript(
+  runId: string
+): Promise<VisibleDialogueContext> {
+  return requestJson<VisibleDialogueContext>(
+    `/api/runtime/runs/${encodeURIComponent(runId)}/transcript`
   );
 }
