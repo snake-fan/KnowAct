@@ -13,17 +13,24 @@ from backend.knowact.authoring.openai_workflow import build_openai_graph_authori
 from backend.knowact.authoring.parsers.graph_authoring import (
     AuthoringOutputParseError,
     parse_node_rubric_authoring_output,
+    parse_segment_node_extraction_output,
 )
+from backend.knowact.authoring.segments import derive_parsed_source_segments
 from backend.knowact.authoring.schemas import (
     EdgeProposalInput,
     NodeRubricAuthoringInput,
     NodeRubricAuthoringResult,
     NodeRubricPatch,
+    ParsedSourceSegment,
+    SegmentNodeExtractionDraft,
     SourceGroundedNodeSkeleton,
     SourceMaterial,
 )
 from backend.knowact.authoring.templates.edge_proposal import build_edge_proposal_messages
 from backend.knowact.authoring.templates.node_extraction import build_node_extraction_messages
+from backend.knowact.authoring.templates.node_skeleton_reconciliation import (
+    build_node_skeleton_reconciliation_messages,
+)
 from backend.knowact.authoring.templates.node_rubric_authoring import build_node_rubric_authoring_messages
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeGraph, KnowledgeNode, SourceLocator
@@ -135,6 +142,60 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertEqual("logistic_regression", edge.target)
         validate_knowledge_graph(KnowledgeGraph(nodes=result.candidate_nodes, edges=result.candidate_edges))
 
+    def test_parsed_source_segments_use_numbered_heading_paths_and_char_counts(self):
+        source = SourceMaterial(
+            source_id="isl_python",
+            title="ISLP",
+            text=(
+                "# 2 Statistical Learning\n\n"
+                "Chapter introduction.\n\n"
+                "# 2.1 What Is Statistical Learning?\n\n"
+                "Section text.\n\n"
+                "# 2.1.1 Why Estimate f?\n\n"
+                "Subsection text."
+            ),
+        )
+
+        segments = derive_parsed_source_segments([source])
+
+        self.assertGreaterEqual(len(segments), 1)
+        self.assertEqual("seg_000001", segments[0].segment_id)
+        self.assertLessEqual(max(len(segment.heading_path) for segment in segments), 3)
+        self.assertEqual(len(segments[0].text), segments[0].char_count)
+        self.assertEqual("isl_python", segments[0].source_locator.source_id)
+        self.assertIn("Statistical Learning", segments[0].location)
+
+    def test_segment_driven_workflow_fails_when_all_segments_return_zero_drafts(self):
+        workflow = build_openai_graph_authoring_workflow(model_client=EmptyDraftGraphModelClient())
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            with self.assertRaises(GraphAuthoringWorkflowRunError) as context:
+                workflow.run_with_log(
+                    [_source_material()],
+                    run_id="empty_drafts_run_001",
+                    intermediate_artifact_writer=GraphAuthoringIntermediateArtifactWriter(output_dir),
+                )
+
+            self.assertIsInstance(context.exception.cause, KnowActValidationError)
+            failed_entry = context.exception.run_log.entries[-1]
+            self.assertEqual("validate_segment_node_extraction_drafts", failed_entry.entry_name)
+            self.assertEqual("failed", failed_entry.status)
+            self.assertIn("produced no drafts", failed_entry.error.message)
+            entries_by_name = {entry.entry_name: entry for entry in context.exception.run_log.entries}
+            self.assertIn("parsed_source_segments", entries_by_name["derive_parsed_source_segments"].artifact_uris)
+            self.assertEqual(
+                "intermediate/parsed_source_segments.json",
+                entries_by_name["derive_parsed_source_segments"].artifact_uris["parsed_source_segments"],
+            )
+            self.assertEqual(
+                "intermediate/segment_node_extraction_drafts.json",
+                entries_by_name["node_extraction"].artifact_uris["segment_node_extraction_drafts"],
+            )
+            self.assertTrue((output_dir / "intermediate" / "parsed_source_segments.json").exists())
+            self.assertEqual([], _load_json(output_dir / "intermediate" / "segment_node_extraction_drafts.json"))
+            self.assertFalse((output_dir / "intermediate" / "source_grounded_node_skeletons.json").exists())
+
     def test_graph_authoring_run_log_can_be_written_as_sidecar_artifact(self):
         workflow = GraphAuthoringAgentWorkflow(
             node_extraction_step=FixtureNodeExtractionStep(),
@@ -245,7 +306,12 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
             tuple(locator.locator for locator in result.candidate_nodes[0].source_locators),
         )
         self.assertEqual(
-            ["Node Extraction Agent Step", "Node Rubric Authoring Agent Step", "Edge Proposal Agent Step"],
+            [
+                "Node Extraction Agent Step",
+                "Node Skeleton Reconciliation Agent Step",
+                "Node Rubric Authoring Agent Step",
+                "Edge Proposal Agent Step",
+            ],
             model_client.prompt_markers,
         )
 
@@ -258,11 +324,21 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         entries_by_name = {entry.entry_name: entry for entry in run_result.run_log.entries}
         node_extraction_trace = entries_by_name["node_extraction"].agent_trace
         self.assertIsNotNone(node_extraction_trace)
-        self.assertIn('"skeletons"', node_extraction_trace.model_raw_output)
         self.assertEqual("succeeded", node_extraction_trace.parser_result.status)
+        self.assertEqual("Train Test Split", node_extraction_trace.parser_result.output["drafts"][0]["name"])
+        self.assertEqual(1, len(node_extraction_trace.batch_traces))
+        self.assertEqual("seg_000001", node_extraction_trace.batch_traces[0].batch_name)
         self.assertEqual(
-            "train_test_split",
-            node_extraction_trace.parser_result.output["skeletons"][0]["id"],
+            "Train Test Split",
+            node_extraction_trace.batch_traces[0].parser_result.output["drafts"][0]["name"],
+        )
+
+        reconciliation_trace = entries_by_name["node_skeleton_reconciliation"].agent_trace
+        self.assertIsNotNone(reconciliation_trace)
+        self.assertEqual("succeeded", reconciliation_trace.parser_result.status)
+        self.assertEqual(
+            "Train Test Split",
+            reconciliation_trace.parser_result.output["skeletons"][0]["name"],
         )
 
         rubric_trace = entries_by_name["node_rubric_authoring"].agent_trace
@@ -291,23 +367,37 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
             raw_log = _load_json(log_path)
             entries_by_name = {entry["entry_name"]: entry for entry in raw_log["entries"]}
             node_trace = entries_by_name["node_extraction"]["agent_trace"]
-            self.assertNotIn("model_raw_output", node_trace)
-            self.assertEqual(
-                "agent_traces/node_extraction/model_raw_output.txt",
-                node_trace["model_raw_output_uri"],
-            )
             self.assertNotIn("output", node_trace["parser_result"])
             self.assertEqual(
                 "agent_traces/node_extraction/parser_output.json",
                 node_trace["parser_result"]["output_uri"],
             )
-
-            raw_output_path = output_dir / node_trace["model_raw_output_uri"]
-            parser_output_path = output_dir / node_trace["parser_result"]["output_uri"]
-            self.assertIn('"skeletons"', raw_output_path.read_text(encoding="utf-8"))
+            segment_trace = node_trace["batch_traces"][0]
             self.assertEqual(
-                "train_test_split",
-                _load_json(parser_output_path)["skeletons"][0]["id"],
+                "agent_traces/node_extraction/seg_000001/model_raw_output.txt",
+                segment_trace["model_raw_output_uri"],
+            )
+            self.assertEqual(
+                "agent_traces/node_extraction/seg_000001/parser_output.json",
+                segment_trace["parser_result"]["output_uri"],
+            )
+
+            raw_output_path = output_dir / segment_trace["model_raw_output_uri"]
+            parser_output_path = output_dir / node_trace["parser_result"]["output_uri"]
+            self.assertIn('"drafts"', raw_output_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                "Train Test Split",
+                _load_json(parser_output_path)["drafts"][0]["name"],
+            )
+
+            reconciliation_trace = entries_by_name["node_skeleton_reconciliation"]["agent_trace"]
+            self.assertEqual(
+                "agent_traces/node_skeleton_reconciliation/model_raw_output.txt",
+                reconciliation_trace["model_raw_output_uri"],
+            )
+            self.assertEqual(
+                "agent_traces/node_skeleton_reconciliation/parser_output.json",
+                reconciliation_trace["parser_result"]["output_uri"],
             )
 
             rubric_trace = entries_by_name["node_rubric_authoring"]["agent_trace"]
@@ -333,11 +423,15 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertEqual("AuthoringOutputParseError", failed_entry.error.error_type)
         self.assertIn("not valid JSON", failed_entry.error.message)
         self.assertIsNotNone(failed_entry.agent_trace)
-        self.assertEqual("I cannot return JSON for this request.", failed_entry.agent_trace.model_raw_output)
         self.assertEqual("failed", failed_entry.agent_trace.parser_result.status)
         self.assertEqual(
             "AuthoringOutputParseError",
             failed_entry.agent_trace.parser_result.error.error_type,
+        )
+        self.assertEqual(1, len(failed_entry.agent_trace.batch_traces))
+        self.assertEqual(
+            "I cannot return JSON for this request.",
+            failed_entry.agent_trace.batch_traces[0].model_raw_output,
         )
 
     def test_node_rubric_parser_rejects_missing_required_rubric_fields(self):
@@ -366,15 +460,54 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
 
     def test_graph_authoring_templates_are_split_and_include_knowledge_graph_guardrails(self):
         source_materials = [_source_material()]
+        segments = derive_parsed_source_segments(source_materials)
 
-        extraction_prompt = _render_prompt(build_node_extraction_messages(source_materials))
-        self.assertIn("Source-Grounded Node Skeletons", extraction_prompt)
+        extraction_prompt = _render_prompt(build_node_extraction_messages(segments[0]))
+        self.assertIn("Segment Node Extraction Drafts", extraction_prompt)
         self.assertIn("roughly 1-3 focused diagnostic questions", extraction_prompt)
-        self.assertIn("Do not output diagnostic_goal", extraction_prompt)
-        self.assertIn("Parsed Source Markdown", extraction_prompt)
-        self.assertIn('"skeletons"', extraction_prompt)
+        self.assertIn("Do not output id, draft_id, segment_id", extraction_prompt)
+        self.assertIn("Parsed Source Segment", extraction_prompt)
+        self.assertIn('"drafts"', extraction_prompt)
 
         skeletons = FixtureNodeExtractionStep().run(source_materials)
+        drafts = tuple(
+            parse_segment_node_extraction_output(
+                json.dumps(
+                    {
+                        "drafts": [
+                            {
+                                "name": "Train Test Split",
+                                "definition": "Separating data into training and test sets.",
+                                "source_locator": {
+                                    "source_id": "isl_python",
+                                    "locator": "chapter_2",
+                                },
+                                "grounding_note": "Grounded by the fixture source.",
+                            }
+                        ]
+                    }
+                )
+            )
+        )
+        reconciliation_prompt = _render_prompt(
+            build_node_skeleton_reconciliation_messages(
+                (
+                    SegmentNodeExtractionDraft(
+                        draft_id="draft_000001",
+                        segment_id=segments[0].segment_id,
+                        name=drafts[0].name,
+                        definition=drafts[0].definition,
+                        source_locator=drafts[0].source_locator,
+                        grounding_note=drafts[0].grounding_note,
+                    ),
+                )
+            )
+        )
+        self.assertIn("Node Skeleton Reconciliation Agent Step", reconciliation_prompt)
+        self.assertIn("supporting_draft_ids", reconciliation_prompt)
+        self.assertIn("The workflow will derive final node ids", reconciliation_prompt)
+        self.assertNotIn(source_materials[0].text, reconciliation_prompt)
+
         rubric_prompt = _render_prompt(
             build_node_rubric_authoring_messages(
                 NodeRubricAuthoringInput(skeletons=skeletons)
@@ -411,21 +544,21 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertNotIn("node-id order", edge_prompt)
         self.assertNotIn(source_materials[0].text, edge_prompt)
 
-        self.assertIn("Parsed Source Markdown", extraction_prompt)
-        self.assertIn('source_id "isl_python"', extraction_prompt)
+        self.assertIn("Parsed Source Segment", extraction_prompt)
+        self.assertIn("Source: isl_python", extraction_prompt)
         self.assertIn(source_materials[0].text, extraction_prompt)
         self.assertNotIn("uploaded original PDF", extraction_prompt)
-        for prompt in (rubric_prompt, edge_prompt):
+        for prompt in (reconciliation_prompt, rubric_prompt, edge_prompt):
             self.assertNotIn("Parsed Source Markdown for source_id", prompt)
             self.assertIn("isl_python", prompt)
             self.assertNotIn("uploaded original PDF", prompt)
 
     def test_graph_authoring_templates_render_high_priority_instructions_for_message_profile(self):
-        source_materials = [_source_material()]
+        segment = derive_parsed_source_segments([_source_material()])[0]
 
-        default_messages = build_node_extraction_messages(source_materials)
+        default_messages = build_node_extraction_messages(segment)
         deepseek_messages = build_node_extraction_messages(
-            source_materials,
+            segment,
             message_profile=DEEPSEEK_MESSAGE_PROFILE,
         )
 
@@ -598,7 +731,38 @@ class FakeRawJSONWorkflowModelClient:
         developer_prompt = messages[0].content
         if "Node Extraction Agent Step" in developer_prompt:
             self.prompt_markers.append("Node Extraction Agent Step")
-            return json.dumps({"skeletons": [self._skeleton.model_dump(mode="json")]})
+            return json.dumps(
+                {
+                    "drafts": [
+                        {
+                            "name": self._skeleton.name,
+                            "definition": self._skeleton.definition,
+                            "source_locator": self._skeleton.source_locators[0].model_dump(mode="json"),
+                            "grounding_note": self._skeleton.source_grounding_notes[0],
+                        }
+                    ]
+                }
+            )
+        if "Node Skeleton Reconciliation Agent Step" in developer_prompt:
+            self.prompt_markers.append("Node Skeleton Reconciliation Agent Step")
+            return json.dumps(
+                {
+                    "skeletons": [
+                        {
+                            "name": self._skeleton.name,
+                            "definition": self._skeleton.definition,
+                            "source_locators": [
+                                locator.model_dump(mode="json")
+                                for locator in self._skeleton.source_locators
+                            ],
+                            "grounding_notes": list(self._skeleton.source_grounding_notes),
+                            "supporting_draft_ids": ["draft_000001"],
+                            "supporting_segment_ids": ["seg_000001"],
+                            "merge_split_note": "Single draft kept as canonical skeleton.",
+                        }
+                    ]
+                }
+            )
         if "Node Rubric Authoring Agent Step" in developer_prompt:
             self.prompt_markers.append("Node Rubric Authoring Agent Step")
             node = _complete_candidate_node(self._skeleton)
@@ -613,6 +777,15 @@ class InvalidJSONGraphModelClient(FakeRawJSONWorkflowModelClient):
     def complete(self, *, messages):
         self.prompt_markers.append("Node Extraction Agent Step")
         return "I cannot return JSON for this request."
+
+
+class EmptyDraftGraphModelClient(FakeRawJSONWorkflowModelClient):
+    def complete(self, *, messages):
+        developer_prompt = messages[0].content
+        if "Node Extraction Agent Step" in developer_prompt:
+            self.prompt_markers.append("Node Extraction Agent Step")
+            return json.dumps({"drafts": []})
+        raise AssertionError(f"unexpected prompt after empty drafts: {developer_prompt}")
 
 
 def _complete_candidate_node(

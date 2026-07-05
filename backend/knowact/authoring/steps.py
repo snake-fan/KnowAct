@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+import re
 from typing import Callable
 from typing import Protocol
 
@@ -14,19 +15,30 @@ from backend.knowact.authoring.logging import (
 from backend.knowact.authoring.parsers.graph_authoring import (
     AuthoringOutputParseError,
     parse_edge_proposal_output,
-    parse_node_extraction_output,
+    parse_node_skeleton_reconciliation_output,
     parse_node_rubric_authoring_output,
+    parse_segment_node_extraction_output,
 )
+from backend.knowact.authoring.segments import derive_parsed_source_segments
 from backend.knowact.authoring.schemas import (
     EdgeProposalInput,
+    NodeSkeletonReconciliationRecord,
+    NodeSkeletonReconciliationResult,
     NodeRubricAuthoringInput,
     NodeRubricAuthoringResult,
     NodeRubricPatch,
+    ParsedSourceSegment,
+    ReconciledNodeSkeletonDraft,
+    SegmentNodeExtractionDraft,
+    SegmentNodeExtractionDraftPatch,
     SourceGroundedNodeSkeleton,
     SourceMaterial,
 )
 from backend.knowact.authoring.templates.edge_proposal import build_edge_proposal_messages
 from backend.knowact.authoring.templates.node_extraction import build_node_extraction_messages
+from backend.knowact.authoring.templates.node_skeleton_reconciliation import (
+    build_node_skeleton_reconciliation_messages,
+)
 from backend.knowact.authoring.templates.node_rubric_authoring import (
     build_node_rubric_authoring_messages,
 )
@@ -42,6 +54,19 @@ AgentStepOutputSerializer = Callable[[tuple[BaseModel, ...]], dict[str, object]]
 class NodeExtractionStep(Protocol):
     def run(self, source_materials: Sequence[SourceMaterial]) -> tuple[SourceGroundedNodeSkeleton, ...]:
         """Extract source-grounded node skeletons from authoritative source material."""
+
+
+class SegmentNodeExtractionStep(Protocol):
+    def run(self, segments: Sequence[ParsedSourceSegment]) -> tuple[SegmentNodeExtractionDraft, ...]:
+        """Extract thin node drafts from parsed source segments."""
+
+
+class NodeSkeletonReconciliationStep(Protocol):
+    def run(
+        self,
+        drafts: Sequence[SegmentNodeExtractionDraft],
+    ) -> NodeSkeletonReconciliationResult:
+        """Reconcile segment-level node drafts into source-grounded node skeletons."""
 
 
 class NodeRubricAuthoringStep(Protocol):
@@ -66,19 +91,57 @@ class LLMNodeExtractionStep:
         self.last_trace: WorkflowRunAgentTrace | None = None
 
     def run(self, source_materials: Sequence[SourceMaterial]) -> tuple[SourceGroundedNodeSkeleton, ...]:
-        return _run_traced_llm_step(
+        segment_step = LLMSegmentNodeExtractionStep(self._model_client)
+        reconciliation_step = LLMNodeSkeletonReconciliationStep(self._model_client)
+        drafts = segment_step.run(derive_parsed_source_segments(source_materials))
+        result = reconciliation_step.run(drafts)
+        self.last_trace = reconciliation_step.last_trace
+        return result.source_grounded_node_skeletons
+
+    def _set_last_trace(self, trace: WorkflowRunAgentTrace | None) -> None:
+        self.last_trace = trace
+
+
+class LLMSegmentNodeExtractionStep:
+    def __init__(self, model_client: ModelClient) -> None:
+        self._model_client = model_client
+        self.last_trace: WorkflowRunAgentTrace | None = None
+
+    def run(self, segments: Sequence[ParsedSourceSegment]) -> tuple[SegmentNodeExtractionDraft, ...]:
+        return _run_traced_segment_node_extraction_step(
             model_client=self._model_client,
-            messages=build_node_extraction_messages(
-                source_materials,
+            segments=tuple(segments),
+            trace_setter=self._set_last_trace,
+            message_profile=_message_profile_for(self._model_client),
+        )
+
+    def _set_last_trace(self, trace: WorkflowRunAgentTrace | None) -> None:
+        self.last_trace = trace
+
+
+class LLMNodeSkeletonReconciliationStep:
+    def __init__(self, model_client: ModelClient) -> None:
+        self._model_client = model_client
+        self.last_trace: WorkflowRunAgentTrace | None = None
+
+    def run(
+        self,
+        drafts: Sequence[SegmentNodeExtractionDraft],
+    ) -> NodeSkeletonReconciliationResult:
+        reconciled_drafts = _run_traced_llm_step(
+            model_client=self._model_client,
+            messages=build_node_skeleton_reconciliation_messages(
+                drafts,
                 message_profile=_message_profile_for(self._model_client),
             ),
-            parser=parse_node_extraction_output,
+            parser=parse_node_skeleton_reconciliation_output,
             output_serializer=lambda skeletons: {
                 "skeletons": _dump_models(skeletons),
             },
-            step_name="node_extraction",
+            step_name="node_skeleton_reconciliation",
             trace_setter=self._set_last_trace,
         )
+        return _build_node_skeleton_reconciliation_result(reconciled_drafts)
 
     def _set_last_trace(self, trace: WorkflowRunAgentTrace | None) -> None:
         self.last_trace = trace
@@ -191,6 +254,140 @@ def _run_traced_llm_step(
         )
     )
     return parsed_output
+
+
+def _run_traced_segment_node_extraction_step(
+    *,
+    model_client: ModelClient,
+    segments: tuple[ParsedSourceSegment, ...],
+    trace_setter: Callable[[WorkflowRunAgentTrace | None], None],
+    message_profile: ModelMessageProfile,
+) -> tuple[SegmentNodeExtractionDraft, ...]:
+    trace_setter(None)
+    drafts: list[SegmentNodeExtractionDraft] = []
+    batch_traces: list[WorkflowRunAgentTraceBatch] = []
+
+    for segment in segments:
+        raw_output = model_client.complete(
+            messages=build_node_extraction_messages(
+                segment,
+                message_profile=message_profile,
+            )
+        )
+        redacted_raw_output = redact_logged_text(raw_output)
+
+        try:
+            parsed_patches = parse_segment_node_extraction_output(raw_output)
+            segment_drafts = _segment_drafts_from_patches(
+                parsed_patches,
+                segment=segment,
+                start_index=len(drafts) + 1,
+            )
+        except Exception as exc:
+            batch_traces.append(
+                WorkflowRunAgentTraceBatch(
+                    batch_name=segment.segment_id,
+                    input_counts={"segments": 1, "char_count": segment.char_count},
+                    model_raw_output=redacted_raw_output,
+                    parser_result=WorkflowRunParserResult(
+                        status="failed",
+                        error=workflow_run_error_from_exception(
+                            exc,
+                            step_name="node_extraction",
+                        ),
+                    ),
+                )
+            )
+            trace_setter(
+                WorkflowRunAgentTrace(
+                    parser_result=WorkflowRunParserResult(
+                        status="failed",
+                        error=workflow_run_error_from_exception(
+                            exc,
+                            step_name="node_extraction",
+                        ),
+                    ),
+                    batch_traces=tuple(batch_traces),
+                )
+            )
+            raise
+
+        drafts.extend(segment_drafts)
+        batch_traces.append(
+            WorkflowRunAgentTraceBatch(
+                batch_name=segment.segment_id,
+                input_counts={"segments": 1, "char_count": segment.char_count},
+                model_raw_output=redacted_raw_output,
+                parser_result=WorkflowRunParserResult(
+                    status="succeeded",
+                    output={"drafts": _dump_models(tuple(segment_drafts))},
+                ),
+            )
+        )
+
+    trace_setter(
+        WorkflowRunAgentTrace(
+            parser_result=WorkflowRunParserResult(
+                status="succeeded",
+                output={"drafts": _dump_models(tuple(drafts))},
+            ),
+            batch_traces=tuple(batch_traces),
+        )
+    )
+    return tuple(drafts)
+
+
+def _segment_drafts_from_patches(
+    patches: Sequence[SegmentNodeExtractionDraftPatch],
+    *,
+    segment: ParsedSourceSegment,
+    start_index: int,
+) -> tuple[SegmentNodeExtractionDraft, ...]:
+    return tuple(
+        SegmentNodeExtractionDraft(
+            draft_id=f"draft_{index:06d}",
+            segment_id=segment.segment_id,
+            name=patch.name,
+            definition=patch.definition,
+            source_locator=patch.source_locator,
+            grounding_note=patch.grounding_note,
+        )
+        for index, patch in enumerate(patches, start=start_index)
+    )
+
+
+def _build_node_skeleton_reconciliation_result(
+    skeleton_drafts: Sequence[ReconciledNodeSkeletonDraft],
+) -> NodeSkeletonReconciliationResult:
+    records: list[NodeSkeletonReconciliationRecord] = []
+    skeletons: list[SourceGroundedNodeSkeleton] = []
+    for draft in skeleton_drafts:
+        node_id = _node_id_from_name(draft.name)
+        records.append(
+            NodeSkeletonReconciliationRecord(
+                id=node_id,
+                name=draft.name,
+                definition=draft.definition,
+                source_locators=draft.source_locators,
+                grounding_notes=draft.grounding_notes,
+                supporting_draft_ids=draft.supporting_draft_ids,
+                supporting_segment_ids=draft.supporting_segment_ids,
+                merge_split_note=draft.merge_split_note,
+            )
+        )
+        skeletons.append(
+            SourceGroundedNodeSkeleton(
+                id=node_id,
+                name=draft.name,
+                definition=draft.definition,
+                source_locators=draft.source_locators,
+                source_grounding_notes=draft.grounding_notes,
+            )
+        )
+    return NodeSkeletonReconciliationResult(
+        records=tuple(records),
+        source_grounded_node_skeletons=tuple(skeletons),
+    )
 
 
 def _run_traced_batched_node_rubric_authoring_step(
@@ -344,3 +541,11 @@ def _duplicates(values: Sequence[str]) -> set[str]:
             duplicates.add(value)
         seen.add(value)
     return duplicates
+
+
+def _node_id_from_name(name: str) -> str:
+    node_id = re.sub(r"[^A-Za-z0-9]+", "_", name.strip().lower()).strip("_")
+    node_id = re.sub(r"_+", "_", node_id)
+    if not node_id:
+        raise AuthoringOutputParseError(f"Could not derive node id from name: {name!r}")
+    return node_id

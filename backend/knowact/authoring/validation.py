@@ -4,15 +4,107 @@ from backend.knowact.core.graph import KnowledgeEdge, KnowledgeEdgeType, Knowled
 from backend.knowact.core.map import MasteryLevel
 from backend.knowact.validation.exceptions import KnowActValidationError
 from backend.knowact.validation.graph import validate_knowledge_graph
-from backend.knowact.authoring.schemas import SourceGroundedNodeSkeleton
+from backend.knowact.authoring.schemas import (
+    NodeSkeletonReconciliationResult,
+    ParsedSourceSegment,
+    SegmentNodeExtractionDraft,
+    SourceGroundedNodeSkeleton,
+)
 
 
 REQUIRED_MASTERY_LEVELS = {level.value for level in MasteryLevel}
 
 
+def validate_parsed_source_segments(
+    segments: Sequence[ParsedSourceSegment],
+) -> None:
+    if not segments:
+        raise KnowActValidationError("Parsed source segmentation produced no segments")
+
+    segment_ids = [segment.segment_id for segment in segments]
+    duplicate_ids = _duplicates(segment_ids)
+    if duplicate_ids:
+        raise KnowActValidationError(f"Duplicate parsed source segment ids: {sorted(duplicate_ids)}")
+
+    for segment in segments:
+        if len(segment.heading_path) > 3:
+            raise KnowActValidationError(
+                f"Parsed source segment {segment.segment_id} has heading_path deeper than three levels"
+            )
+        if segment.source_locator.source_id != segment.source_id:
+            raise KnowActValidationError(
+                f"Parsed source segment {segment.segment_id} source locator source_id does not match segment source_id"
+            )
+        if segment.char_count != len(segment.text):
+            raise KnowActValidationError(
+                f"Parsed source segment {segment.segment_id} char_count does not match text length"
+            )
+
+
+def validate_segment_node_extraction_drafts(
+    drafts: Sequence[SegmentNodeExtractionDraft],
+    segments: Sequence[ParsedSourceSegment],
+) -> None:
+    if not drafts:
+        raise KnowActValidationError("Segment node extraction produced no drafts")
+
+    draft_ids = [draft.draft_id for draft in drafts]
+    duplicate_ids = _duplicates(draft_ids)
+    if duplicate_ids:
+        raise KnowActValidationError(f"Duplicate segment node extraction draft ids: {sorted(duplicate_ids)}")
+
+    segments_by_id = {segment.segment_id: segment for segment in segments}
+    for draft in drafts:
+        segment = segments_by_id.get(draft.segment_id)
+        if segment is None:
+            raise KnowActValidationError(
+                f"Segment node extraction draft {draft.draft_id} references unknown segment {draft.segment_id}"
+            )
+        if draft.source_locator.source_id != segment.source_id:
+            raise KnowActValidationError(
+                f"Segment node extraction draft {draft.draft_id} source locator source_id does not match segment source_id"
+            )
+
+
+def validate_node_skeleton_reconciliation_result(
+    result: NodeSkeletonReconciliationResult,
+    drafts: Sequence[SegmentNodeExtractionDraft],
+) -> None:
+    validate_source_grounded_node_skeletons(result.source_grounded_node_skeletons)
+
+    if len(result.records) != len(result.source_grounded_node_skeletons):
+        raise KnowActValidationError("Node skeleton reconciliation record count must match skeleton count")
+
+    draft_ids = {draft.draft_id for draft in drafts}
+    segment_ids = {draft.segment_id for draft in drafts}
+    skeleton_ids = [record.id for record in result.records]
+    duplicate_ids = _duplicates(skeleton_ids)
+    if duplicate_ids:
+        raise KnowActValidationError(f"Duplicate reconciled node skeleton ids: {sorted(duplicate_ids)}")
+
+    for record, skeleton in zip(result.records, result.source_grounded_node_skeletons, strict=True):
+        if record.id != skeleton.id:
+            raise KnowActValidationError(
+                f"Node skeleton reconciliation record {record.id} does not match skeleton {skeleton.id}"
+            )
+        unknown_drafts = set(record.supporting_draft_ids) - draft_ids
+        if unknown_drafts:
+            raise KnowActValidationError(
+                f"Node skeleton reconciliation record {record.id} references unknown drafts: {sorted(unknown_drafts)}"
+            )
+        unknown_segments = set(record.supporting_segment_ids) - segment_ids
+        if unknown_segments:
+            raise KnowActValidationError(
+                f"Node skeleton reconciliation record {record.id} references unknown segments: {sorted(unknown_segments)}"
+            )
+
+
 def validate_source_grounded_node_skeletons(
     skeletons: Sequence[SourceGroundedNodeSkeleton],
 ) -> None:
+    if not skeletons:
+        raise KnowActValidationError("Source-grounded node skeleton validation received no skeletons")
+
     skeleton_ids = [skeleton.id for skeleton in skeletons]
     duplicate_ids = _duplicates(skeleton_ids)
     if duplicate_ids:

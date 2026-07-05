@@ -130,7 +130,7 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertEqual("openai", raw_log["model_provider"])
             self.assertEqual("fixture-model", raw_log["model_name"])
             self.assertEqual("openai", raw_log["message_profile"])
-            self.assertEqual(6, len(raw_log["entries"]))
+            self.assertEqual(10, len(raw_log["entries"]))
             self.assertEqual("storage/books/isl_python.md", raw_log["source_materials"][0]["parsed_markdown_uri"])
             self.assertEqual("hit", raw_log["source_materials"][0]["parsed_markdown_cache_status"])
             self.assertEqual(artifact_paths["workflow_log_uri"], raw_log["artifact_paths"]["workflow_log_uri"])
@@ -142,42 +142,64 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertNotIn("Cached Markdown", serialized_log)
             self.assertNotIn("Node Extraction Agent Step", serialized_log)
             entries_by_name = {entry["entry_name"]: entry for entry in raw_log["entries"]}
-            node_trace = entries_by_name["node_extraction"]["agent_trace"]
-            self.assertNotIn("model_raw_output", node_trace)
-            self.assertNotIn("output", node_trace["parser_result"])
             self.assertEqual(
-                "agent_traces/node_extraction/model_raw_output.txt",
-                node_trace["model_raw_output_uri"],
+                "intermediate/parsed_source_segments.json",
+                entries_by_name["derive_parsed_source_segments"]["artifact_uris"]["parsed_source_segments"],
             )
+            self.assertEqual(
+                "intermediate/segment_node_extraction_drafts.json",
+                entries_by_name["node_extraction"]["artifact_uris"]["segment_node_extraction_drafts"],
+            )
+            self.assertEqual(
+                "intermediate/node_skeleton_reconciliation.json",
+                entries_by_name["validate_source_grounded_node_skeletons"]["artifact_uris"][
+                    "node_skeleton_reconciliation"
+                ],
+            )
+            node_trace = entries_by_name["node_extraction"]["agent_trace"]
+            self.assertNotIn("output", node_trace["parser_result"])
             self.assertEqual(
                 "agent_traces/node_extraction/parser_output.json",
                 node_trace["parser_result"]["output_uri"],
             )
-            self.assertIn(
-                '"skeletons"',
-                (log_path.parent / node_trace["model_raw_output_uri"]).read_text(encoding="utf-8"),
+            segment_trace = node_trace["batch_traces"][0]
+            self.assertEqual(
+                "agent_traces/node_extraction/seg_000001/model_raw_output.txt",
+                segment_trace["model_raw_output_uri"],
             )
             self.assertEqual(
-                ["train_test_split"],
+                "agent_traces/node_extraction/seg_000001/parser_output.json",
+                segment_trace["parser_result"]["output_uri"],
+            )
+            self.assertIn(
+                '"drafts"',
+                (log_path.parent / segment_trace["model_raw_output_uri"]).read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                ["Train Test Split"],
                 [
-                    node["id"]
+                    node["name"]
                     for node in _load_json(log_path.parent / node_trace["parser_result"]["output_uri"])[
-                        "skeletons"
+                        "drafts"
                     ]
                 ],
             )
 
-            self.assertEqual(3, len(fake_model_client.calls))
+            self.assertEqual(4, len(fake_model_client.calls))
             self.assertIn("Node Extraction Agent Step", fake_model_client.calls[0][0].content)
-            self.assertIn("Node Rubric Authoring Agent Step", fake_model_client.calls[1][0].content)
-            self.assertIn("Edge Proposal Agent Step", fake_model_client.calls[2][0].content)
+            self.assertIn("Node Skeleton Reconciliation Agent Step", fake_model_client.calls[1][0].content)
+            self.assertIn("Node Rubric Authoring Agent Step", fake_model_client.calls[2][0].content)
+            self.assertIn("Edge Proposal Agent Step", fake_model_client.calls[3][0].content)
             extraction_prompt = _render_messages(fake_model_client.calls[0])
-            self.assertIn("Parsed Source Markdown", extraction_prompt)
+            self.assertIn("Parsed Source Segment", extraction_prompt)
             self.assertIn("Cached Markdown", extraction_prompt)
-            self.assertIn('source_id "isl_python"', extraction_prompt)
+            self.assertIn("Source: isl_python", extraction_prompt)
             self.assertNotIn("data:application/pdf;base64", extraction_prompt)
             self.assertNotIn("uploaded original PDF", extraction_prompt)
-            for messages in fake_model_client.calls[1:]:
+            reconciliation_prompt = _render_messages(fake_model_client.calls[1])
+            self.assertIn("Segment Node Extraction Drafts", reconciliation_prompt)
+            self.assertNotIn("Cached Markdown", reconciliation_prompt)
+            for messages in fake_model_client.calls[2:]:
                 rendered_prompt = _render_messages(messages)
                 self.assertNotIn("Cached Markdown", rendered_prompt)
                 self.assertNotIn("Parsed Source Markdown for source_id", rendered_prompt)
@@ -666,7 +688,7 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertNotIn("output", rubric_batch_trace["parser_result"])
             self.assertTrue((output_dir / rubric_batch_trace["model_raw_output_uri"]).exists())
             self.assertTrue((output_dir / rubric_batch_trace["parser_result"]["output_uri"]).exists())
-            self.assertEqual(2, len(fake_model_client.calls))
+            self.assertEqual(3, len(fake_model_client.calls))
 
     def test_authoring_api_rejects_paths_outside_storage(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -721,6 +743,7 @@ class V1AuthoringApiTest(unittest.TestCase):
 class FixtureGraphModelClient:
     def __init__(self):
         self.calls = []
+        self._last_source_id = "isl_python"
         self.message_profile = OPENAI_MESSAGE_PROFILE
         self.metadata = ModelClientMetadata(
             provider="openai",
@@ -730,11 +753,31 @@ class FixtureGraphModelClient:
         self._responses = [
             json.dumps(
                 {
+                    "drafts": [
+                        {
+                            "name": "Train Test Split",
+                            "definition": (
+                                "Separating data into training and test sets to estimate "
+                                "out-of-sample performance."
+                            ),
+                            "source_locator": {
+                                "source_id": "isl_python",
+                                "locator": "chapter_2",
+                                "note": "Development fixture locator",
+                            },
+                            "grounding_note": (
+                                "The fixture source introduces train/test split for estimating "
+                                "out-of-sample performance."
+                            ),
+                        }
+                    ]
+                }
+            ),
+            json.dumps(
+                {
                     "skeletons": [
                         {
-                            "id": "train_test_split",
                             "name": "Train Test Split",
-                            "type": "concept",
                             "definition": (
                                 "Separating data into training and test sets to estimate "
                                 "out-of-sample performance."
@@ -746,9 +789,12 @@ class FixtureGraphModelClient:
                                     "note": "Development fixture locator",
                                 }
                             ],
-                            "source_grounding_notes": [
+                            "grounding_notes": [
                                 "The fixture source introduces train/test split for estimating out-of-sample performance."
                             ],
+                            "supporting_draft_ids": ["draft_000001"],
+                            "supporting_segment_ids": ["seg_000001"],
+                            "merge_split_note": "Single draft kept as canonical skeleton.",
                         }
                     ]
                 }
@@ -785,18 +831,29 @@ class FixtureGraphModelClient:
 
     def complete(self, *, messages):
         self.calls.append(messages)
-        return self._responses[len(self.calls) - 1]
+        response_index = len(self.calls) - 1
+        if response_index == 0:
+            self._last_source_id = _source_id_from_prompt(_render_messages(messages))
+            payload = json.loads(self._responses[0])
+            payload["drafts"][0]["source_locator"]["source_id"] = self._last_source_id
+            return json.dumps(payload)
+        if response_index == 1:
+            payload = json.loads(self._responses[1])
+            payload["skeletons"][0]["source_locators"][0]["source_id"] = self._last_source_id
+            return json.dumps(payload)
+        return self._responses[response_index]
 
 
 class IncompleteNodeGraphModelClient(FixtureGraphModelClient):
     def __init__(self):
         super().__init__()
-        node_payload = json.loads(self._responses[1])
+        node_payload = json.loads(self._responses[2])
         del node_payload["nodes"][0]["levels"]["L5"]
         self._responses = [
             self._responses[0],
+            self._responses[1],
             json.dumps(node_payload),
-            self._responses[2],
+            self._responses[3],
         ]
 
 
@@ -878,6 +935,14 @@ def _load_json(path: Path):
 
 def _render_messages(messages) -> str:
     return "\n\n".join(message.content for message in messages)
+
+
+def _source_id_from_prompt(prompt: str) -> str:
+    marker = "Source: "
+    for line in prompt.splitlines():
+        if line.startswith(marker):
+            return line[len(marker):].split(" - ", 1)[0].strip()
+    return "isl_python"
 
 
 if __name__ == "__main__":

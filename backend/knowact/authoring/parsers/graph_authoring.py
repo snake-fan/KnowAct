@@ -6,6 +6,10 @@ from backend.knowact.authoring.schemas import (
     KnowledgeEdgeList,
     NodeRubricPatch,
     NodeRubricPatchList,
+    ReconciledNodeSkeletonDraft,
+    ReconciledNodeSkeletonDraftList,
+    SegmentNodeExtractionDraftPatch,
+    SegmentNodeExtractionDraftPatchList,
     SourceGroundedNodeSkeleton,
     SourceGroundedNodeSkeletonList,
 )
@@ -18,6 +22,14 @@ class AuthoringOutputParseError(RuntimeError):
 
 def parse_node_extraction_output(raw_output: str) -> tuple[SourceGroundedNodeSkeleton, ...]:
     return _parse_model(raw_output, SourceGroundedNodeSkeletonList).skeletons
+
+
+def parse_segment_node_extraction_output(raw_output: str) -> tuple[SegmentNodeExtractionDraftPatch, ...]:
+    return _parse_model(raw_output, SegmentNodeExtractionDraftPatchList).drafts
+
+
+def parse_node_skeleton_reconciliation_output(raw_output: str) -> tuple[ReconciledNodeSkeletonDraft, ...]:
+    return _parse_model(raw_output, ReconciledNodeSkeletonDraftList).skeletons
 
 
 def parse_node_rubric_authoring_output(raw_output: str) -> tuple[NodeRubricPatch, ...]:

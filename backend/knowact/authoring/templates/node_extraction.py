@@ -1,6 +1,4 @@
-from collections.abc import Sequence
-
-from backend.knowact.authoring.schemas import SourceMaterial
+from backend.knowact.authoring.schemas import ParsedSourceSegment
 from backend.knowact.authoring.templates.common import (
     AUTHORING_CONTEXT,
     JSON_ONLY_RULES,
@@ -8,14 +6,13 @@ from backend.knowact.authoring.templates.common import (
     SOURCE_READING_RULES,
     STOP_AFTER_JSON_RULES,
     TASK_DATA_BOUNDARY_RULES,
-    render_parsed_source_markdown,
     render_sections,
 )
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage, ModelMessageProfile
 
 
 def build_node_extraction_messages(
-    source_materials: Sequence[SourceMaterial],
+    segment: ParsedSourceSegment,
     *,
     message_profile: ModelMessageProfile = OPENAI_MESSAGE_PROFILE,
 ) -> tuple[ModelMessage, ...]:
@@ -29,8 +26,8 @@ You are the KnowAct Node Extraction Agent Step.
 """.strip(),
                 """
 Objective:
-Extract reviewable Source-Grounded Node Skeletons that can later become benchmark Knowledge Nodes.
-Success means every returned skeleton is source-grounded, diagnosable, moderately granular, and parseable by the exact JSON contract.
+Extract thin Segment Node Extraction Drafts from one bounded Parsed Source Segment.
+Success means every returned draft is source-grounded, diagnosable, moderately granular, and parseable by the exact JSON contract.
 """.strip(),
                 AUTHORING_CONTEXT,
                 TASK_DATA_BOUNDARY_RULES,
@@ -38,62 +35,56 @@ Success means every returned skeleton is source-grounded, diagnosable, moderatel
                 NODE_DESIGN_RULES,
                 """
 Input boundary:
-This step extracts only Source-Grounded Node Skeletons from Parsed Source Markdown.
-It is not the rubric-writing step and it is not the edge proposal step.
-The Parsed Source Markdown is the only source-material text available to this step.
+This step reads exactly one Parsed Source Segment.
+It is not the reconciliation step, rubric-writing step, or edge proposal step.
+The segment text is the only source-material text available to this call.
 """.strip(),
                 """
 Process:
-1. Scan the Parsed Source Markdown for stable concepts that matter for active knowledge-state diagnosis.
-2. Merge obvious duplicates and near-synonyms into one canonical skeleton id.
-3. Keep only concepts with enough source grounding to support a reviewer locator and concise source_grounding_notes.
-4. Prefer source-grounded definitions, boundaries, contrasts, dependencies, examples, and diagnostic clues over broad chapter headings or isolated notation.
-5. Remove anything that would belong to rubric authoring, edge proposal, user-state authoring, or evidence authoring.
+1. Read the segment text and identify stable concepts that matter for active knowledge-state diagnosis.
+2. Return only concepts grounded in this segment.
+3. Keep drafts thin: name, definition, source_locator, and grounding_note only.
+4. Prefer source-grounded definitions, boundaries, contrasts, dependencies, examples, and diagnostic clues over broad headings or isolated notation.
+5. Remove anything that belongs to reconciliation, rubric authoring, edge proposal, user-state authoring, or evidence authoring.
 """.strip(),
                 """
 Decision rules:
-- Preserve a clear source trail for every skeleton.
+- Preserve a clear source trail for every draft.
 - Prefer stable domain concepts over section headings, implementation details, examples, or isolated formula notation.
-- Use snake_case ids that are stable and meaningful.
-- Write definitions from the Parsed Source Markdown, not from outside memory.
-- Write concise source_grounding_notes that preserve the source-grounded facts later workflow steps need without copying long source passages.
-- If a concept cannot be grounded in the Parsed Source Markdown, omit it.
-- If no concept is sufficiently grounded, return {"skeletons": []}.
-- Do not output diagnostic_goal, levels, diagnostic_signals, simulator_behavior, edges, user states, or evidence.
+- Write definitions from the provided segment text, not from outside memory.
+- Write concise grounding_note values that preserve the source-grounded facts later workflow steps need without copying long source passages.
+- If a concept cannot be grounded in the segment text, omit it.
+- If the segment contains no sufficiently grounded diagnosable concept, return {"drafts": []}.
+- A soft target is 8-12 drafts or fewer for this segment, but include more if the segment clearly supports them.
+- Do not output id, draft_id, segment_id, diagnostic_goal, levels, diagnostic_signals, simulator_behavior, edges, user states, or evidence.
 """.strip(),
                 """
 Output contract:
 Return JSON with this exact top-level shape:
 {
-  "skeletons": [
+  "drafts": [
     {
-      "id": "stable_snake_case_id",
       "name": "Human Readable Name",
-      "type": "concept",
       "definition": "Concise source-grounded definition.",
-      "source_locators": [
-        {
-          "source_id": "same_source_id_as_input",
-          "locator": "chapter_or_section_or_page_reference",
-          "note": "optional short reviewer note"
-        }
-      ],
-      "source_grounding_notes": [
-        "Concise paraphrased source-grounding note for downstream rubric and edge steps."
-      ]
+      "source_locator": {
+        "source_id": "same_source_id_as_input",
+        "locator": "same_or_more_precise_location_as_input",
+        "note": "optional short reviewer note"
+      },
+      "grounding_note": "Concise paraphrased source-grounding note."
     }
   ]
 }
 
-The complete response must be a JSON object with exactly one top-level key: "skeletons".
-"skeletons" must be an array.
+The complete response must be a JSON object with exactly one top-level key: "drafts".
+"drafts" must be an array.
 """.strip(),
                 """
 Final check before output:
-- Each skeleton has a nonblank id, name, type, definition, source_locators, and source_grounding_notes.
-- Each locator uses a provided source_id and a reviewer-usable locator.
-- No skeleton relies on outside memory or invented source metadata.
-- No output contains user-state, evidence, candidate-status, edge, or rubric fields.
+- Each draft has nonblank name, definition, source_locator, and grounding_note.
+- Each locator uses the provided source id and a reviewer-usable locator.
+- No draft relies on outside memory or invented source metadata.
+- No output contains ids, user-state, evidence, candidate-status, edge, or rubric fields.
 """.strip(),
                 STOP_AFTER_JSON_RULES,
                 JSON_ONLY_RULES,
@@ -102,17 +93,10 @@ Final check before output:
         ModelMessage(
             role="user",
             content=render_sections(
-                "Extract reviewable Source-Grounded Node Skeletons from Parsed Source Markdown.",
-                render_parsed_source_markdown(source_materials),
-                """
-Before returning JSON, check each skeleton:
-- Is it source-grounded by an explicit locator?
-- Is it explainable and diagnosable?
-- Is it neither too broad nor too tiny?
-- Is it stable enough to appear in a reviewed benchmark graph?
-- Does it include concise source_grounding_notes that capture definition, use, boundary, contrast, dependency, or diagnostic clues when source-grounded?
-- Is it free of user-state, evidence, candidate-status, and edge data?
-""".strip(),
+                "Extract reviewable Segment Node Extraction Drafts from this Parsed Source Segment.",
+                f"Source: {segment.source_id} - {segment.source_title}",
+                f"Location: {segment.location}",
+                f"Text:\n\n{segment.text}",
             ),
         ),
     )

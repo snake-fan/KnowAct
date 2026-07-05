@@ -16,20 +16,29 @@ from backend.knowact.authoring.logging import (
 from backend.knowact.authoring.schemas import (
     EdgeProposalInput,
     GraphAuthoringWorkflowResult,
+    NodeSkeletonReconciliationResult,
     NodeRubricAuthoringInput,
     NodeRubricAuthoringResult,
+    ParsedSourceSegment,
+    SegmentNodeExtractionDraft,
     SourceMaterial,
 )
+from backend.knowact.authoring.segments import derive_parsed_source_segments
 from backend.knowact.authoring.steps import (
     EdgeProposalStep,
     NodeExtractionStep,
+    NodeSkeletonReconciliationStep,
     NodeRubricAuthoringStep,
+    SegmentNodeExtractionStep,
     get_authoring_agent_step_trace,
 )
 from backend.knowact.authoring.validation import (
     canonicalize_candidate_edges,
     validate_candidate_edges,
     validate_complete_candidate_nodes,
+    validate_node_skeleton_reconciliation_result,
+    validate_parsed_source_segments,
+    validate_segment_node_extraction_drafts,
     validate_source_grounded_node_skeletons,
 )
 from backend.knowact.llm.client import ModelClientMetadata
@@ -41,6 +50,15 @@ _LOGGER = get_knowact_logger("authoring.workflow")
 
 
 class IntermediateArtifactWriter(Protocol):
+    def write_parsed_source_segments(self, items) -> str:
+        """Persist validated parsed source segments and return a run-relative URI."""
+
+    def write_segment_node_extraction_drafts(self, items) -> str:
+        """Persist validated segment-level node drafts and return a run-relative URI."""
+
+    def write_node_skeleton_reconciliation(self, items) -> str:
+        """Persist validated node skeleton reconciliation records and return a run-relative URI."""
+
     def write_source_grounded_node_skeletons(self, items) -> str:
         """Persist validated source-grounded skeletons and return a run-relative URI."""
 
@@ -58,12 +76,23 @@ class GraphAuthoringAgentWorkflow:
     def __init__(
         self,
         *,
-        node_extraction_step: NodeExtractionStep,
+        node_extraction_step: NodeExtractionStep | None = None,
+        segment_node_extraction_step: SegmentNodeExtractionStep | None = None,
+        node_skeleton_reconciliation_step: NodeSkeletonReconciliationStep | None = None,
         node_rubric_authoring_step: NodeRubricAuthoringStep,
         edge_proposal_step: EdgeProposalStep,
         model_metadata: ModelClientMetadata | None = None,
     ) -> None:
+        if node_extraction_step is None and (
+            segment_node_extraction_step is None or node_skeleton_reconciliation_step is None
+        ):
+            raise ValueError(
+                "Either node_extraction_step or both segment_node_extraction_step and "
+                "node_skeleton_reconciliation_step must be provided"
+            )
         self._node_extraction_step = node_extraction_step
+        self._segment_node_extraction_step = segment_node_extraction_step
+        self._node_skeleton_reconciliation_step = node_skeleton_reconciliation_step
         self._node_rubric_authoring_step = node_rubric_authoring_step
         self._edge_proposal_step = edge_proposal_step
         self._model_metadata = model_metadata
@@ -96,28 +125,11 @@ class GraphAuthoringAgentWorkflow:
             model_metadata=self._model_metadata,
         )
 
-        skeletons = _run_logged_entry(
-            builder,
-            entry_name="node_extraction",
-            entry_type="agent_step",
-            input_counts={"source_materials": len(source_materials)},
+        skeletons = self._run_source_grounded_node_skeleton_authoring(
+            builder=builder,
+            source_materials=source_materials,
             run_id=run_id,
-            operation=lambda: self._node_extraction_step.run(source_materials),
-            output_counts=lambda value: {"skeletons": len(value)},
-            trace_getter=lambda: get_authoring_agent_step_trace(self._node_extraction_step),
-        )
-        _run_logged_entry(
-            builder,
-            entry_name="validate_source_grounded_node_skeletons",
-            entry_type="validation_checkpoint",
-            input_counts={"skeletons": len(skeletons)},
-            run_id=run_id,
-            operation=lambda: validate_source_grounded_node_skeletons(skeletons),
-            validation_result="passed",
-            artifact_uris=lambda _: _write_source_grounded_node_skeleton_artifacts(
-                intermediate_artifact_writer,
-                skeletons,
-            ),
+            intermediate_artifact_writer=intermediate_artifact_writer,
         )
 
         rubric_result = _run_logged_entry(
@@ -197,6 +209,133 @@ class GraphAuthoringAgentWorkflow:
             run_log=builder.succeeded(),
         )
 
+    def _run_source_grounded_node_skeleton_authoring(
+        self,
+        *,
+        builder: GraphAuthoringRunLogBuilder,
+        source_materials: tuple[SourceMaterial, ...],
+        run_id: str,
+        intermediate_artifact_writer: IntermediateArtifactWriter | None,
+    ):
+        if self._segment_node_extraction_step is None or self._node_skeleton_reconciliation_step is None:
+            if self._node_extraction_step is None:
+                raise RuntimeError("Graph authoring workflow has no node extraction path")
+            return self._run_legacy_node_extraction(
+                builder=builder,
+                source_materials=source_materials,
+                run_id=run_id,
+                intermediate_artifact_writer=intermediate_artifact_writer,
+            )
+
+        segments = _run_logged_entry(
+            builder,
+            entry_name="derive_parsed_source_segments",
+            entry_type="deterministic_step",
+            input_counts={"source_materials": len(source_materials)},
+            run_id=run_id,
+            operation=lambda: derive_parsed_source_segments(source_materials),
+            output_counts=lambda value: {"segments": len(value)},
+            artifact_uris=lambda value: _write_parsed_source_segment_artifacts(
+                intermediate_artifact_writer,
+                value,
+            ),
+        )
+        _run_logged_entry(
+            builder,
+            entry_name="validate_parsed_source_segments",
+            entry_type="validation_checkpoint",
+            input_counts={"segments": len(segments)},
+            run_id=run_id,
+            operation=lambda: validate_parsed_source_segments(segments),
+            validation_result="passed",
+        )
+
+        drafts = _run_logged_entry(
+            builder,
+            entry_name="node_extraction",
+            entry_type="agent_step",
+            input_counts={"segments": len(segments)},
+            run_id=run_id,
+            operation=lambda: self._segment_node_extraction_step.run(segments),
+            output_counts=lambda value: {"segment_node_extraction_drafts": len(value)},
+            artifact_uris=lambda value: _write_segment_node_extraction_draft_artifacts(
+                intermediate_artifact_writer,
+                value,
+            ),
+            trace_getter=lambda: get_authoring_agent_step_trace(self._segment_node_extraction_step),
+        )
+        _run_logged_entry(
+            builder,
+            entry_name="validate_segment_node_extraction_drafts",
+            entry_type="validation_checkpoint",
+            input_counts={"segments": len(segments), "segment_node_extraction_drafts": len(drafts)},
+            run_id=run_id,
+            operation=lambda: validate_segment_node_extraction_drafts(drafts, segments),
+            validation_result="passed",
+        )
+
+        reconciliation_result = _run_logged_entry(
+            builder,
+            entry_name="node_skeleton_reconciliation",
+            entry_type="agent_step",
+            input_counts={"segment_node_extraction_drafts": len(drafts)},
+            run_id=run_id,
+            operation=lambda: self._node_skeleton_reconciliation_step.run(drafts),
+            output_counts=lambda value: {"skeletons": len(value.source_grounded_node_skeletons)},
+            trace_getter=lambda: get_authoring_agent_step_trace(self._node_skeleton_reconciliation_step),
+        )
+        skeletons = reconciliation_result.source_grounded_node_skeletons
+        _run_logged_entry(
+            builder,
+            entry_name="validate_source_grounded_node_skeletons",
+            entry_type="validation_checkpoint",
+            input_counts={"skeletons": len(skeletons), "segment_node_extraction_drafts": len(drafts)},
+            run_id=run_id,
+            operation=lambda: validate_node_skeleton_reconciliation_result(
+                reconciliation_result,
+                drafts,
+            ),
+            validation_result="passed",
+            artifact_uris=lambda _: _write_reconciled_node_skeleton_artifacts(
+                intermediate_artifact_writer,
+                reconciliation_result,
+            ),
+        )
+        return skeletons
+
+    def _run_legacy_node_extraction(
+        self,
+        *,
+        builder: GraphAuthoringRunLogBuilder,
+        source_materials: tuple[SourceMaterial, ...],
+        run_id: str,
+        intermediate_artifact_writer: IntermediateArtifactWriter | None,
+    ):
+        skeletons = _run_logged_entry(
+            builder,
+            entry_name="node_extraction",
+            entry_type="agent_step",
+            input_counts={"source_materials": len(source_materials)},
+            run_id=run_id,
+            operation=lambda: self._node_extraction_step.run(source_materials),
+            output_counts=lambda value: {"skeletons": len(value)},
+            trace_getter=lambda: get_authoring_agent_step_trace(self._node_extraction_step),
+        )
+        _run_logged_entry(
+            builder,
+            entry_name="validate_source_grounded_node_skeletons",
+            entry_type="validation_checkpoint",
+            input_counts={"skeletons": len(skeletons)},
+            run_id=run_id,
+            operation=lambda: validate_source_grounded_node_skeletons(skeletons),
+            validation_result="passed",
+            artifact_uris=lambda _: _write_source_grounded_node_skeleton_artifacts(
+                intermediate_artifact_writer,
+                skeletons,
+            ),
+        )
+        return skeletons
+
 
 def _run_logged_entry(
     builder: GraphAuthoringRunLogBuilder,
@@ -266,6 +405,48 @@ def _run_logged_entry(
         validation_result,
     )
     return value
+
+
+def _write_parsed_source_segment_artifacts(
+    writer: IntermediateArtifactWriter | None,
+    segments: Sequence[ParsedSourceSegment],
+) -> dict[str, str]:
+    if writer is None:
+        return {}
+    return {
+        "parsed_source_segments": writer.write_parsed_source_segments(
+            tuple(segments)
+        )
+    }
+
+
+def _write_segment_node_extraction_draft_artifacts(
+    writer: IntermediateArtifactWriter | None,
+    drafts: Sequence[SegmentNodeExtractionDraft],
+) -> dict[str, str]:
+    if writer is None:
+        return {}
+    return {
+        "segment_node_extraction_drafts": writer.write_segment_node_extraction_drafts(
+            tuple(drafts)
+        )
+    }
+
+
+def _write_reconciled_node_skeleton_artifacts(
+    writer: IntermediateArtifactWriter | None,
+    reconciliation_result: NodeSkeletonReconciliationResult,
+) -> dict[str, str]:
+    if writer is None:
+        return {}
+    return {
+        "node_skeleton_reconciliation": writer.write_node_skeleton_reconciliation(
+            reconciliation_result.records
+        ),
+        "source_grounded_node_skeletons": writer.write_source_grounded_node_skeletons(
+            reconciliation_result.source_grounded_node_skeletons
+        ),
+    }
 
 
 def _write_source_grounded_node_skeleton_artifacts(

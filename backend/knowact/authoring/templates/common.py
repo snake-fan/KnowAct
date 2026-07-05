@@ -18,11 +18,11 @@ Keep these domain boundaries explicit:
 
 SOURCE_READING_RULES = """
 Source-reading rules:
-- Use only the provided Parsed Source Markdown as authoritative source material.
+- Use only the provided source text as authoritative source material.
 - Do not brainstorm nodes from model memory.
 - Every skeleton must be traceable to at least one source_id and locator.
 - Source locators are lightweight audit references, not quote stores. Chapter, section, page, slide, paragraph, or equivalent locator is enough when it lets a reviewer find the concept.
-- Do not invent quotes, exact spans, page numbers, or source metadata that are not visible in the Parsed Source Markdown or provided as source_id metadata.
+- Do not invent quotes, exact spans, page numbers, or source metadata that are not visible in the provided source text or source_id metadata.
 """.strip()
 
 

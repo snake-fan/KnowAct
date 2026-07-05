@@ -167,16 +167,17 @@ core
 
 建议模块：
 
-- `schemas.py`: authoring-only schemas, including `SourceMaterial`, `Source-Grounded Node Skeleton` with concise source grounding notes, step input/result DTOs, list wrappers, and workflow result objects.
+- `schemas.py`: authoring-only schemas, including `SourceMaterial`, `Parsed Source Segment`, `Segment Node Extraction Draft`, `Source-Grounded Node Skeleton` with concise source grounding notes, step input/result DTOs, list wrappers, and workflow result objects.
 - `workflow.py`: `GraphAuthoringAgentWorkflow` orchestration, including step order, dependency direction, and validation checkpoints.
-- `steps.py`: graph authoring step protocols and concrete step implementations. `Node Extraction Agent Step`, `Node Rubric Authoring Agent Step`, and `Edge Proposal Agent Step` can live in this single module; they are workflow responsibilities, not required one-file-per-step modules.
+- `steps.py`: graph authoring step protocols and concrete step implementations. `Node Extraction Agent Step`, `Node Skeleton Reconciliation Agent Step`, `Node Rubric Authoring Agent Step`, and `Edge Proposal Agent Step` can live in this single module; they are workflow responsibilities, not required one-file-per-step modules.
 - `templates/common.py`: shared graph-authoring prompt components such as source-grounding rules, node design rules, MasteryScale guidance, edge type definitions, schema/output contracts, and JSON serialization helpers.
-- `templates/node_extraction.py`, `templates/node_rubric_authoring.py`, `templates/edge_proposal.py`: prompt/message builders for each Graph Authoring Agent Workflow step. Step-specific prompt content should live in the step-specific template file; do not add compatibility re-export modules for old aggregate template names.
-- `parsers/graph_authoring.py`: raw model-output parsers that turn JSON text into source skeletons, candidate nodes, and candidate edges.
-- `validation.py`: authoring-specific validation around skeleton grounding, complete candidate node rubrics, and candidate edge graph validity.
+- `templates/node_extraction.py`, `templates/node_skeleton_reconciliation.py`, `templates/node_rubric_authoring.py`, `templates/edge_proposal.py`: prompt/message builders for each Graph Authoring Agent Workflow step. Step-specific prompt content should live in the step-specific template file; do not add compatibility re-export modules for old aggregate template names.
+- `parsers/graph_authoring.py`: raw model-output parsers that turn JSON text into segment node drafts, reconciled source skeletons, candidate nodes, and candidate edges.
+- `validation.py`: authoring-specific validation around parsed source segments, segment grounding, skeleton reconciliation provenance, complete candidate node rubrics, and candidate edge graph validity.
 - `logging.py`: authoring run log schemas and helpers for structured, redacted `Graph Authoring Run Log` records, including links to external agent-step raw model outputs and parser outputs for local debugging.
 - `output.py`: candidate graph file export, especially `candidate_nodes.json` and `candidate_edges.json`, plus sidecar `workflow_log.json` export.
-- `sources.py`: authoring source preparation, including resolving cached `Parsed Source Markdown`, splitting PDFs that exceed MinerU's per-task page limit into local chunks, temporarily publishing local PDFs or PDF chunks through private Aliyun OSS signed URLs for MinerU standard-mode parsing, joining chunk Markdown in page order, calling MinerU when a same-directory same-stem Markdown file is missing or explicitly regenerated, and keeping source parsing outside the `llm/` completion boundary.
+- `sources.py`: authoring source preparation, including resolving cached `Parsed Source Markdown`, splitting PDFs that exceed MinerU's per-task page limit into local chunks, temporarily publishing local PDFs or PDF chunks through private Aliyun OSS signed URLs for MinerU standard-mode parsing, joining chunk Markdown in page order, and calling MinerU when a same-directory same-stem Markdown file is missing or explicitly regenerated.
+- `segments.py`: deterministic `Parsed Source Markdown` to `Parsed Source Segments` derivation, including shallow heading-path parsing, adjacent sibling merging for small sections, paragraph-level splitting for oversized sections, `char_count`, and source locator preservation. Source parsing and segmentation both stay outside the `llm/` completion boundary.
 - `openai_workflow.py`: shared graph authoring workflow wiring behind the `ModelClient` interface, with provider selection for OpenAI and DeepSeek clients.
 - `map_authoring.py` and `map_authoring_output.py`: initial Candidate Knowledge Map generation workflow, deterministic assembly, blocking validation, and debug artifact export. Reviewed-map promotion support lives with the shared `review_promotion.py` promotion orchestration and reviewed-map storage helpers. The initial map-authoring contract is intentionally single-map: one generation run receives `benchmark_domain`, one reviewed `graph_version`, one confirmed `user_id`, optional `run_id`, and `client_provider`. `map_id` is assigned only during reviewed-map promotion. The normal orchestration starts from a benchmark-author supplied rough user description, generates a reviewable `Profile Context`, and applies separate `Profile Context Validation` and explicit benchmark-author `Profile Context Confirmation` gates before invoking candidate-map generation. Candidate-map generation remains an independently callable authoring capability for focused debugging. Cohort generation remains an outer orchestration concern that can repeat the single-map contract.
 - Candidate Knowledge Map generation now supports reviewed-graph scale through contiguous evidence-authoring batches in stable reviewed-node order. It exposes identity-based generation, artifact inspection, and explicit promotion, defaults to `evidence_batch_size = 5` with a positive request-level override, applies one request-level `sampling_temperature` to the outline step and every evidence batch, and writes generation-time edge-consistency warnings. Candidate-map run ids do not overwrite existing run directories; retry creates a new run id.
@@ -235,16 +236,27 @@ core
 
 - graph authoring final output 只能是 `candidate_nodes.json` 和 `candidate_edges.json` 两个 JSON list files。
 - `workflow_log.json` 可以作为 run directory 中的 sidecar artifact 存在，并记录 agent step 状态、counts、错误和 trace artifact URI；LLM raw output 与 parser output 分别写入 `agent_traces/{step}/model_raw_output.txt` 与 `agent_traces/{step}/parser_output.json`。这些都不是 candidate graph final review output，也不改变 node/edge JSON list schema。
-- `intermediate/` 可以作为 run directory 中的 structured replay/debug artifact directory 存在，保存通过相邻 validation checkpoint 的 workflow intermediate artifacts，例如 `source_grounded_node_skeletons.json`、`node_rubric_patches.json`、`candidate_nodes_pre_edge.json` 和 canonicalized candidate edge snapshots；这些不是 candidate graph final review output。
+- Segment-level node extraction traces should be keyed by segment id, for example `agent_traces/node_extraction/{segment_id}/model_raw_output.txt` and `parser_output.json`, or an equivalent per-segment batch trace.
+- Parsed source segment ids are run-local sequential ids in document order, for example `seg_000001`; they are used for trace, debug, and replay, while reviewer-facing location remains the `Source Locator`.
+- Initial segmentation thresholds stay as internal code defaults; `POST /api/authoring/graph-candidates` does not expose request parameters for segment maximum character length, minimum size, or overlap.
+- Segment sizing uses simple character length as the context-size proxy, and segment artifacts should record `char_count`; do not add a tokenizer dependency or provider-specific token counting for the initial slice.
+- Node Skeleton Reconciliation keeps one global step trace, for example `agent_traces/node_skeleton_reconciliation/model_raw_output.txt` and `parser_output.json`; merge and split provenance belongs in `intermediate/node_skeleton_reconciliation.json`.
+- `intermediate/` 可以作为 run directory 中的 structured replay/debug artifact directory 存在，保存通过相邻 validation checkpoint 的 workflow intermediate artifacts，例如 `parsed_source_segments.json`、`segment_node_extraction_drafts.json`、`node_skeleton_reconciliation.json`、`source_grounded_node_skeletons.json`、`node_rubric_patches.json`、`candidate_nodes_pre_edge.json` 和 canonicalized candidate edge snapshots；这些不是 candidate graph final review output。
+- `parsed_source_segments.json` stores each segment's full `text` for replay/debug. Downstream draft, reconciliation, rubric, and edge intermediate artifacts reference segment ids, source locators, notes, and provenance, but do not copy segment text or full source text.
+- `segment_node_extraction_drafts.json` stores intentionally thin drafts with only `draft_id`, `segment_id`, `name`, `definition`, `source_locator`, and `grounding_note`. Segment-level extraction must not generate rubrics, edges, type taxonomy, difficulty labels, prerequisite claims, or other downstream judgments.
+- A valid parsed source segment may have an empty draft list when it contains no diagnosable concept; this is distinct from a failed, unparseable, or ungrounded segment output.
+- The whole graph-authoring run fails if all valid segments together produce zero drafts; reconciliation needs at least one draft input and downstream skeleton/candidate artifacts must not be written in that case.
+- `source_grounded_node_skeletons.json` stores clean rubric-step input only: `id`, `name`, `definition`, `source_locators`, and `source_grounding_notes`. Workflow code derives `id` deterministically from the reconciled canonical `name`, and that `id` is the final `KnowledgeNode.id`; do not add a separate `skeleton_id` to `node_id` mapping. Duplicate derived ids are reconciliation failures and should fail validation rather than being silently suffixed. Reconciliation provenance such as supporting draft ids, supporting segment ids, and merge or split notes stays in `node_skeleton_reconciliation.json` and is not passed to the rubric prompt.
 - `candidate` 状态不写进 node/edge object。
-- Node Extraction Agent Step 是唯一接收 full `Parsed Source Markdown` / `SourceMaterial.text` 的 LLM step；rubric authoring 和 edge proposal 的 step protocol 与 prompt template 不接收 source-material text 参数。
+- Full `Parsed Source Markdown` 会先被切成 `Parsed Source Segments`；Node Extraction Agent Step 只接收 segment-level `Source`、`Location` 和 `Text`，不接收整本文本。
+- Node Skeleton Reconciliation Agent Step 读取结构化 `Segment Node Extraction Drafts` 和 source-grounding metadata，不回读 segment text 或 full source text。
 - rubric authoring 只读取 source-grounded skeletons、source locators、source grounding notes 和 MasteryScale，不读取 unreviewed candidate edges。
 - edge proposal 可以读取 complete candidate nodes、rubrics、source locators 和 source grounding notes，但仍然只产生 candidate edges。
 - `workflow.py` 负责编排 step 顺序和每步后的 validation；具体 step 只负责把自己的 template、model client 和 parser 连接起来。
 - `workflow.py` 判定 intermediate artifact 何时可信并调用 `output.py` helper 写盘；step implementation 不直接写 candidate graph 或 intermediate artifact files。
-- `steps.py` 可以统一承载多个 step 接口和 LLM step 实现；只有在职责真正膨胀时才拆出 `node_extraction.py`、`rubric_authoring.py` 或 `edge_proposal.py`。
-- template 与 parser 不混写在 step class 中。每个 step 的 prompt 差异通过 `templates/node_extraction.py`、`templates/node_rubric_authoring.py`、`templates/edge_proposal.py` 表达，共享约束放在 `templates/common.py`；parser 仍可通过 `parsers/graph_authoring.py` 统一表达 raw model output 到 structured objects 的转换。
-- rubric authoring 的 LLM output 只包含 node-level rubric patch；`id`、`name`、`type`、`definition` 和 `source_locators` 由 workflow 按 skeleton id 确定性合并，避免让模型重复拷贝 source-grounded 字段。
+- `steps.py` 可以统一承载多个 step 接口和 LLM step 实现；只有在职责真正膨胀时才拆出 `node_extraction.py`、`node_skeleton_reconciliation.py`、`rubric_authoring.py` 或 `edge_proposal.py`。
+- template 与 parser 不混写在 step class 中。每个 step 的 prompt 差异通过 `templates/node_extraction.py`、`templates/node_skeleton_reconciliation.py`、`templates/node_rubric_authoring.py`、`templates/edge_proposal.py` 表达，共享约束放在 `templates/common.py`；parser 仍可通过 `parsers/graph_authoring.py` 统一表达 raw model output 到 structured objects 的转换。
+- rubric authoring 的 LLM output 只包含 node-level rubric patch；`id`、`name`、`type`、`definition` 和 `source_locators` 由 workflow 按 source-grounded skeleton `id` 确定性合并，避免让模型重复拷贝 source-grounded 字段。
 - Large node-rubric authoring can be batched inside the concrete step implementation. The workflow still records one `node_rubric_authoring` entry, while the step trace may contain per-batch raw/parser artifacts.
 
 ### `llm/`
@@ -266,8 +278,8 @@ core
 - model client 返回原始模型文本；workflow-specific parser 负责把输出解析成 domain schema。
 - hidden map、hidden evidence、visible transcript 的边界在调用前显式构造。
 - Phase 2 初始实现使用 OpenAI Python SDK-compatible adapters，通过 `.env.example` 中记录的环境变量配置 OpenAI 或 DeepSeek API key、model、base URL 和 timeout；`POST /api/authoring/graph-candidates`、`POST /api/simulator/turn` 和 `POST /api/tested-agents/simple-llm/turn-test` 通过 `client_provider` 在请求级选择 provider，默认 `openai`。
-- 测试阶段的 PDF source material 可以放在仓库根目录 `storage/` 下，由 `/api/authoring` 按相对路径选择；authoring source preparation 先复用或生成同目录同 stem 的 `Parsed Source Markdown`，再通过普通 text `ModelClient` 发送给 LLM。
-- v1 graph authoring 不使用 PDF base64 `input_file`、OpenAI Files API `file_id` 或 PDF-specific LLM client path；MinerU 解析属于 `authoring/sources.py` 的 source preparation。
+- 测试阶段的 PDF source material 可以放在仓库根目录 `storage/` 下，由 `/api/authoring` 按相对路径选择；authoring source preparation 先复用或生成同目录同 stem 的 `Parsed Source Markdown`，再派生 `Parsed Source Segments`，由后续 LLM steps 通过普通 text `ModelClient` 消费 segment 或结构化 intermediate artifacts。
+- v1 graph authoring 不使用 PDF base64 `input_file`、OpenAI Files API `file_id` 或 PDF-specific LLM client path；MinerU 解析属于 `authoring/sources.py` 的 source preparation，Markdown segmentation 属于 `authoring/segments.py`。
 - MinerU standard mode 通过私有阿里云 OSS bucket 的临时 staging object 生成短期 signed URL，再将 URL 提交给 MinerU v4；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会先在本地拆分为多个 chunk，逐块解析后按页码顺序拼接为一个 `Parsed Source Markdown`；OSS object 默认 best-effort 删除，signed URL 不进入 API response、workflow log 或 candidate graph artifacts。
 - 测试和 development fixture 默认使用 fake 或 deterministic model clients，不应在普通 validation checks 中调用真实 OpenAI API。
 
@@ -495,14 +507,14 @@ Phase 7 的 development/test surface 允许 `POST /api/tested-agents/simple-llm/
 ```text
 benchmark/
 ├── fixtures/
-│   └── classical_supervised_ml_algorithms_dev/
+│   └── statistical_learning_with_python_dev/
 │       ├── graph_manifest.json
 │       ├── authored_nodes.json
 │       ├── authored_edges.json
 │       ├── maps/
 │       └── episodes/
 ├── domains/
-│   └── classical_supervised_ml_algorithms/
+│   └── statistical_learning_with_python/
 │       ├── sources/
 │       │   └── isl_python.md
 │       ├── candidate_graphs/
@@ -511,6 +523,10 @@ benchmark/
 │       │       ├── candidate_edges.json
 │       │       ├── workflow_log.json
 │       │       ├── intermediate/
+│       │       │   ├── parsed_source_segments.json
+│       │       │   ├── segment_node_extraction_drafts.json
+│       │       │   ├── node_skeleton_reconciliation.json
+│       │       │   └── source_grounded_node_skeletons.json
 │       │       └── agent_traces/
 │       ├── graphs/
 │       │   └── v1/
@@ -661,7 +677,7 @@ uv run python -m unittest
    - 推荐：接受，但默认不要提交大体积 run outputs；只提交精选 reports 或小型 fixture outputs。
 
 4. authoring workflow 是否应该通过 API 暴露？
-   - 推荐：暴露一条窄的 source-backed candidate graph run API，用于真实运行和人工检查生成质量；它以本地 PDF 为入口，先解析或复用同目录 Markdown，再把 Markdown 作为 LLM text input。它只能写 candidate artifacts，不能 promote reviewed graph data。review workflow 稳定后再扩展 UI/API。
+   - 推荐：暴露一条窄的 source-backed candidate graph run API，用于真实运行和人工检查生成质量；它以本地 PDF 为入口，先解析或复用同目录 Markdown，再派生 Parsed Source Segments，并让 LLM steps 只消费 bounded segment text 或 structured intermediate artifacts。它只能写 candidate artifacts，不能 promote reviewed graph data。review workflow 稳定后再扩展 UI/API。
 
 5. frontend 是否进入 v1 必需路径？
    - 推荐：不是 M1-M8 的必需路径。M10 再扩展 research workbench；早期可只做最小 inspection。

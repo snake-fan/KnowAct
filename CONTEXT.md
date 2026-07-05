@@ -20,6 +20,10 @@ _Avoid_: benchmark graph manifest, reviewed graph data, book-only library
 A Markdown representation of an **Authoritative Source** used as source material during graph authoring.
 _Avoid_: PDF input_file, OpenAI file_id, raw PDF prompt payload
 
+**Parsed Source Segment**:
+An authoring-only semantic slice of **Parsed Source Markdown** that preserves its source path and reviewable source location for source-grounded graph authoring. Its `segment_id` is a run-local sequential debug/replay id such as `seg_000001`, not a **Source Locator** or stable reviewed identifier.
+_Avoid_: chunk, PDF chunk, raw paragraph chunk
+
 **Source Locator**:
 A minimal structured reference that identifies where a **Knowledge Node** is mentioned in an **Authoritative Source**.
 _Avoid_: vague source label, invented citation, generic textbook reference, required quote span
@@ -212,13 +216,13 @@ _Avoid_: domain-local episode list, agent-owned test queue, cross-domain knowled
 The subject area covered by a v1 authored graph and its evaluation episodes.
 _Avoid_: multi-domain suite, unrelated topic mix, general knowledge
 
-**Classical Supervised ML Algorithms Domain**:
-The v1 **Benchmark Domain** covering classical supervised machine learning algorithms and their core evaluation concepts.
-_Avoid_: deep learning, reinforcement learning, unsupervised learning, all machine learning
+**Statistical Learning With Python Domain**:
+The v1 **Benchmark Domain** covering the full source scope of *An Introduction to Statistical Learning with Applications in Python*.
+_Avoid_: classical supervised ML-only slice, demo graph, unrelated machine learning survey
 
-**V1 Graph Size Target**:
-The target size of 30-50 **Knowledge Nodes** for the first v1 authored graph.
-_Avoid_: toy graph, full curriculum, unbounded graph
+**V1 Full-Source Graph Scope**:
+The graph-authoring scope where the first v1 authored graph is derived from the full selected **Authoritative Source** rather than a fixed demo-size node target.
+_Avoid_: 30-50 node cap, hand-picked chapter subset, demo slice
 
 **Episode Knowledge Graph**:
 The **Authored Knowledge Graph** used as the domain structure for one **Evaluation Episode**.
@@ -453,15 +457,19 @@ The source-grounded list of candidate **Knowledge Nodes** considered during grap
 _Avoid_: brainstormed topic list, final graph, unsourced curriculum outline
 
 **Source-Grounded Node Skeleton**:
-A partial **Knowledge Node** draft containing the source-grounded concept identity, source locator, and concise **Source Grounding Notes** before diagnostic rubrics are authored.
-_Avoid_: final node, complete rubric, unsourced topic
+A reconciled partial **Knowledge Node** draft containing the source-grounded concept identity, source locators, and concise **Source Grounding Notes** before diagnostic rubrics are authored.
+_Avoid_: final node, complete rubric, reconciliation provenance, unsourced topic
+
+**Segment Node Extraction Draft**:
+A source-grounded concept draft extracted from one or more **Parsed Source Segments** before global node-skeleton reconciliation.
+_Avoid_: final skeleton, candidate node, rubric draft, edge draft, unreconciled node list
 
 **Graph Authoring Pipeline**:
 The workflow that produces and reviews a **Candidate Knowledge Graph** before it becomes an **Authored Knowledge Graph**.
 _Avoid_: evaluation runtime, tested agent loop, scoring pipeline
 
 **Graph Authoring Agent Workflow**:
-The single agent workflow that accelerates graph authoring by extracting source-grounded node skeletons, authoring node rubrics, and proposing edges for review, then outputs node and edge JSON list files.
+The single agent workflow that accelerates graph authoring by extracting segment-level node drafts, reconciling source-grounded node skeletons, authoring node rubrics, and proposing edges for review, then outputs node and edge JSON list files.
 _Avoid_: manual-only inventory, evaluation runtime, automatic authored graph
 
 **Graph Authoring Intermediate Artifacts**:
@@ -477,8 +485,12 @@ The graph-authoring output file containing plain **Knowledge Edge** objects that
 _Avoid_: node rubric duplicate, textbook source list, user-state relation
 
 **Node Extraction Agent Step**:
-The step in the **Graph Authoring Agent Workflow** that reads **Authoritative Sources** and extracts **Source-Grounded Node Skeletons** with **Source Locators**.
+The step in the **Graph Authoring Agent Workflow** that reads **Parsed Source Segments** and extracts **Segment Node Extraction Drafts** with source-grounded locators.
 _Avoid_: separate workflow, manual brainstorm, final authored graph
+
+**Node Skeleton Reconciliation Agent Step**:
+The LLM-backed step in the **Graph Authoring Agent Workflow** that deduplicates and merges **Segment Node Extraction Drafts** into reconciled **Source-Grounded Node Skeletons**.
+_Avoid_: deterministic dedupe, direct concatenation, rubric authoring
 
 **Node Rubric Authoring Agent Step**:
 The step in the **Graph Authoring Agent Workflow** that turns **Source-Grounded Node Skeletons** into complete candidate **Knowledge Nodes** with diagnostic goals and L0-L5 rubrics.
@@ -533,7 +545,7 @@ _Avoid_: ground-truth edge, authored edge
 - A v1 **Source Locator** does not require quoted text, evidence spans, exact text offsets, or paragraph-level precision when coarser location is enough for review.
 - A **Candidate Node Inventory** contains **Source-Grounded Candidate Nodes**, not brainstormed topics.
 - A **Source-Grounded Node Skeleton** is not a complete **Knowledge Node** because it lacks node-specific diagnostic rubrics.
-- A **Source-Grounded Node Skeleton** should include stable identity fields such as `id`, `name`, `type`, `definition`, and `source`.
+- A **Source-Grounded Node Skeleton** should include stable identity and source-grounding fields such as `id`, `name`, `definition`, `source_locators`, and `grounding_notes`; the skeleton `id` becomes the final `KnowledgeNode.id`, while reconciliation provenance remains an intermediate debugging concern.
 - **Knowledge Nodes** do not belong to built-in hierarchy levels.
 - A **Knowledge Graph** contains user-independent **Knowledge Nodes** and **Knowledge Edges**.
 - A **Knowledge Map** represents user-specific or reconstructed knowledge state over a **Knowledge Graph**.
@@ -621,10 +633,10 @@ _Avoid_: ground-truth edge, authored edge
 - V1 uses one fixed **Scoring Profile**, `squared_mastery_distance_v1`.
 - An **Evaluation Episode Manifest** may reference the v1 **Scoring Profile** but must not override it.
 - V1 targets one **Benchmark Domain** before multi-domain expansion.
-- The first v1 **Benchmark Domain** is **Classical Supervised ML Algorithms Domain**.
+- The first v1 **Benchmark Domain** is **Statistical Learning With Python Domain**.
 - The primary v1 **Authoritative Source** is *An Introduction to Statistical Learning with Applications in Python*.
-- The first v1 graph should contain enough **Knowledge Nodes** to distinguish different user knowledge structures.
-- The first v1 graph targets 30-50 **Knowledge Nodes**.
+- The first v1 graph follows **V1 Full-Source Graph Scope**.
+- The first v1 graph should contain enough **Knowledge Nodes** to distinguish different user knowledge structures without treating 30-50 nodes as a hard cap.
 - A **Reviewed Map** and a **Reconstructed Knowledge Map** are compared over the same **Authored Knowledge Graph** in v1.
 - An **Agent Working Knowledge Map** may evolve during an **Evaluation Episode** and is distinct from the **Final Reconstruction Submission** used for primary scoring.
 - An **Agent Working Knowledge Map** is initialized over every **Knowledge Node** in the **Episode Knowledge Graph**.
@@ -789,12 +801,19 @@ _Avoid_: ground-truth edge, authored edge
 - V1 uses a lightweight **Graph File Layout** that publishes reviewed graph versions under `benchmark/domains/{benchmark_domain}/graphs/{version}/`.
 - **Reviewed Graph Promotion** preserves the originating **Candidate Knowledge Graph** artifacts and never overwrites an existing graph version; graph corrections require a new version.
 - The v1 **Graph Authoring Pipeline** is implemented through a **Graph Authoring Agent Workflow**.
-- The **Graph Authoring Agent Workflow** contains a **Node Extraction Agent Step**, a **Node Rubric Authoring Agent Step**, and an **Edge Proposal Agent Step**.
-- The **Node Extraction Agent Step** may read the authoritative PDF or source material directly rather than relying on pre-cut chunks.
-- In v1, the **Node Extraction Agent Step** is the only **Graph Authoring Agent Workflow** step that reads full **Parsed Source Markdown** directly.
+- The **Graph Authoring Agent Workflow** contains a **Node Extraction Agent Step**, a **Node Skeleton Reconciliation Agent Step**, a **Node Rubric Authoring Agent Step**, and an **Edge Proposal Agent Step**.
+- The **Graph Authoring Pipeline** derives **Parsed Source Segments** from **Parsed Source Markdown** before node extraction.
+- **Parsed Source Segment** ids are assigned in document order within one graph-authoring run; oversized-section splits continue the same sequence and do not encode headings, hashes, or reviewer-facing location.
+- The **Node Extraction Agent Step** reads **Parsed Source Segments** rather than full **Parsed Source Markdown**.
+- The **Node Extraction Agent Step** is responsible for producing **Segment Node Extraction Drafts**.
+- The **Node Skeleton Reconciliation Agent Step** runs after segment-level node extraction and before node rubric authoring.
+- The **Node Skeleton Reconciliation Agent Step** is responsible for producing reconciled **Source-Grounded Node Skeletons** with **Source Locators**.
+- The **Node Skeleton Reconciliation Agent Step** reads **Segment Node Extraction Drafts** and their structured source-grounding metadata, not full **Parsed Source Segments**.
+- The **Node Skeleton Reconciliation Agent Step** may merge same-concept drafts across chapters when it preserves multiple **Source Locators**.
+- The **Node Skeleton Reconciliation Agent Step** must not create a **Source-Grounded Node Skeleton** without support from at least one **Segment Node Extraction Draft**.
+- The initial **Node Skeleton Reconciliation Agent Step** is one global reconciliation call over structured drafts; it keeps one step-level trace, while merge and split provenance lives in **Graph Authoring Intermediate Artifacts**.
 - Later **Graph Authoring Agent Workflow** steps should not receive source-material text as an input parameter.
-- The **Node Extraction Agent Step** is responsible for producing **Source-Grounded Node Skeletons** with **Source Locators**.
-- The **Node Rubric Authoring Agent Step** runs after node extraction and before final node output.
+- The **Node Rubric Authoring Agent Step** runs after node skeleton reconciliation and before final node output.
 - The **Node Rubric Authoring Agent Step** is responsible for `diagnostic_goal`, L0-L5 `levels`, diagnostic signals, and `simulator_behavior`.
 - The v1 **Node Rubric Authoring Agent Step** must stay within the **Node Rubric Input Scope**.
 - The v1 **Node Rubric Authoring Agent Step** must not use unreviewed neighboring nodes or candidate edges as rubric-generation context.
@@ -865,8 +884,8 @@ _Avoid_: ground-truth edge, authored edge
 - "episode manifests belong to one domain directory" can limit cross-domain experiment orchestration; resolved: v1 stores runnable episode manifests in a **Runtime Episode Registry** while each manifest still selects one domain graph version and one hidden **Reviewed Map**.
 - "scoring profile" can imply per-episode custom metrics; resolved: v1 uses fixed `squared_mastery_distance_v1` for comparability.
 - "benchmark domain" can imply a multi-domain suite; resolved: v1 starts with one domain and defers multi-domain calibration.
-- "machine learning algorithms" is too broad for v1; resolved: the first domain is classical supervised ML algorithms with enough nodes for profile differentiation.
-- "enough knowledge nodes" is vague; resolved: the first v1 graph targets 30-50 **Knowledge Nodes**.
+- "machine learning algorithms" can underspecify the source scope; resolved: the first domain is **Statistical Learning With Python Domain**.
+- "enough knowledge nodes" is vague; resolved: the first v1 graph follows **V1 Full-Source Graph Scope** rather than a fixed 30-50 node cap.
 - "authoritative source" can remain underspecified; resolved: v1 starts from *An Introduction to Statistical Learning with Applications in Python*.
 - "one turn" can hide multiple questions; resolved: v1 **Interaction Turn** allows one primary **Diagnostic Question**.
 - "multi-node question" can mean either one **Integrated Diagnostic Question** or a batch of independent questions; resolved: one integrated question is allowed, while multiple independent questions in one turn are disallowed.
@@ -906,13 +925,13 @@ _Avoid_: ground-truth edge, authored edge
 - "graph manifest" can sound like the graph data itself; resolved: a **Graph Manifest** is optional metadata that references separate graph data files.
 - "graph file layout" can sound like part of the v1 schema; resolved: v1 fixes file contents and split storage, while directory layout is deferred.
 - "graph authoring agent" can sound like it bypasses review; resolved: the **Graph Authoring Agent Workflow** produces **Graph Authoring Output Files** for benchmark-author review.
-- "graph authoring workflow" can be split into separate tasks; resolved: v1 uses one **Graph Authoring Agent Workflow** with node extraction, node rubric authoring, and edge proposal steps.
-- "node extraction" can sound like it produces full candidate nodes; resolved: v1 node extraction produces **Source-Grounded Node Skeletons**, then node rubrics are authored in a later step.
+- "graph authoring workflow" can be split into separate tasks; resolved: v1 uses one **Graph Authoring Agent Workflow** with node extraction, node skeleton reconciliation, node rubric authoring, and edge proposal steps.
+- "node extraction" can sound like it produces final candidate nodes or reconciled skeletons; resolved: v1 node extraction produces **Segment Node Extraction Drafts**, then **Node Skeleton Reconciliation Agent Step** produces **Source-Grounded Node Skeletons**.
 - "node rubric context" can accidentally include unreviewed graph structure; resolved: v1 rubric authoring uses only **Node Rubric Input Scope**, not neighboring nodes or candidate edges.
 - "edge proposal context" can be confused with rubric context; resolved: v1 edge proposal may use complete candidate node rubrics because it runs after rubric authoring and remains subject to review.
 - "edge proposal" can become recall-first relatedness harvesting; resolved: v1 uses **Precision-First Edge Proposal** and omits weak or speculative relations.
 - "precision-first" can sound like a fixed confidence threshold; resolved: v1 has no fixed **Candidate Edge Confidence Threshold** and uses rationale quality instead.
-- "source preprocessing" can imply the node step only consumes pre-cut chunks; resolved: v1 allows the **Node Extraction Agent Step** to read the authoritative source directly and extract locators.
+- "chunk" can mean either PDF parser transport or graph-authoring source context; resolved: use **Parsed Source Segment** for the graph-authoring source-reading unit.
 - "candidate artifact" can imply candidate fields inside every output object; resolved: candidate status belongs to the filename, directory, or review state, not to **Knowledge Node** or **Knowledge Edge** object contents.
 - "validation report" can sound like a required final graph-authoring output; resolved: v1 final graph-authoring output is only the node JSON list and edge JSON list.
 - "edge content" can be confused with node content; resolved: edge list items use the **Knowledge Edge** schema, not the **Knowledge Node** rubric schema.

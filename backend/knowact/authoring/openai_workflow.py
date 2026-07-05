@@ -2,8 +2,9 @@ from typing import Literal
 
 from backend.knowact.authoring.steps import (
     LLMEdgeProposalStep,
-    LLMNodeExtractionStep,
+    LLMNodeSkeletonReconciliationStep,
     LLMNodeRubricAuthoringStep,
+    LLMSegmentNodeExtractionStep,
 )
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 from backend.knowact.llm.client import ModelClient
@@ -25,7 +26,8 @@ def build_graph_authoring_workflow(
     model_client: ModelClient,
 ) -> GraphAuthoringAgentWorkflow:
     return GraphAuthoringAgentWorkflow(
-        node_extraction_step=LLMNodeExtractionStep(model_client),
+        segment_node_extraction_step=LLMSegmentNodeExtractionStep(model_client),
+        node_skeleton_reconciliation_step=LLMNodeSkeletonReconciliationStep(model_client),
         node_rubric_authoring_step=LLMNodeRubricAuthoringStep(model_client),
         edge_proposal_step=LLMEdgeProposalStep(model_client),
         model_metadata=getattr(model_client, "metadata", None),

@@ -17,7 +17,7 @@ MAX_ERROR_MESSAGE_CHARS = 500
 
 RunLogStatus = Literal["running", "succeeded", "failed"]
 RunLogCompletedStatus = Literal["succeeded", "failed"]
-WorkflowRunLogEntryType = Literal["agent_step", "validation_checkpoint", "artifact_write"]
+WorkflowRunLogEntryType = Literal["agent_step", "validation_checkpoint", "artifact_write", "deterministic_step"]
 WorkflowRunValidationResult = Literal["passed", "failed"]
 WorkflowRunParserResultStatus = Literal["succeeded", "failed"]
 

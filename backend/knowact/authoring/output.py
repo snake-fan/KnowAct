@@ -14,6 +14,9 @@ AGENT_TRACE_DIRNAME = "agent_traces"
 INTERMEDIATE_DIRNAME = "intermediate"
 MODEL_RAW_OUTPUT_FILENAME = "model_raw_output.txt"
 PARSER_OUTPUT_FILENAME = "parser_output.json"
+PARSED_SOURCE_SEGMENTS_FILENAME = "parsed_source_segments.json"
+SEGMENT_NODE_EXTRACTION_DRAFTS_FILENAME = "segment_node_extraction_drafts.json"
+NODE_SKELETON_RECONCILIATION_FILENAME = "node_skeleton_reconciliation.json"
 SOURCE_GROUNDED_NODE_SKELETONS_FILENAME = "source_grounded_node_skeletons.json"
 NODE_RUBRIC_PATCHES_FILENAME = "node_rubric_patches.json"
 CANDIDATE_NODES_PRE_EDGE_FILENAME = "candidate_nodes_pre_edge.json"
@@ -24,6 +27,15 @@ _SAFE_ARTIFACT_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 class GraphAuthoringIntermediateArtifactWriter:
     def __init__(self, output_dir: Path) -> None:
         self._output_dir = output_dir
+
+    def write_parsed_source_segments(self, items: tuple[BaseModel, ...]) -> str:
+        return self._write_json_list(PARSED_SOURCE_SEGMENTS_FILENAME, items)
+
+    def write_segment_node_extraction_drafts(self, items: tuple[BaseModel, ...]) -> str:
+        return self._write_json_list(SEGMENT_NODE_EXTRACTION_DRAFTS_FILENAME, items)
+
+    def write_node_skeleton_reconciliation(self, items: tuple[BaseModel, ...]) -> str:
+        return self._write_json_list(NODE_SKELETON_RECONCILIATION_FILENAME, items)
 
     def write_source_grounded_node_skeletons(self, items: tuple[BaseModel, ...]) -> str:
         return self._write_json_list(SOURCE_GROUNDED_NODE_SKELETONS_FILENAME, items)

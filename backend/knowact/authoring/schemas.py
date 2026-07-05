@@ -23,6 +23,105 @@ class SourceMaterial(BaseModel):
         return value
 
 
+class ParsedSourceSegment(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    segment_id: str
+    source_id: str
+    source_title: str
+    location: str
+    heading_path: tuple[str, ...] = Field(min_length=1, max_length=3)
+    source_locator: SourceLocator
+    text: str
+    char_count: int = Field(ge=1)
+
+    @field_validator("segment_id", "source_id", "source_title", "location", "text")
+    @classmethod
+    def _must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("heading_path")
+    @classmethod
+    def _heading_path_items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not item.strip() for item in value):
+            raise ValueError("must not contain blank headings")
+        return value
+
+
+class SegmentNodeExtractionDraftPatch(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str
+    definition: str
+    source_locator: SourceLocator
+    grounding_note: str
+
+    @field_validator("name", "definition", "grounding_note")
+    @classmethod
+    def _must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
+class SegmentNodeExtractionDraftPatchList(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    drafts: tuple[SegmentNodeExtractionDraftPatch, ...]
+
+
+class SegmentNodeExtractionDraft(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    draft_id: str
+    segment_id: str
+    name: str
+    definition: str
+    source_locator: SourceLocator
+    grounding_note: str
+
+    @field_validator("draft_id", "segment_id", "name", "definition", "grounding_note")
+    @classmethod
+    def _must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
+class ReconciledNodeSkeletonDraft(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str
+    definition: str
+    source_locators: tuple[SourceLocator, ...] = Field(min_length=1)
+    grounding_notes: tuple[str, ...] = Field(min_length=1)
+    supporting_draft_ids: tuple[str, ...] = Field(min_length=1)
+    supporting_segment_ids: tuple[str, ...] = Field(min_length=1)
+    merge_split_note: str
+
+    @field_validator("name", "definition", "merge_split_note")
+    @classmethod
+    def _must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("grounding_notes", "supporting_draft_ids", "supporting_segment_ids")
+    @classmethod
+    def _items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not item.strip() for item in value):
+            raise ValueError("must not contain blank items")
+        return value
+
+
+class ReconciledNodeSkeletonDraftList(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    skeletons: tuple[ReconciledNodeSkeletonDraft, ...]
+
+
 class SourceGroundedNodeSkeleton(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -52,6 +151,40 @@ class SourceGroundedNodeSkeletonList(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     skeletons: tuple[SourceGroundedNodeSkeleton, ...]
+
+
+class NodeSkeletonReconciliationRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    name: str
+    definition: str
+    source_locators: tuple[SourceLocator, ...] = Field(min_length=1)
+    grounding_notes: tuple[str, ...] = Field(min_length=1)
+    supporting_draft_ids: tuple[str, ...] = Field(min_length=1)
+    supporting_segment_ids: tuple[str, ...] = Field(min_length=1)
+    merge_split_note: str
+
+    @field_validator("id", "name", "definition", "merge_split_note")
+    @classmethod
+    def _must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("grounding_notes", "supporting_draft_ids", "supporting_segment_ids")
+    @classmethod
+    def _items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not item.strip() for item in value):
+            raise ValueError("must not contain blank items")
+        return value
+
+
+class NodeSkeletonReconciliationResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    records: tuple[NodeSkeletonReconciliationRecord, ...]
+    source_grounded_node_skeletons: tuple[SourceGroundedNodeSkeleton, ...]
 
 
 class NodeRubricPatch(BaseModel):
