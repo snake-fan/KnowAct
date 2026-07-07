@@ -79,6 +79,7 @@ Output rules:
 - The first non-whitespace character must be { and the last non-whitespace character must be }.
 - Do not return a top-level array, JSON Lines, YAML, XML, Markdown, or prose.
 - Use double quotes for every JSON key and string; do not use comments or trailing commas.
+- Do not use LaTeX delimiters or raw backslash notation in JSON string values; write math notation as plain text, e.g. beta_0, beta_1, H_0.
 - Include only the exact top-level key or keys named by this step's output contract.
 - Keep every field name exactly as shown in the contract; do not rename, add, omit, or nest fields differently.
 - Do not wrap JSON in Markdown fences.
