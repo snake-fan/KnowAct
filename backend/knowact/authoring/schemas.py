@@ -50,12 +50,33 @@ class ParsedSourceSegment(BaseModel):
         return value
 
 
+class SegmentNodeExtractionSourceLocatorPatch(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    locator: str
+    note: str | None = None
+
+    @field_validator("locator")
+    @classmethod
+    def _must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("note")
+    @classmethod
+    def _optional_values_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
 class SegmentNodeExtractionDraftPatch(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
     definition: str
-    source_locator: SourceLocator
+    source_locator: SegmentNodeExtractionSourceLocatorPatch
     grounding_note: str
 
     @field_validator("name", "definition", "grounding_note")

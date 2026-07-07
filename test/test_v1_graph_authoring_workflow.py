@@ -315,6 +315,38 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
             model_client.prompt_markers,
         )
 
+    def test_segment_node_extraction_uses_segment_source_id_when_model_outputs_wrong_source_id(self):
+        model_client = WrongSourceIdGraphModelClient()
+        workflow = build_openai_graph_authoring_workflow(model_client=model_client)
+
+        run_result = workflow.run_with_log([_source_material()], run_id="wrong_source_id_run_001")
+
+        entries_by_name = {entry.entry_name: entry for entry in run_result.run_log.entries}
+        node_extraction_trace = entries_by_name["node_extraction"].agent_trace
+        self.assertIsNotNone(node_extraction_trace)
+        draft = node_extraction_trace.batch_traces[0].parser_result.output["drafts"][0]
+        self.assertEqual("isl_python", draft["source_locator"]["source_id"])
+        self.assertEqual("chapter_2", draft["source_locator"]["locator"])
+
+    def test_segment_node_extraction_logs_per_segment_progress(self):
+        model_client = FakeRawJSONWorkflowModelClient()
+        workflow = build_openai_graph_authoring_workflow(model_client=model_client)
+
+        with self.assertLogs("backend.knowact.authoring.steps", level="INFO") as context:
+            workflow.run([_source_material()])
+
+        logs = "\n".join(context.output)
+        self.assertIn("Segment node extraction started segments=1", logs)
+        self.assertIn(
+            "Segment node extraction segment started segment_index=1 segment_total=1 segment_id=seg_000001",
+            logs,
+        )
+        self.assertIn(
+            "Segment node extraction segment succeeded segment_index=1 segment_total=1 segment_id=seg_000001 draft_count=1 total_drafts=1",
+            logs,
+        )
+        self.assertIn("Segment node extraction succeeded segments=1 total_drafts=1", logs)
+
     def test_llm_agent_steps_record_raw_model_output_and_parser_output_in_run_log(self):
         model_client = FakeRawJSONWorkflowModelClient()
         workflow = build_openai_graph_authoring_workflow(model_client=model_client)
@@ -466,8 +498,11 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertIn("Segment Node Extraction Drafts", extraction_prompt)
         self.assertIn("roughly 1-3 focused diagnostic questions", extraction_prompt)
         self.assertIn("Do not output id, draft_id, segment_id", extraction_prompt)
+        self.assertIn("Do not output source_id", extraction_prompt)
         self.assertIn("Parsed Source Segment", extraction_prompt)
         self.assertIn('"drafts"', extraction_prompt)
+        self.assertIn("Source ID (workflow-supplied; do not output): isl_python", extraction_prompt)
+        self.assertNotIn('"source_id": "same_source_id_as_input"', extraction_prompt)
 
         skeletons = FixtureNodeExtractionStep().run(source_materials)
         drafts = tuple(
@@ -489,6 +524,10 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
                 )
             )
         )
+        self.assertEqual(
+            {"locator": "chapter_2"},
+            drafts[0].source_locator.model_dump(mode="json", exclude_none=True),
+        )
         reconciliation_prompt = _render_prompt(
             build_node_skeleton_reconciliation_messages(
                 (
@@ -497,7 +536,11 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
                         segment_id=segments[0].segment_id,
                         name=drafts[0].name,
                         definition=drafts[0].definition,
-                        source_locator=drafts[0].source_locator,
+                        source_locator=SourceLocator(
+                            source_id=segments[0].source_id,
+                            locator=drafts[0].source_locator.locator,
+                            note=drafts[0].source_locator.note,
+                        ),
                         grounding_note=drafts[0].grounding_note,
                     ),
                 )
@@ -545,7 +588,7 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertNotIn(source_materials[0].text, edge_prompt)
 
         self.assertIn("Parsed Source Segment", extraction_prompt)
-        self.assertIn("Source: isl_python", extraction_prompt)
+        self.assertIn("Source ID (workflow-supplied; do not output): isl_python", extraction_prompt)
         self.assertIn(source_materials[0].text, extraction_prompt)
         self.assertNotIn("uploaded original PDF", extraction_prompt)
         for prompt in (reconciliation_prompt, rubric_prompt, edge_prompt):
@@ -771,6 +814,30 @@ class FakeRawJSONWorkflowModelClient:
             self.prompt_markers.append("Edge Proposal Agent Step")
             return json.dumps({"edges": []})
         raise AssertionError(f"unexpected prompt: {developer_prompt}")
+
+
+class WrongSourceIdGraphModelClient(FakeRawJSONWorkflowModelClient):
+    def complete(self, *, messages):
+        developer_prompt = messages[0].content
+        if "Node Extraction Agent Step" in developer_prompt:
+            self.prompt_markers.append("Node Extraction Agent Step")
+            return json.dumps(
+                {
+                    "drafts": [
+                        {
+                            "name": self._skeleton.name,
+                            "definition": self._skeleton.definition,
+                            "source_locator": {
+                                "source_id": "isl_python - Development fixture title",
+                                "locator": self._skeleton.source_locators[0].locator,
+                                "note": self._skeleton.source_locators[0].note,
+                            },
+                            "grounding_note": self._skeleton.source_grounding_notes[0],
+                        }
+                    ]
+                }
+            )
+        return super().complete(messages=messages)
 
 
 class InvalidJSONGraphModelClient(FakeRawJSONWorkflowModelClient):

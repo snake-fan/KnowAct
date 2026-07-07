@@ -193,7 +193,7 @@ class V1AuthoringApiTest(unittest.TestCase):
             extraction_prompt = _render_messages(fake_model_client.calls[0])
             self.assertIn("Parsed Source Segment", extraction_prompt)
             self.assertIn("Cached Markdown", extraction_prompt)
-            self.assertIn("Source: isl_python", extraction_prompt)
+            self.assertIn("Source ID (workflow-supplied; do not output): isl_python", extraction_prompt)
             self.assertNotIn("data:application/pdf;base64", extraction_prompt)
             self.assertNotIn("uploaded original PDF", extraction_prompt)
             reconciliation_prompt = _render_messages(fake_model_client.calls[1])
@@ -938,10 +938,13 @@ def _render_messages(messages) -> str:
 
 
 def _source_id_from_prompt(prompt: str) -> str:
-    marker = "Source: "
+    workflow_supplied_marker = "Source ID (workflow-supplied; do not output): "
+    legacy_marker = "Source: "
     for line in prompt.splitlines():
-        if line.startswith(marker):
-            return line[len(marker):].split(" - ", 1)[0].strip()
+        if line.startswith(workflow_supplied_marker):
+            return line[len(workflow_supplied_marker):].strip()
+        if line.startswith(legacy_marker):
+            return line[len(legacy_marker):].split(" - ", 1)[0].strip()
     return "isl_python"
 
 

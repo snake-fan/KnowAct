@@ -57,6 +57,7 @@ Decision rules:
 - If the segment contains no sufficiently grounded diagnosable concept, return {"drafts": []}.
 - A soft target is 8-12 drafts or fewer for this segment, but include more if the segment clearly supports them.
 - Do not output id, draft_id, segment_id, diagnostic_goal, levels, diagnostic_signals, simulator_behavior, edges, user states, or evidence.
+- Do not output source_id. The workflow supplies source_id from the Parsed Source Segment.
 """.strip(),
                 """
 Output contract:
@@ -67,7 +68,6 @@ Return JSON with this exact top-level shape:
       "name": "Human Readable Name",
       "definition": "Concise source-grounded definition.",
       "source_locator": {
-        "source_id": "same_source_id_as_input",
         "locator": "same_or_more_precise_location_as_input",
         "note": "optional short reviewer note"
       },
@@ -82,7 +82,7 @@ The complete response must be a JSON object with exactly one top-level key: "dra
                 """
 Final check before output:
 - Each draft has nonblank name, definition, source_locator, and grounding_note.
-- Each locator uses the provided source id and a reviewer-usable locator.
+- Each source_locator contains a reviewer-usable locator and does not contain source_id.
 - No draft relies on outside memory or invented source metadata.
 - No output contains ids, user-state, evidence, candidate-status, edge, or rubric fields.
 """.strip(),
@@ -94,7 +94,8 @@ Final check before output:
             role="user",
             content=render_sections(
                 "Extract reviewable Segment Node Extraction Drafts from this Parsed Source Segment.",
-                f"Source: {segment.source_id} - {segment.source_title}",
+                f"Source ID (workflow-supplied; do not output): {segment.source_id}",
+                f"Source title: {segment.source_title}",
                 f"Location: {segment.location}",
                 f"Text:\n\n{segment.text}",
             ),

@@ -1,5 +1,7 @@
 from collections.abc import Sequence
+import logging
 import re
+from time import monotonic
 from typing import Callable
 from typing import Protocol
 
@@ -42,13 +44,14 @@ from backend.knowact.authoring.templates.node_skeleton_reconciliation import (
 from backend.knowact.authoring.templates.node_rubric_authoring import (
     build_node_rubric_authoring_messages,
 )
-from backend.knowact.core.graph import KnowledgeEdge, KnowledgeNode
+from backend.knowact.core.graph import KnowledgeEdge, KnowledgeNode, SourceLocator
 from backend.knowact.llm.client import ModelClient
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessageProfile
 
 
 AgentStepParser = Callable[[str], tuple[BaseModel, ...]]
 AgentStepOutputSerializer = Callable[[tuple[BaseModel, ...]], dict[str, object]]
+_LOGGER = logging.getLogger(__name__)
 
 
 class NodeExtractionStep(Protocol):
@@ -266,17 +269,36 @@ def _run_traced_segment_node_extraction_step(
     trace_setter(None)
     drafts: list[SegmentNodeExtractionDraft] = []
     batch_traces: list[WorkflowRunAgentTraceBatch] = []
+    total_segments = len(segments)
+    step_started_at = monotonic()
 
-    for segment in segments:
-        raw_output = model_client.complete(
-            messages=build_node_extraction_messages(
-                segment,
-                message_profile=message_profile,
-            )
+    _LOGGER.info(
+        "Segment node extraction started segments=%s total_char_count=%s",
+        total_segments,
+        sum(segment.char_count for segment in segments),
+    )
+
+    for segment_index, segment in enumerate(segments, start=1):
+        segment_started_at = monotonic()
+        _LOGGER.info(
+            "Segment node extraction segment started segment_index=%s segment_total=%s segment_id=%s source_id=%s char_count=%s location=%s",
+            segment_index,
+            total_segments,
+            segment.segment_id,
+            segment.source_id,
+            segment.char_count,
+            segment.location,
         )
-        redacted_raw_output = redact_logged_text(raw_output)
 
+        redacted_raw_output: str | None = None
         try:
+            raw_output = model_client.complete(
+                messages=build_node_extraction_messages(
+                    segment,
+                    message_profile=message_profile,
+                )
+            )
+            redacted_raw_output = redact_logged_text(raw_output)
             parsed_patches = parse_segment_node_extraction_output(raw_output)
             segment_drafts = _segment_drafts_from_patches(
                 parsed_patches,
@@ -284,6 +306,15 @@ def _run_traced_segment_node_extraction_step(
                 start_index=len(drafts) + 1,
             )
         except Exception as exc:
+            _LOGGER.error(
+                "Segment node extraction segment failed segment_index=%s segment_total=%s segment_id=%s elapsed_seconds=%.3f error_type=%s message=%s",
+                segment_index,
+                total_segments,
+                segment.segment_id,
+                monotonic() - segment_started_at,
+                exc.__class__.__name__,
+                str(exc),
+            )
             batch_traces.append(
                 WorkflowRunAgentTraceBatch(
                     batch_name=segment.segment_id,
@@ -324,6 +355,15 @@ def _run_traced_segment_node_extraction_step(
                 ),
             )
         )
+        _LOGGER.info(
+            "Segment node extraction segment succeeded segment_index=%s segment_total=%s segment_id=%s draft_count=%s total_drafts=%s elapsed_seconds=%.3f",
+            segment_index,
+            total_segments,
+            segment.segment_id,
+            len(segment_drafts),
+            len(drafts),
+            monotonic() - segment_started_at,
+        )
 
     trace_setter(
         WorkflowRunAgentTrace(
@@ -333,6 +373,12 @@ def _run_traced_segment_node_extraction_step(
             ),
             batch_traces=tuple(batch_traces),
         )
+    )
+    _LOGGER.info(
+        "Segment node extraction succeeded segments=%s total_drafts=%s elapsed_seconds=%.3f",
+        total_segments,
+        len(drafts),
+        monotonic() - step_started_at,
     )
     return tuple(drafts)
 
@@ -349,7 +395,11 @@ def _segment_drafts_from_patches(
             segment_id=segment.segment_id,
             name=patch.name,
             definition=patch.definition,
-            source_locator=patch.source_locator,
+            source_locator=SourceLocator(
+                source_id=segment.source_id,
+                locator=patch.source_locator.locator,
+                note=patch.source_locator.note,
+            ),
             grounding_note=patch.grounding_note,
         )
         for index, patch in enumerate(patches, start=start_index)
