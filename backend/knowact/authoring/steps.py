@@ -1,5 +1,6 @@
 from collections.abc import Sequence
-import logging
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from dataclasses import dataclass
 import re
 from time import monotonic
 from typing import Callable
@@ -47,11 +48,14 @@ from backend.knowact.authoring.templates.node_rubric_authoring import (
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeNode, SourceLocator
 from backend.knowact.llm.client import ModelClient
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessageProfile
+from backend.knowact.logging_config import get_knowact_logger
 
 
 AgentStepParser = Callable[[str], tuple[BaseModel, ...]]
 AgentStepOutputSerializer = Callable[[tuple[BaseModel, ...]], dict[str, object]]
-_LOGGER = logging.getLogger(__name__)
+DEFAULT_SEGMENT_NODE_EXTRACTION_MAX_CONCURRENT_REQUESTS = 8
+SEGMENT_NODE_EXTRACTION_PROGRESS_LOG_INTERVAL_SECONDS = 30.0
+_LOGGER = get_knowact_logger("authoring.steps")
 
 
 class NodeExtractionStep(Protocol):
@@ -89,12 +93,24 @@ class EdgeProposalStep(Protocol):
 
 
 class LLMNodeExtractionStep:
-    def __init__(self, model_client: ModelClient) -> None:
+    def __init__(
+        self,
+        model_client: ModelClient,
+        *,
+        segment_max_concurrent_requests: int = DEFAULT_SEGMENT_NODE_EXTRACTION_MAX_CONCURRENT_REQUESTS,
+    ) -> None:
         self._model_client = model_client
+        self._segment_max_concurrent_requests = _validate_positive_int(
+            segment_max_concurrent_requests,
+            "segment_max_concurrent_requests",
+        )
         self.last_trace: WorkflowRunAgentTrace | None = None
 
     def run(self, source_materials: Sequence[SourceMaterial]) -> tuple[SourceGroundedNodeSkeleton, ...]:
-        segment_step = LLMSegmentNodeExtractionStep(self._model_client)
+        segment_step = LLMSegmentNodeExtractionStep(
+            self._model_client,
+            max_concurrent_requests=self._segment_max_concurrent_requests,
+        )
         reconciliation_step = LLMNodeSkeletonReconciliationStep(self._model_client)
         drafts = segment_step.run(derive_parsed_source_segments(source_materials))
         result = reconciliation_step.run(drafts)
@@ -106,8 +122,17 @@ class LLMNodeExtractionStep:
 
 
 class LLMSegmentNodeExtractionStep:
-    def __init__(self, model_client: ModelClient) -> None:
+    def __init__(
+        self,
+        model_client: ModelClient,
+        *,
+        max_concurrent_requests: int = DEFAULT_SEGMENT_NODE_EXTRACTION_MAX_CONCURRENT_REQUESTS,
+    ) -> None:
         self._model_client = model_client
+        self._max_concurrent_requests = _validate_positive_int(
+            max_concurrent_requests,
+            "max_concurrent_requests",
+        )
         self.last_trace: WorkflowRunAgentTrace | None = None
 
     def run(self, segments: Sequence[ParsedSourceSegment]) -> tuple[SegmentNodeExtractionDraft, ...]:
@@ -116,6 +141,7 @@ class LLMSegmentNodeExtractionStep:
             segments=tuple(segments),
             trace_setter=self._set_last_trace,
             message_profile=_message_profile_for(self._model_client),
+            max_concurrent_requests=self._max_concurrent_requests,
         )
 
     def _set_last_trace(self, trace: WorkflowRunAgentTrace | None) -> None:
@@ -220,6 +246,12 @@ def _message_profile_for(model_client: ModelClient) -> ModelMessageProfile:
     return getattr(model_client, "message_profile", OPENAI_MESSAGE_PROFILE)
 
 
+def _validate_positive_int(value: int, name: str) -> int:
+    if value < 1:
+        raise ValueError(f"{name} must be at least 1")
+    return value
+
+
 def _run_traced_llm_step(
     *,
     model_client: ModelClient,
@@ -265,106 +297,115 @@ def _run_traced_segment_node_extraction_step(
     segments: tuple[ParsedSourceSegment, ...],
     trace_setter: Callable[[WorkflowRunAgentTrace | None], None],
     message_profile: ModelMessageProfile,
+    max_concurrent_requests: int,
 ) -> tuple[SegmentNodeExtractionDraft, ...]:
     trace_setter(None)
-    drafts: list[SegmentNodeExtractionDraft] = []
-    batch_traces: list[WorkflowRunAgentTraceBatch] = []
     total_segments = len(segments)
+    max_workers = min(max_concurrent_requests, total_segments) if total_segments else 1
     step_started_at = monotonic()
 
     _LOGGER.info(
-        "Segment node extraction started segments=%s total_char_count=%s",
+        "Segment node extraction started segments=%s total_char_count=%s max_concurrent_requests=%s",
         total_segments,
         sum(segment.char_count for segment in segments),
+        max_workers,
     )
 
-    for segment_index, segment in enumerate(segments, start=1):
-        segment_started_at = monotonic()
-        _LOGGER.info(
-            "Segment node extraction segment started segment_index=%s segment_total=%s segment_id=%s source_id=%s char_count=%s location=%s",
-            segment_index,
-            total_segments,
-            segment.segment_id,
-            segment.source_id,
-            segment.char_count,
-            segment.location,
-        )
+    completed_results: dict[int, _SegmentNodeExtractionResult] = {}
+    completed_draft_count = 0
 
-        redacted_raw_output: str | None = None
-        try:
-            raw_output = model_client.complete(
-                messages=build_node_extraction_messages(
-                    segment,
-                    message_profile=message_profile,
-                )
-            )
-            redacted_raw_output = redact_logged_text(raw_output)
-            parsed_patches = parse_segment_node_extraction_output(raw_output)
-            segment_drafts = _segment_drafts_from_patches(
-                parsed_patches,
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures: dict[Future[_SegmentNodeExtractionResult], int] = {
+            executor.submit(
+                _extract_segment_node_patches,
+                model_client=model_client,
+                message_profile=message_profile,
                 segment=segment,
-                start_index=len(drafts) + 1,
-            )
-        except Exception as exc:
-            _LOGGER.error(
-                "Segment node extraction segment failed segment_index=%s segment_total=%s segment_id=%s elapsed_seconds=%.3f error_type=%s message=%s",
-                segment_index,
-                total_segments,
-                segment.segment_id,
-                monotonic() - segment_started_at,
-                exc.__class__.__name__,
-                str(exc),
-            )
-            batch_traces.append(
-                WorkflowRunAgentTraceBatch(
-                    batch_name=segment.segment_id,
-                    input_counts={"segments": 1, "char_count": segment.char_count},
-                    model_raw_output=redacted_raw_output,
-                    parser_result=WorkflowRunParserResult(
-                        status="failed",
-                        error=workflow_run_error_from_exception(
-                            exc,
-                            step_name="node_extraction",
-                        ),
-                    ),
+                segment_index=segment_index,
+                total_segments=total_segments,
+            ): segment_index
+            for segment_index, segment in enumerate(segments, start=1)
+        }
+        pending_futures = set(futures)
+
+        try:
+            while pending_futures:
+                done_futures, pending_futures = wait(
+                    pending_futures,
+                    timeout=SEGMENT_NODE_EXTRACTION_PROGRESS_LOG_INTERVAL_SECONDS,
+                    return_when=FIRST_COMPLETED,
                 )
+                if not done_futures:
+                    _log_segment_node_extraction_progress(
+                        total_segments=total_segments,
+                        completed_segments=len(completed_results),
+                        active_or_queued_segments=len(pending_futures),
+                        total_drafts=completed_draft_count,
+                        max_concurrent_requests=max_workers,
+                        elapsed_seconds=monotonic() - step_started_at,
+                    )
+                    continue
+
+                for future in done_futures:
+                    result = future.result()
+                    completed_results[result.segment_index] = result
+                    completed_draft_count += len(result.parsed_patches)
+                    remaining_segments = total_segments - len(completed_results)
+                    _LOGGER.info(
+                        "Segment node extraction segment succeeded segment_index=%s segment_total=%s segment_id=%s draft_count=%s total_drafts=%s completed_segments=%s remaining_segments=%s active_or_queued_segments=%s elapsed_seconds=%.3f",
+                        result.segment_index,
+                        total_segments,
+                        result.segment.segment_id,
+                        len(result.parsed_patches),
+                        completed_draft_count,
+                        len(completed_results),
+                        remaining_segments,
+                        len(pending_futures),
+                        result.elapsed_seconds,
+                    )
+        except _SegmentNodeExtractionFailure as failure:
+            for pending_future in pending_futures:
+                pending_future.cancel()
+            _LOGGER.error(
+                "Segment node extraction segment failed segment_index=%s segment_total=%s segment_id=%s completed_segments=%s remaining_segments=%s elapsed_seconds=%.3f error_type=%s message=%s",
+                failure.segment_index,
+                total_segments,
+                failure.segment.segment_id,
+                len(completed_results),
+                total_segments - len(completed_results),
+                failure.elapsed_seconds,
+                failure.cause.__class__.__name__,
+                str(failure.cause),
             )
+            failed_trace = _segment_failure_batch_trace(failure)
             trace_setter(
                 WorkflowRunAgentTrace(
                     parser_result=WorkflowRunParserResult(
                         status="failed",
                         error=workflow_run_error_from_exception(
-                            exc,
+                            failure.cause,
                             step_name="node_extraction",
                         ),
                     ),
-                    batch_traces=tuple(batch_traces),
+                    batch_traces=(
+                        *_build_segment_batch_traces(
+                            segments=segments,
+                            completed_results=completed_results,
+                        ),
+                        failed_trace,
+                    ),
                 )
             )
-            raise
+            raise failure.cause from failure
 
-        drafts.extend(segment_drafts)
-        batch_traces.append(
-            WorkflowRunAgentTraceBatch(
-                batch_name=segment.segment_id,
-                input_counts={"segments": 1, "char_count": segment.char_count},
-                model_raw_output=redacted_raw_output,
-                parser_result=WorkflowRunParserResult(
-                    status="succeeded",
-                    output={"drafts": _dump_models(tuple(segment_drafts))},
-                ),
-            )
-        )
-        _LOGGER.info(
-            "Segment node extraction segment succeeded segment_index=%s segment_total=%s segment_id=%s draft_count=%s total_drafts=%s elapsed_seconds=%.3f",
-            segment_index,
-            total_segments,
-            segment.segment_id,
-            len(segment_drafts),
-            len(drafts),
-            monotonic() - segment_started_at,
-        )
-
+    drafts = _build_segment_drafts_in_order(
+        segments=segments,
+        completed_results=completed_results,
+    )
+    batch_traces = _build_segment_batch_traces(
+        segments=segments,
+        completed_results=completed_results,
+    )
     trace_setter(
         WorkflowRunAgentTrace(
             parser_result=WorkflowRunParserResult(
@@ -381,6 +422,167 @@ def _run_traced_segment_node_extraction_step(
         monotonic() - step_started_at,
     )
     return tuple(drafts)
+
+
+def _log_segment_node_extraction_progress(
+    *,
+    total_segments: int,
+    completed_segments: int,
+    active_or_queued_segments: int,
+    total_drafts: int,
+    max_concurrent_requests: int,
+    elapsed_seconds: float,
+) -> None:
+    _LOGGER.info(
+        "Segment node extraction progress completed_segments=%s segment_total=%s remaining_segments=%s active_or_queued_segments=%s total_drafts=%s max_concurrent_requests=%s elapsed_seconds=%.3f",
+        completed_segments,
+        total_segments,
+        total_segments - completed_segments,
+        active_or_queued_segments,
+        total_drafts,
+        max_concurrent_requests,
+        elapsed_seconds,
+    )
+
+
+@dataclass(frozen=True)
+class _SegmentNodeExtractionResult:
+    segment_index: int
+    segment: ParsedSourceSegment
+    redacted_raw_output: str
+    parsed_patches: tuple[SegmentNodeExtractionDraftPatch, ...]
+    elapsed_seconds: float
+
+
+class _SegmentNodeExtractionFailure(Exception):
+    def __init__(
+        self,
+        *,
+        segment_index: int,
+        segment: ParsedSourceSegment,
+        redacted_raw_output: str | None,
+        elapsed_seconds: float,
+        cause: Exception,
+    ) -> None:
+        super().__init__(str(cause))
+        self.segment_index = segment_index
+        self.segment = segment
+        self.redacted_raw_output = redacted_raw_output
+        self.elapsed_seconds = elapsed_seconds
+        self.cause = cause
+
+
+def _extract_segment_node_patches(
+    *,
+    model_client: ModelClient,
+    message_profile: ModelMessageProfile,
+    segment: ParsedSourceSegment,
+    segment_index: int,
+    total_segments: int,
+) -> _SegmentNodeExtractionResult:
+    segment_started_at = monotonic()
+    _LOGGER.info(
+        "Segment node extraction segment started segment_index=%s segment_total=%s segment_id=%s source_id=%s char_count=%s location=%s",
+        segment_index,
+        total_segments,
+        segment.segment_id,
+        segment.source_id,
+        segment.char_count,
+        segment.location,
+    )
+
+    redacted_raw_output: str | None = None
+    try:
+        raw_output = model_client.complete(
+            messages=build_node_extraction_messages(
+                segment,
+                message_profile=message_profile,
+            )
+        )
+        redacted_raw_output = redact_logged_text(raw_output)
+        parsed_patches = parse_segment_node_extraction_output(raw_output)
+    except Exception as exc:
+        raise _SegmentNodeExtractionFailure(
+            segment_index=segment_index,
+            segment=segment,
+            redacted_raw_output=redacted_raw_output,
+            elapsed_seconds=monotonic() - segment_started_at,
+            cause=exc,
+        ) from exc
+
+    return _SegmentNodeExtractionResult(
+        segment_index=segment_index,
+        segment=segment,
+        redacted_raw_output=redacted_raw_output,
+        parsed_patches=tuple(parsed_patches),
+        elapsed_seconds=monotonic() - segment_started_at,
+    )
+
+
+def _build_segment_drafts_in_order(
+    *,
+    segments: tuple[ParsedSourceSegment, ...],
+    completed_results: dict[int, _SegmentNodeExtractionResult],
+) -> tuple[SegmentNodeExtractionDraft, ...]:
+    drafts: list[SegmentNodeExtractionDraft] = []
+    for segment_index, segment in enumerate(segments, start=1):
+        result = completed_results[segment_index]
+        drafts.extend(
+            _segment_drafts_from_patches(
+                result.parsed_patches,
+                segment=segment,
+                start_index=len(drafts) + 1,
+            )
+        )
+    return tuple(drafts)
+
+
+def _build_segment_batch_traces(
+    *,
+    segments: tuple[ParsedSourceSegment, ...],
+    completed_results: dict[int, _SegmentNodeExtractionResult],
+) -> tuple[WorkflowRunAgentTraceBatch, ...]:
+    traces: list[WorkflowRunAgentTraceBatch] = []
+    draft_start_index = 1
+    for segment_index, segment in enumerate(segments, start=1):
+        result = completed_results.get(segment_index)
+        if result is None:
+            continue
+        segment_drafts = _segment_drafts_from_patches(
+            result.parsed_patches,
+            segment=segment,
+            start_index=draft_start_index,
+        )
+        draft_start_index += len(segment_drafts)
+        traces.append(
+            WorkflowRunAgentTraceBatch(
+                batch_name=segment.segment_id,
+                input_counts={"segments": 1, "char_count": segment.char_count},
+                model_raw_output=result.redacted_raw_output,
+                parser_result=WorkflowRunParserResult(
+                    status="succeeded",
+                    output={"drafts": _dump_models(tuple(segment_drafts))},
+                ),
+            )
+        )
+    return tuple(traces)
+
+
+def _segment_failure_batch_trace(
+    failure: _SegmentNodeExtractionFailure,
+) -> WorkflowRunAgentTraceBatch:
+    return WorkflowRunAgentTraceBatch(
+        batch_name=failure.segment.segment_id,
+        input_counts={"segments": 1, "char_count": failure.segment.char_count},
+        model_raw_output=failure.redacted_raw_output,
+        parser_result=WorkflowRunParserResult(
+            status="failed",
+            error=workflow_run_error_from_exception(
+                failure.cause,
+                step_name="node_extraction",
+            ),
+        ),
+    )
 
 
 def _segment_drafts_from_patches(

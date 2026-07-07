@@ -58,6 +58,7 @@ Decision rules:
 - A soft target is 8-12 drafts or fewer for this segment, but include more if the segment clearly supports them.
 - Do not output id, draft_id, segment_id, diagnostic_goal, levels, diagnostic_signals, simulator_behavior, edges, user states, or evidence.
 - Do not output source_id. The workflow supplies source_id from the Parsed Source Segment.
+- If source_locator.note would be blank, omit the note key entirely.
 """.strip(),
                 """
 Output contract:
@@ -68,8 +69,7 @@ Return JSON with this exact top-level shape:
       "name": "Human Readable Name",
       "definition": "Concise source-grounded definition.",
       "source_locator": {
-        "locator": "same_or_more_precise_location_as_input",
-        "note": "optional short reviewer note"
+        "locator": "same_or_more_precise_location_as_input"
       },
       "grounding_note": "Concise paraphrased source-grounding note."
     }
@@ -78,11 +78,13 @@ Return JSON with this exact top-level shape:
 
 The complete response must be a JSON object with exactly one top-level key: "drafts".
 "drafts" must be an array.
+source_locator.note is optional. Include it only when it is a nonblank reviewer note; otherwise omit the key.
 """.strip(),
                 """
 Final check before output:
 - Each draft has nonblank name, definition, source_locator, and grounding_note.
 - Each source_locator contains a reviewer-usable locator and does not contain source_id.
+- No source_locator contains a blank note.
 - No draft relies on outside memory or invented source metadata.
 - No output contains ids, user-state, evidence, candidate-status, edge, or rubric fields.
 """.strip(),

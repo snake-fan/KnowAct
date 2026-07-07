@@ -1,5 +1,6 @@
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from backend.knowact.authoring.templates.node_skeleton_reconciliation import (
     build_node_skeleton_reconciliation_messages,
 )
 from backend.knowact.authoring.templates.node_rubric_authoring import build_node_rubric_authoring_messages
+from backend.knowact.authoring.steps import LLMSegmentNodeExtractionStep
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeGraph, KnowledgeNode, SourceLocator
 from backend.knowact.core.map import MasteryLevel
@@ -332,11 +334,12 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         model_client = FakeRawJSONWorkflowModelClient()
         workflow = build_openai_graph_authoring_workflow(model_client=model_client)
 
-        with self.assertLogs("backend.knowact.authoring.steps", level="INFO") as context:
+        with self.assertLogs("knowact.authoring.steps", level="INFO") as context:
             workflow.run([_source_material()])
 
         logs = "\n".join(context.output)
         self.assertIn("Segment node extraction started segments=1", logs)
+        self.assertIn("max_concurrent_requests=1", logs)
         self.assertIn(
             "Segment node extraction segment started segment_index=1 segment_total=1 segment_id=seg_000001",
             logs,
@@ -345,7 +348,38 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
             "Segment node extraction segment succeeded segment_index=1 segment_total=1 segment_id=seg_000001 draft_count=1 total_drafts=1",
             logs,
         )
+        self.assertIn("remaining_segments=0", logs)
         self.assertIn("Segment node extraction succeeded segments=1 total_drafts=1", logs)
+
+    def test_segment_node_extraction_requests_segments_in_parallel(self):
+        model_client = BlockingNodeExtractionModelClient(expected_concurrent_calls=2)
+        step = LLMSegmentNodeExtractionStep(
+            model_client,
+            max_concurrent_requests=2,
+        )
+
+        drafts = step.run(
+            (
+                _parsed_segment("seg_000001", "chapter_1"),
+                _parsed_segment("seg_000002", "chapter_2"),
+            )
+        )
+
+        self.assertEqual(2, model_client.max_active_calls)
+        self.assertEqual(
+            ("draft_000001", "draft_000002"),
+            tuple(draft.draft_id for draft in drafts),
+        )
+        self.assertEqual(
+            ("seg_000001", "seg_000002"),
+            tuple(draft.segment_id for draft in drafts),
+        )
+        trace = step.last_trace
+        self.assertIsNotNone(trace)
+        self.assertEqual(
+            ("seg_000001", "seg_000002"),
+            tuple(batch.batch_name for batch in trace.batch_traces),
+        )
 
     def test_llm_agent_steps_record_raw_model_output_and_parser_output_in_run_log(self):
         model_client = FakeRawJSONWorkflowModelClient()
@@ -855,6 +889,45 @@ class EmptyDraftGraphModelClient(FakeRawJSONWorkflowModelClient):
         raise AssertionError(f"unexpected prompt after empty drafts: {developer_prompt}")
 
 
+class BlockingNodeExtractionModelClient:
+    def __init__(self, *, expected_concurrent_calls: int):
+        self._barrier = threading.Barrier(expected_concurrent_calls, timeout=2.0)
+        self._lock = threading.Lock()
+        self._active_calls = 0
+        self.max_active_calls = 0
+
+    def complete(self, *, messages):
+        prompt = "\n\n".join(message.content for message in messages)
+        if "Node Extraction Agent Step" not in prompt:
+            raise AssertionError(f"unexpected prompt: {prompt}")
+
+        with self._lock:
+            self._active_calls += 1
+            self.max_active_calls = max(self.max_active_calls, self._active_calls)
+        try:
+            self._barrier.wait()
+        finally:
+            with self._lock:
+                self._active_calls -= 1
+
+        location = _location_from_prompt(prompt)
+        return json.dumps(
+            {
+                "drafts": [
+                    {
+                        "name": f"Concept From {location}",
+                        "definition": f"Definition grounded in {location}.",
+                        "source_locator": {
+                            "locator": location,
+                            "note": "Concurrent extraction test locator.",
+                        },
+                        "grounding_note": f"Grounded in {location}.",
+                    }
+                ]
+            }
+        )
+
+
 def _complete_candidate_node(
     skeleton: SourceGroundedNodeSkeleton,
     *,
@@ -909,6 +982,19 @@ def _source_material() -> SourceMaterial:
     )
 
 
+def _parsed_segment(segment_id: str, location: str) -> ParsedSourceSegment:
+    return ParsedSourceSegment(
+        segment_id=segment_id,
+        source_id="isl_python",
+        source_title="An Introduction to Statistical Learning with Applications in Python",
+        location=location,
+        heading_path=(location,),
+        text=f"{location} introduces a diagnosable statistical learning concept.",
+        source_locator=SourceLocator(source_id="isl_python", locator=location),
+        char_count=72,
+    )
+
+
 def _load_json(path: Path):
     with path.open(encoding="utf-8") as handle:
         return json.load(handle)
@@ -916,6 +1002,13 @@ def _load_json(path: Path):
 
 def _render_prompt(messages) -> str:
     return "\n\n".join(message.content for message in messages)
+
+
+def _location_from_prompt(prompt: str) -> str:
+    for line in prompt.splitlines():
+        if line.startswith("Location: "):
+            return line.removeprefix("Location: ").strip()
+    raise AssertionError(f"missing Location line in prompt: {prompt}")
 
 
 if __name__ == "__main__":
