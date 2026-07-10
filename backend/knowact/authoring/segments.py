@@ -6,9 +6,10 @@ from backend.knowact.authoring.schemas import ParsedSourceSegment, SourceMateria
 from backend.knowact.core.graph import SourceLocator
 
 
-MAX_SEGMENT_CHARS = 12000
-MIN_SEGMENT_CHARS = 800
-OVERLAP_PARAGRAPHS = 1
+MIN_SEGMENT_CHARS = 50_000
+TARGET_SEGMENT_CHARS = 100_000
+MAX_SEGMENT_CHARS = 150_000
+OVERLAP_PARAGRAPHS = 0
 
 _MARKDOWN_HEADING_PATTERN = re.compile(r"^\s{0,3}(#{1,6})\s+(.+?)\s*$")
 _NUMBERED_HEADING_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+){0,2})(?:[\s:.-]+)(.+?)\s*$")
@@ -21,10 +22,7 @@ class _RawSection:
     source: SourceMaterial
     heading_path: tuple[str, ...]
     text: str
-
-    @property
-    def parent_path(self) -> tuple[str, ...]:
-        return self.heading_path[:-1]
+    location: str | None = None
 
     @property
     def char_count(self) -> int:
@@ -36,13 +34,13 @@ def derive_parsed_source_segments(
 ) -> tuple[ParsedSourceSegment, ...]:
     raw_sections: list[_RawSection] = []
     for source in source_materials:
-        raw_sections.extend(_merge_small_sibling_sections(_parse_source_sections(source)))
+        raw_sections.extend(_pack_adjacent_sections(_parse_source_sections(source)))
 
     segments: list[ParsedSourceSegment] = []
     next_index = 1
     for section in raw_sections:
         for text, suffix in _split_oversized_text(section.text):
-            location = _render_location(section.heading_path, suffix)
+            location = _render_section_location(section, suffix)
             segments.append(
                 ParsedSourceSegment(
                     segment_id=f"seg_{next_index:06d}",
@@ -153,38 +151,94 @@ def _parse_heading(line: str) -> tuple[int, str] | None:
     return markdown_level, title
 
 
-def _merge_small_sibling_sections(
+def _pack_adjacent_sections(
     sections: Sequence[_RawSection],
 ) -> tuple[_RawSection, ...]:
-    merged: list[_RawSection] = []
-    index = 0
-    while index < len(sections):
-        current = sections[index]
-        texts = [current.text]
-        start_heading_path = current.heading_path
-        total_chars = current.char_count
-        next_index = index + 1
+    groups: list[list[_RawSection]] = []
+    current: list[_RawSection] = []
+    current_chars = 0
 
-        while (
-            total_chars < MIN_SEGMENT_CHARS
-            and next_index < len(sections)
-            and sections[next_index].source.source_id == current.source.source_id
-            and sections[next_index].parent_path == current.parent_path
-        ):
-            sibling = sections[next_index]
-            texts.append(sibling.text)
-            total_chars += sibling.char_count
-            next_index += 1
-
-        merged.append(
-            _RawSection(
-                source=current.source,
-                heading_path=start_heading_path,
-                text="\n\n".join(texts),
+    for section in sections:
+        separator_chars = 2 if current else 0
+        projected_chars = current_chars + separator_chars + section.char_count
+        if current and (
+            projected_chars > MAX_SEGMENT_CHARS
+            or (
+                current_chars >= TARGET_SEGMENT_CHARS
+                and projected_chars > TARGET_SEGMENT_CHARS
             )
-        )
-        index = next_index
-    return tuple(merged)
+        ):
+            groups.append(current)
+            current = []
+            current_chars = 0
+            separator_chars = 0
+
+        current.append(section)
+        current_chars += separator_chars + section.char_count
+
+    if current:
+        groups.append(current)
+
+    groups = _merge_short_final_section_group(groups)
+    return tuple(_section_group_to_raw_section(group) for group in groups)
+
+
+def _merge_short_final_section_group(groups: list[list[_RawSection]]) -> list[list[_RawSection]]:
+    if len(groups) < 2:
+        return groups
+
+    final_group = groups[-1]
+    previous_group = groups[-2]
+    if (
+        _section_group_char_count(final_group) < MIN_SEGMENT_CHARS
+        and _section_group_char_count([*previous_group, *final_group]) <= MAX_SEGMENT_CHARS
+    ):
+        return [*groups[:-2], [*previous_group, *final_group]]
+    return groups
+
+
+def _section_group_to_raw_section(group: Sequence[_RawSection]) -> _RawSection:
+    if not group:
+        raise ValueError("section group must not be empty")
+
+    source = group[0].source
+    heading_path = _common_heading_path([section.heading_path for section in group])
+    if not heading_path:
+        heading_path = (source.title,)
+
+    start_location = _render_location(group[0].heading_path, None)
+    end_location = _render_location(group[-1].heading_path, None)
+    location = (
+        start_location
+        if start_location == end_location
+        else f"{start_location} through {end_location}"
+    )
+
+    return _RawSection(
+        source=source,
+        heading_path=heading_path,
+        text="\n\n".join(section.text for section in group),
+        location=location,
+    )
+
+
+def _section_group_char_count(group: Sequence[_RawSection]) -> int:
+    if not group:
+        return 0
+    return sum(section.char_count for section in group) + (2 * (len(group) - 1))
+
+
+def _common_heading_path(paths: Sequence[tuple[str, ...]]) -> tuple[str, ...]:
+    if not paths:
+        return ()
+
+    common: list[str] = []
+    for items in zip(*paths):
+        first = items[0]
+        if any(item != first for item in items):
+            break
+        common.append(first)
+    return tuple(common[:3])
 
 
 def _split_oversized_text(text: str) -> tuple[tuple[str, str | None], ...]:
@@ -193,27 +247,78 @@ def _split_oversized_text(text: str) -> tuple[tuple[str, str | None], ...]:
 
     paragraphs = [paragraph.strip() for paragraph in re.split(r"\n\s*\n", text) if paragraph.strip()]
     if not paragraphs:
-        return ((text[:MAX_SEGMENT_CHARS], "part 1"),)
+        return _split_plain_text_by_budget(text)
 
-    chunks: list[tuple[str, str | None]] = []
+    chunks: list[str] = []
     current: list[str] = []
     current_chars = 0
     for paragraph in paragraphs:
-        paragraph_len = len(paragraph)
-        if current and current_chars + paragraph_len + 2 > MAX_SEGMENT_CHARS:
-            chunks.append(("\n\n".join(current), f"part {len(chunks) + 1}"))
-            current = current[-OVERLAP_PARAGRAPHS:] if OVERLAP_PARAGRAPHS else []
-            current_chars = sum(len(item) + 2 for item in current)
-        current.append(paragraph)
-        current_chars += paragraph_len + 2
+        for piece in _split_paragraph_by_budget(paragraph):
+            piece_len = len(piece)
+            separator_chars = 2 if current else 0
+            projected_chars = current_chars + separator_chars + piece_len
+
+            if current and (
+                projected_chars > MAX_SEGMENT_CHARS
+                or (
+                    current_chars >= TARGET_SEGMENT_CHARS
+                    and projected_chars > TARGET_SEGMENT_CHARS
+                )
+            ):
+                chunks.append("\n\n".join(current))
+                current = current[-OVERLAP_PARAGRAPHS:] if OVERLAP_PARAGRAPHS else []
+                current_chars = sum(len(item) + 2 for item in current)
+                separator_chars = 2 if current else 0
+
+            current.append(piece)
+            current_chars += separator_chars + piece_len
 
     if current:
-        chunks.append(("\n\n".join(current), f"part {len(chunks) + 1}"))
-    return tuple(chunks)
+        chunks.append("\n\n".join(current))
+
+    chunks = _merge_short_final_chunk(chunks)
+    return tuple((chunk, f"part {index}") for index, chunk in enumerate(chunks, start=1))
+
+
+def _split_plain_text_by_budget(text: str) -> tuple[tuple[str, str | None], ...]:
+    chunks = [
+        text[index : index + TARGET_SEGMENT_CHARS]
+        for index in range(0, len(text), TARGET_SEGMENT_CHARS)
+    ]
+    chunks = _merge_short_final_chunk(chunks)
+    return tuple((chunk, f"part {index}") for index, chunk in enumerate(chunks, start=1))
+
+
+def _split_paragraph_by_budget(paragraph: str) -> tuple[str, ...]:
+    if len(paragraph) <= MAX_SEGMENT_CHARS:
+        return (paragraph,)
+    return tuple(
+        paragraph[index : index + TARGET_SEGMENT_CHARS]
+        for index in range(0, len(paragraph), TARGET_SEGMENT_CHARS)
+    )
+
+
+def _merge_short_final_chunk(chunks: list[str]) -> list[str]:
+    if len(chunks) < 2:
+        return chunks
+
+    final_chunk = chunks[-1]
+    previous_chunk = chunks[-2]
+    merged = f"{previous_chunk}\n\n{final_chunk}"
+    if len(final_chunk) < MIN_SEGMENT_CHARS and len(merged) <= MAX_SEGMENT_CHARS:
+        return [*chunks[:-2], merged]
+    return chunks
 
 
 def _render_location(heading_path: tuple[str, ...], suffix: str | None) -> str:
     location = " > ".join(heading_path)
+    if suffix is not None:
+        return f"{location} ({suffix})"
+    return location
+
+
+def _render_section_location(section: _RawSection, suffix: str | None) -> str:
+    location = section.location or _render_location(section.heading_path, None)
     if suffix is not None:
         return f"{location} ({suffix})"
     return location

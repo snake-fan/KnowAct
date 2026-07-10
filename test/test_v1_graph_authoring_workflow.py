@@ -16,7 +16,11 @@ from backend.knowact.authoring.parsers.graph_authoring import (
     parse_node_rubric_authoring_output,
     parse_segment_node_extraction_output,
 )
-from backend.knowact.authoring.segments import derive_parsed_source_segments
+from backend.knowact.authoring.segments import (
+    MAX_SEGMENT_CHARS,
+    MIN_SEGMENT_CHARS,
+    derive_parsed_source_segments,
+)
 from backend.knowact.authoring.schemas import (
     EdgeProposalInput,
     NodeRubricAuthoringInput,
@@ -166,6 +170,63 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertEqual(len(segments[0].text), segments[0].char_count)
         self.assertEqual("isl_python", segments[0].source_locator.source_id)
         self.assertIn("Statistical Learning", segments[0].location)
+
+    def test_parsed_source_segments_merge_sibling_sections_into_large_context_windows(self):
+        section_texts = [
+            f"Section {index}\n" + ("x" * 20_000)
+            for index in range(1, 9)
+        ]
+        source = SourceMaterial(
+            source_id="large_source",
+            title="Large Source",
+            text="# 1 Large Chapter\n\n" + "\n\n".join(
+                f"## 1.{index} Section {index}\n\n{text}"
+                for index, text in enumerate(section_texts, start=1)
+            ),
+        )
+
+        segments = derive_parsed_source_segments([source])
+
+        self.assertEqual(2, len(segments))
+        self.assertTrue(
+            all(MIN_SEGMENT_CHARS <= segment.char_count <= MAX_SEGMENT_CHARS for segment in segments)
+        )
+        self.assertGreaterEqual(segments[0].char_count, 90_000)
+
+    def test_parsed_source_segments_pack_adjacent_sections_across_heading_parents(self):
+        source = SourceMaterial(
+            source_id="large_source",
+            title="Large Source",
+            text="\n\n".join(
+                f"# {index} Chapter {index}\n\nChapter {index}\n" + ("x" * 30_000)
+                for index in range(1, 5)
+            ),
+        )
+
+        segments = derive_parsed_source_segments([source])
+
+        self.assertEqual(1, len(segments))
+        self.assertLessEqual(segments[0].char_count, MAX_SEGMENT_CHARS)
+        self.assertIn("through", segments[0].location)
+
+    def test_parsed_source_segments_split_oversized_sections_without_overlap(self):
+        paragraphs = [
+            f"paragraph-{index} " + ("x" * 29_990)
+            for index in range(1, 7)
+        ]
+        source = SourceMaterial(
+            source_id="large_source",
+            title="Large Source",
+            text="# 1 Large Chapter\n\n" + "\n\n".join(paragraphs),
+        )
+
+        segments = derive_parsed_source_segments([source])
+
+        self.assertEqual(2, len(segments))
+        self.assertTrue(
+            all(MIN_SEGMENT_CHARS <= segment.char_count <= MAX_SEGMENT_CHARS for segment in segments)
+        )
+        self.assertNotIn("paragraph-4", segments[1].text)
 
     def test_segment_driven_workflow_fails_when_all_segments_return_zero_drafts(self):
         workflow = build_openai_graph_authoring_workflow(model_client=EmptyDraftGraphModelClient())
@@ -524,6 +585,67 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         with self.assertRaises(AuthoringOutputParseError):
             parse_node_rubric_authoring_output(raw_output)
 
+    def test_segment_node_extraction_parser_repairs_raw_latex_backslashes(self):
+        raw_output = r'''{
+  "drafts": [
+    {
+      "name": "Standard Error of an Estimated Coefficient",
+      "definition": "The standard error of an estimated regression coefficient measures variability.",
+      "source_locator": {
+        "locator": "3. Which media are associated with sales?"
+      },
+      "grounding_note": "The standard error of $\hat{\beta}_j$ constructs intervals for $\beta_j$."
+    }
+  ]
+}'''
+
+        drafts = parse_segment_node_extraction_output(raw_output)
+
+        self.assertEqual(1, len(drafts))
+        self.assertEqual(
+            r"The standard error of $\hat{\beta}_j$ constructs intervals for $\beta_j$.",
+            drafts[0].grounding_note,
+        )
+
+    def test_segment_node_extraction_parser_repairs_json_valid_latex_backslashes(self):
+        raw_output = r'''{
+  "drafts": [
+    {
+      "name": "Regression Coefficient",
+      "definition": "A regression coefficient represents an adjusted predictor association.",
+      "source_locator": {
+        "locator": "chapter_3"
+      },
+      "grounding_note": "The coefficient $\beta_j$ is tested against zero."
+    }
+  ]
+}'''
+
+        drafts = parse_segment_node_extraction_output(raw_output)
+
+        self.assertEqual(
+            r"The coefficient $\beta_j$ is tested against zero.",
+            drafts[0].grounding_note,
+        )
+
+    def test_segment_node_extraction_parser_preserves_valid_json_escapes(self):
+        raw_output = json.dumps(
+            {
+                "drafts": [
+                    {
+                        "name": "Escaped Quote Example",
+                        "definition": 'A definition with an escaped "quote" and newline.',
+                        "source_locator": {"locator": "chapter_3"},
+                        "grounding_note": "Line one\nLine two with a quoted term.",
+                    }
+                ]
+            }
+        )
+
+        drafts = parse_segment_node_extraction_output(raw_output)
+
+        self.assertEqual("Line one\nLine two with a quoted term.", drafts[0].grounding_note)
+
     def test_graph_authoring_templates_are_split_and_include_knowledge_graph_guardrails(self):
         source_materials = [_source_material()]
         segments = derive_parsed_source_segments(source_materials)
@@ -531,6 +653,9 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         extraction_prompt = _render_prompt(build_node_extraction_messages(segments[0]))
         self.assertIn("Segment Node Extraction Drafts", extraction_prompt)
         self.assertIn("roughly 1-3 focused diagnostic questions", extraction_prompt)
+        self.assertIn("no more than 100 Knowledge Nodes", extraction_prompt)
+        self.assertIn("3-8 drafts", extraction_prompt)
+        self.assertIn("Treat 12 drafts as an exceptional upper bound", extraction_prompt)
         self.assertIn("Do not output id, draft_id, segment_id", extraction_prompt)
         self.assertIn("Do not output source_id", extraction_prompt)
         self.assertIn("Parsed Source Segment", extraction_prompt)

@@ -27,7 +27,7 @@ You are the KnowAct Node Extraction Agent Step.
                 """
 Objective:
 Extract thin Segment Node Extraction Drafts from one bounded Parsed Source Segment.
-Success means every returned draft is source-grounded, diagnosable, moderately granular, and parseable by the exact JSON contract.
+Success means every returned draft is source-grounded, diagnosable, moderately granular, likely to survive whole-book reconciliation, and parseable by the exact JSON contract.
 """.strip(),
                 AUTHORING_CONTEXT,
                 TASK_DATA_BOUNDARY_RULES,
@@ -41,21 +41,25 @@ The segment text is the only source-material text available to this call.
 """.strip(),
                 """
 Process:
-1. Read the segment text and identify stable concepts that matter for active knowledge-state diagnosis.
-2. Return only concepts grounded in this segment.
-3. Keep drafts thin: name, definition, source_locator, and grounding_note only.
-4. Prefer source-grounded definitions, boundaries, contrasts, dependencies, examples, and diagnostic clues over broad headings or isolated notation.
-5. Remove anything that belongs to reconciliation, rubric authoring, edge proposal, user-state authoring, or evidence authoring.
+1. Read the segment text as part of a whole-book graph whose final reviewed graph should usually contain no more than 100 Knowledge Nodes.
+2. Identify only stable, canonical concepts that matter for active knowledge-state diagnosis and are likely to become standalone nodes after global reconciliation.
+3. Return only concepts grounded in this segment.
+4. Keep drafts thin: name, definition, source_locator, and grounding_note only.
+5. Prefer source-grounded definitions, boundaries, contrasts, dependencies, examples, and diagnostic clues over broad headings or isolated notation.
+6. Remove anything that belongs to reconciliation, rubric authoring, edge proposal, user-state authoring, or evidence authoring.
 """.strip(),
                 """
 Decision rules:
 - Preserve a clear source trail for every draft.
-- Prefer stable domain concepts over section headings, implementation details, examples, or isolated formula notation.
+- Prefer stable domain concepts over section headings, implementation details, exercises, examples, named one-off results, proof maneuvers, or isolated formula notation.
+- Do not mine every theorem, lemma, proposition, example, exercise, equation, symbol, named algorithm step, or local variation as a separate node.
+- Use examples, exercises, formulas, and local results as grounding for broader concepts unless the passage clearly introduces a central domain concept that can support several diagnostic questions.
+- A normal textbook-scale segment should usually return 3-8 drafts, and may return zero drafts when it contains mostly examples, exercises, proofs, front matter, or repeated material.
+- Treat 12 drafts as an exceptional upper bound for unusually dense segments. If more than 12 candidates seem possible, keep only the highest-value concepts that would still belong in a whole-book graph with at most 100 final nodes.
 - Write definitions from the provided segment text, not from outside memory.
 - Write concise grounding_note values that preserve the source-grounded facts later workflow steps need without copying long source passages.
 - If a concept cannot be grounded in the segment text, omit it.
 - If the segment contains no sufficiently grounded diagnosable concept, return {"drafts": []}.
-- A soft target is 8-12 drafts or fewer for this segment, but include more if the segment clearly supports them.
 - Do not output id, draft_id, segment_id, diagnostic_goal, levels, diagnostic_signals, simulator_behavior, edges, user states, or evidence.
 - Do not output source_id. The workflow supplies source_id from the Parsed Source Segment.
 - If source_locator.note would be blank, omit the note key entirely.
