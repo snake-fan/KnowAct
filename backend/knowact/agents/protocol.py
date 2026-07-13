@@ -22,11 +22,43 @@ class DecisionPhaseContext(BaseModel):
     remaining_diagnostic_turns: int = Field(ge=0)
 
 
+class DiagnosticQuestionPlan(BaseModel):
+    """Tested-agent-visible rationale for one information-seeking action."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    primary_target_node_id: str
+    secondary_target_node_ids: tuple[str, ...] = Field(default_factory=tuple)
+    target_mastery_boundary: str
+    selection_reason: str
+
+    @field_validator(
+        "primary_target_node_id", "target_mastery_boundary", "selection_reason"
+    )
+    @classmethod
+    def _plan_text_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("secondary_target_node_ids")
+    @classmethod
+    def _secondary_targets_must_be_nonblank_unique(
+        cls, value: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        if any(not node_id.strip() for node_id in value):
+            raise ValueError("must not contain blank items")
+        if len(value) != len(set(value)):
+            raise ValueError("must not contain duplicate items")
+        return value
+
+
 class AskDiagnosticQuestionDecision(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["ask_diagnostic_question"] = "ask_diagnostic_question"
     question: DiagnosticQuestion
+    diagnostic_plan: DiagnosticQuestionPlan | None = None
 
 
 class FinalizeReconstructionDecision(BaseModel):

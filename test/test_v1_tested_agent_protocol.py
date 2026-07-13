@@ -7,6 +7,7 @@ from backend.knowact.agents.protocol import (
     AskDiagnosticQuestionDecision,
     DecisionPhase,
     DecisionPhaseContext,
+    DiagnosticQuestionPlan,
     FinalizeReconstructionDecision,
     TestedAgent,
     TestedAgentDecision,
@@ -24,13 +25,23 @@ class V1TestedAgentProtocolTest(unittest.TestCase):
 
     def test_ask_diagnostic_question_decision_requires_valid_question(self):
         decision = AskDiagnosticQuestionDecision(
-            question=DiagnosticQuestion(text="How do you use a validation set?")
+            question=DiagnosticQuestion(text="How do you use a validation set?"),
+            diagnostic_plan=DiagnosticQuestionPlan(
+                primary_target_node_id="train_test_split",
+                secondary_target_node_ids=("overfitting",),
+                target_mastery_boundary="L2_vs_L3",
+                selection_reason="A connected evaluation scenario probes both concepts.",
+            ),
         )
 
         self.assertEqual("ask_diagnostic_question", decision.kind)
         self.assertEqual(
             "How do you use a validation set?",
             decision.question.text,
+        )
+        self.assertEqual(
+            ("overfitting",),
+            decision.diagnostic_plan.secondary_target_node_ids,
         )
 
         with self.assertRaises(ValidationError):

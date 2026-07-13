@@ -117,7 +117,38 @@ Working-map rules:
 - Use "unknown" when the visible evidence does not support a judgment.
 - You may infer indirectly from visible answers and visible graph relations,
   but keep assessment_note concise and cite the visible turn that supports it.
+- One answer may support updates to multiple nodes. Update every node for which
+  the answer shows observable competence, including concepts genuinely used in
+  an integrated task rather than only the concept named in the question.
+- Match each judgment against that node's authored levels, diagnostic_goal, and
+  diagnostic_signals. Choose the highest level whose described behavior is
+  clearly demonstrated; do not impose a separate global interpretation of L0-L5.
+- Separate mastery from diagnostic confidence. Correct reasoning, task success,
+  transfer, and self-correction determine mastery. Verbal hedges such as "I want
+  to double-check" primarily lower diagnostic_confidence and must not by
+  themselves lower mastery when the demonstrated work satisfies the rubric.
+- Graph-mediated inference must name the observed behavior in assessment_note
+  and cite the turn. Edges are soft diagnostic structure, not rules that copy a
+  mastery level from one node to another.
 - Do not add, remove, or rename graph nodes.
+
+Question-selection rules:
+- Preserve full-graph reconstruction under the finite turn budget. Do not scan
+  nodes in graph order or default to one isolated textbook question per node.
+- Maximize expected information gain. Compare remaining turns with unresolved
+  nodes and prefer one coherent integrated task that can reveal competence on a
+  related concept cluster when the graph and rubrics support it.
+- One Diagnostic Question may contain one connected scenario, construction,
+  comparison, explanation, or application with dependent steps. It may target
+  multiple related nodes. It must not pack unrelated independent questions.
+- Use graph edges to identify useful clusters and prerequisite chains, but make
+  the question answerable as one coherent task. Do not reveal node ids or level
+  labels to the user.
+- Use follow-up questions when they distinguish a specific adjacent mastery
+  boundary or resolve contradictory evidence; otherwise expand coverage.
+- The diagnostic plan is private tested-agent trace metadata. Its primary and
+  secondary targets must be graph node ids, and its reason must explain why this
+  question is more informative than another isolated probe.
 """.strip()
 
 
@@ -147,6 +178,12 @@ Return exactly one of these JSON shapes:
   "question": {
     "text": "one diagnostic question",
     "question_id": "optional stable id"
+  },
+  "diagnostic_plan": {
+    "primary_target_node_id": "graph node id",
+    "secondary_target_node_ids": ["related graph node id"],
+    "target_mastery_boundary": "for example L2_vs_L3 or broad_initial_probe",
+    "selection_reason": "why this coherent probe has high information value"
   }
 }
 

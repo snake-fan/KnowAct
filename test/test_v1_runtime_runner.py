@@ -128,6 +128,24 @@ class V1RuntimeRunnerTest(unittest.TestCase):
             "working_map_update",
             {event["event"] for event in trace["events"]},
         )
+        ask_event = next(
+            event
+            for event in trace["events"]
+            if event["event"] == "tested_agent_decision"
+            and event["decision"]["kind"] == "ask_diagnostic_question"
+        )
+        self.assertEqual(
+            "train_test_split",
+            ask_event["decision"]["diagnostic_plan"][
+                "primary_target_node_id"
+            ],
+        )
+        self.assertEqual(
+            ["cross_validation"],
+            ask_event["decision"]["diagnostic_plan"][
+                "secondary_target_node_ids"
+            ],
+        )
 
     def test_runner_persists_completed_turn_and_working_map_before_scoring(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -309,6 +327,12 @@ def _ask_train_test_split_question_output() -> str:
             "question": {
                 "text": "How would you decide whether a Train/Test Split is appropriate?",
                 "question_id": "q_train_test_split",
+            },
+            "diagnostic_plan": {
+                "primary_target_node_id": "train_test_split",
+                "secondary_target_node_ids": ["cross_validation"],
+                "target_mastery_boundary": "broad_initial_probe",
+                "selection_reason": "A held-out evaluation scenario probes related validation concepts.",
             },
         }
     )

@@ -22,6 +22,12 @@ class V1TestedAgentApiTest(unittest.TestCase):
                   "question": {
                     "text": "How would you decide whether a held-out test set is needed?",
                     "question_id": "q_train_test_split"
+                  },
+                  "diagnostic_plan": {
+                    "primary_target_node_id": "train_test_split",
+                    "secondary_target_node_ids": ["cross_validation"],
+                    "target_mastery_boundary": "broad_initial_probe",
+                    "selection_reason": "A held-out scenario probes related evaluation concepts."
                   }
                 }
                 """,
@@ -92,6 +98,12 @@ class V1TestedAgentApiTest(unittest.TestCase):
                   "action": "ask_diagnostic_question",
                   "question": {
                     "text": "How would leakage affect the test estimate?"
+                  },
+                  "diagnostic_plan": {
+                    "primary_target_node_id": "train_test_split",
+                    "secondary_target_node_ids": ["cross_validation"],
+                    "target_mastery_boundary": "L2_vs_L3",
+                    "selection_reason": "Leakage reasoning distinguishes application from recall."
                   }
                 }
                 """,
@@ -211,6 +223,12 @@ class V1TestedAgentApiTest(unittest.TestCase):
                   "action": "ask_diagnostic_question",
                   "question": {
                     "text": "How do you interpret a validation split?"
+                  },
+                  "diagnostic_plan": {
+                    "primary_target_node_id": "train_test_split",
+                    "secondary_target_node_ids": ["cross_validation"],
+                    "target_mastery_boundary": "broad_initial_probe",
+                    "selection_reason": "One validation scenario probes related concepts."
                   }
                 }
                 """,

@@ -365,6 +365,8 @@ Decision reference: `docs/adr/0051-v1-tested-agents-use-working-map-semantic-too
 - If forced finalization fails or times out, the runner may mechanically export the current working map into a fallback full-graph final reconstruction submission. Mark the run output with `forced_finalization_fallback = true`.
 - Fixed, random, and simple LLM baselines all use the same working-map and finalization tool path; fixed-question exists as a deterministic floor for regression and smoke testing.
 - Simple LLM agents may update multiple node assessments after a turn, including indirectly inferred nodes, but they must still use the semantic working-map tools rather than producing final reconstructed-map JSON directly from the transcript.
+- Simple LLM question selection is full-graph and budget-aware: it should maximize expected information gain rather than scan nodes in authored order. One coherent Integrated Diagnostic Question may target a primary node and multiple graph-related secondary nodes. The private `diagnostic_plan` records those targets, the mastery boundary, and the selection reason in the tested-agent decision trace; it is not sent to the simulator as hidden state.
+- Assessment calibration uses each node's authored mastery rubric. Observable task correctness, reasoning, transfer, and self-correction determine assessed mastery, while verbal hesitation primarily affects diagnostic confidence. A single visible answer may support multiple node updates when the answer genuinely demonstrates those concepts; graph edges remain soft inference structure and never copy mastery automatically.
 - v1 baseline set 不包含 oracle、passive summarization、teaching agent 或复杂 ToM agent。
 
 Run output policy:

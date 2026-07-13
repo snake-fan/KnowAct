@@ -4,7 +4,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from backend.knowact.agents.base import BaseTestedAgent
-from backend.knowact.agents.protocol import DecisionPhaseContext
+from backend.knowact.agents.protocol import (
+    AskDiagnosticQuestionDecision,
+    DecisionPhase,
+    DecisionPhaseContext,
+    DiagnosticQuestionPlan,
+    FinalizeReconstructionDecision,
+    TestedAgentDecision,
+)
 from backend.knowact.agents.templates.simple_llm import (
     build_assessment_update_messages,
     build_next_action_messages,
@@ -69,6 +76,40 @@ class SimpleLLMTestedAgent(BaseTestedAgent):
         )
         return parse_next_question_output(raw_output)
 
+    def decide_next_action(
+        self,
+        *,
+        graph: KnowledgeGraph,
+        working_map: AgentWorkingKnowledgeMap,
+        visible_dialogue_context: VisibleDialogueContext,
+        decision_context: DecisionPhaseContext,
+    ) -> TestedAgentDecision:
+        if (
+            decision_context.phase == DecisionPhase.FORCED_FINALIZATION
+            or decision_context.remaining_diagnostic_turns == 0
+        ):
+            return super().decide_next_action(
+                graph=graph,
+                working_map=working_map,
+                visible_dialogue_context=visible_dialogue_context,
+                decision_context=decision_context,
+            )
+
+        raw_output = self._model_client.complete(
+            messages=build_next_action_messages(
+                graph=graph,
+                working_map=working_map,
+                visible_dialogue_context=visible_dialogue_context,
+                decision_context=decision_context,
+                message_profile=_message_profile_for(self._model_client),
+            ),
+            temperature=self._temperature,
+        )
+        decision = parse_next_decision_output(raw_output)
+        if isinstance(decision, AskDiagnosticQuestionDecision):
+            _validate_diagnostic_plan(decision.diagnostic_plan, graph)
+        return decision
+
 
 class _AssessmentUpdateOutput(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -81,6 +122,7 @@ class _NextActionOutput(BaseModel):
 
     action: Literal["ask_diagnostic_question", "finalize_reconstruction"]
     question: DiagnosticQuestion | None = None
+    diagnostic_plan: DiagnosticQuestionPlan | None = None
     reason: str | None = None
 
     @field_validator("reason")
@@ -104,16 +146,48 @@ def parse_assessment_update_output(
 
 
 def parse_next_question_output(raw_output: str) -> DiagnosticQuestion | None:
-    decision = _parse_model_output(
+    decision = parse_next_decision_output(raw_output)
+    if isinstance(decision, FinalizeReconstructionDecision):
+        return None
+    return decision.question
+
+
+def parse_next_decision_output(raw_output: str) -> TestedAgentDecision:
+    output = _parse_model_output(
         raw_output,
         model=_NextActionOutput,
         output_name="next action",
     )
-    if decision.action == "finalize_reconstruction":
-        return None
-    if decision.question is None:
+    if output.action == "finalize_reconstruction":
+        return FinalizeReconstructionDecision(reason=output.reason)
+    if output.question is None:
         raise ModelClientError("Simple LLM tested agent ask action omitted question")
-    return decision.question
+    if output.diagnostic_plan is None:
+        raise ModelClientError(
+            "Simple LLM tested agent ask action omitted diagnostic plan"
+        )
+    return AskDiagnosticQuestionDecision(
+        question=output.question,
+        diagnostic_plan=output.diagnostic_plan,
+    )
+
+
+def _validate_diagnostic_plan(
+    plan: DiagnosticQuestionPlan | None,
+    graph: KnowledgeGraph,
+) -> None:
+    if plan is None:
+        raise ModelClientError("Simple LLM tested agent ask action omitted diagnostic plan")
+    target_ids = (plan.primary_target_node_id, *plan.secondary_target_node_ids)
+    unknown_ids = set(target_ids) - graph.node_ids
+    if unknown_ids:
+        raise ModelClientError(
+            "Simple LLM tested agent diagnostic plan references unknown graph nodes"
+        )
+    if plan.primary_target_node_id in plan.secondary_target_node_ids:
+        raise ModelClientError(
+            "Simple LLM tested agent diagnostic plan repeats its primary target"
+        )
 
 
 def _parse_model_output(raw_output: str, *, model, output_name: str):

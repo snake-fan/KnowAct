@@ -640,6 +640,12 @@ def _ask_train_test_split_question_output() -> str:
                 "text": "How would you decide whether a Train/Test Split is appropriate?",
                 "question_id": "q_train_test_split",
             },
+            "diagnostic_plan": {
+                "primary_target_node_id": "train_test_split",
+                "secondary_target_node_ids": ["cross_validation"],
+                "target_mastery_boundary": "broad_initial_probe",
+                "selection_reason": "A held-out evaluation scenario probes related validation concepts.",
+            },
         }
     )
 

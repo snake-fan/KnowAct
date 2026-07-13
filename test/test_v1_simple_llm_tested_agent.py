@@ -4,6 +4,7 @@ from backend.knowact.agents.protocol import DecisionPhase, DecisionPhaseContext
 from backend.knowact.agents.agents.simple_llm import (
     SimpleLLMTestedAgent,
     parse_assessment_update_output,
+    parse_next_decision_output,
     parse_next_question_output,
 )
 from backend.knowact.agents.working_map import (
@@ -70,6 +71,12 @@ class V1SimpleLLMTestedAgentTest(unittest.TestCase):
                   "question": {
                     "text": "How would you detect overfitting with a validation set?",
                     "question_id": "q_overfitting_validation"
+                  },
+                  "diagnostic_plan": {
+                    "primary_target_node_id": "overfitting",
+                    "secondary_target_node_ids": ["train_test_split"],
+                    "target_mastery_boundary": "L2_vs_L3",
+                    "selection_reason": "One scenario tests linked diagnosis and held-out evaluation."
                   }
                 }
                 """,
@@ -93,6 +100,31 @@ class V1SimpleLLMTestedAgentTest(unittest.TestCase):
             question.text,
         )
         self.assertEqual("q_overfitting_validation", question.question_id)
+
+    def test_next_decision_preserves_multi_node_diagnostic_plan(self):
+        decision = parse_next_decision_output(
+            """
+            {
+              "action": "ask_diagnostic_question",
+              "question": {"text": "Diagnose this model evaluation failure."},
+              "diagnostic_plan": {
+                "primary_target_node_id": "overfitting",
+                "secondary_target_node_ids": ["train_test_split"],
+                "target_mastery_boundary": "L2_vs_L3",
+                "selection_reason": "The integrated scenario tests both nodes."
+              }
+            }
+            """
+        )
+
+        self.assertEqual(
+            "overfitting",
+            decision.diagnostic_plan.primary_target_node_id,
+        )
+        self.assertEqual(
+            ("train_test_split",),
+            decision.diagnostic_plan.secondary_target_node_ids,
+        )
 
     def test_select_diagnostic_question_returns_none_for_finalize_action(self):
         model_client = _FakeModelClient(
@@ -125,6 +157,11 @@ class V1SimpleLLMTestedAgentTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ModelClientError, "omitted question"):
             parse_next_question_output('{"action": "ask_diagnostic_question"}')
+
+        with self.assertRaisesRegex(ModelClientError, "omitted diagnostic plan"):
+            parse_next_question_output(
+                '{"action":"ask_diagnostic_question","question":{"text":"Explain."}}'
+            )
 
 
 class _FakeModelClient:
