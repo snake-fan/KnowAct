@@ -170,6 +170,7 @@ class EpisodeRunner:
             graph_version=manifest.graph_version,
             graph=graph,
         )
+        _write_json(artifacts.working_map_path, working_map)
         visible_dialogue_context = VisibleDialogueContext()
         trace: list[dict[str, Any]] = []
         final_decision: TestedAgentDecision | None = None
@@ -185,14 +186,24 @@ class EpisodeRunner:
                 remaining_diagnostic_turns=remaining_turns,
             )
             if phase != DecisionPhase.INITIAL_QUESTION:
-                working_map = _apply_working_map_updates(
+                working_map, update_events = _apply_working_map_updates(
                     agent=agent,
                     graph=graph,
                     working_map=working_map,
                     visible_dialogue_context=visible_dialogue_context,
                     decision_context=decision_context,
                     max_tool_retries=request.max_tool_retries,
-                    trace=trace,
+                )
+                trace.extend(update_events)
+                _write_json(artifacts.working_map_path, working_map)
+                completed_dialogue_turn = visible_dialogue_context.turns[-1]
+                _write_json(
+                    artifacts.turns_dir / f"{completed_dialogue_turn.turn_id}.json",
+                    {
+                        "turn_id": completed_dialogue_turn.turn_id,
+                        "dialogue": completed_dialogue_turn,
+                        "working_map_update_events": update_events,
+                    },
                 )
 
             decision = agent.decide_next_action(
@@ -258,10 +269,6 @@ class EpisodeRunner:
                 answer=simulator_response.answer,
                 observation=simulator_response.observation,
                 turn_id=turn_id,
-            )
-            _write_json(
-                artifacts.turns_dir / f"{turn_id}.json",
-                visible_dialogue_context.turns[-1],
             )
             trace.append(
                 {
@@ -347,8 +354,8 @@ def _apply_working_map_updates(
     visible_dialogue_context: VisibleDialogueContext,
     decision_context: DecisionPhaseContext,
     max_tool_retries: int,
-    trace: list[dict[str, Any]],
-) -> AgentWorkingKnowledgeMap:
+) -> tuple[AgentWorkingKnowledgeMap, list[dict[str, Any]]]:
+    update_events: list[dict[str, Any]] = []
     for attempt_index in range(1, max_tool_retries + 1):
         try:
             updates = agent.update_after_visible_answer(
@@ -364,7 +371,7 @@ def _apply_working_map_updates(
                 updates=updates,
             )
         except Exception as exc:
-            trace.append(
+            update_events.append(
                 {
                     "event": "working_map_update",
                     "phase": decision_context.phase.value,
@@ -376,7 +383,7 @@ def _apply_working_map_updates(
             )
             continue
 
-        trace.append(
+        update_events.append(
             {
                 "event": "working_map_update",
                 "phase": decision_context.phase.value,
@@ -385,9 +392,9 @@ def _apply_working_map_updates(
                 "updates": [_model_payload(update) for update in updates],
             }
         )
-        return updated_working_map
+        return updated_working_map, update_events
 
-    trace.append(
+    update_events.append(
         {
             "event": "working_map_update",
             "phase": decision_context.phase.value,
@@ -396,7 +403,7 @@ def _apply_working_map_updates(
             "max_tool_retries": max_tool_retries,
         }
     )
-    return working_map
+    return working_map, update_events
 
 
 def _build_tested_agent(request: EpisodeRunRequest) -> SimpleLLMTestedAgent:

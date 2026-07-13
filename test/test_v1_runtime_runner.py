@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from backend.knowact.agents.agents.simple_llm import SimpleLLMTestedAgent
 from backend.knowact.llm.client import ModelClientMetadata
@@ -10,6 +11,9 @@ from backend.knowact.runtime.runner import (
     EpisodeRunAlreadyExistsError,
     EpisodeRunRequest,
     EpisodeRunner,
+)
+from backend.knowact.scoring.compare import (
+    score_final_reconstruction as real_score_final_reconstruction,
 )
 from backend.knowact.simulator.service import SimulatorService
 from test.test_v1_runtime_episode_repository import (
@@ -61,7 +65,16 @@ class V1RuntimeRunnerTest(unittest.TestCase):
         self.assertEqual([0.1, 0.1], model_client.temperatures)
 
         self.assertEqual(1, len(transcript["turns"]))
-        self.assertEqual(transcript["turns"][0], turn_log)
+        self.assertEqual(transcript["turns"][0], turn_log["dialogue"])
+        self.assertEqual("turn_001", turn_log["turn_id"])
+        self.assertEqual(
+            "accepted",
+            turn_log["working_map_update_events"][-1]["status"],
+        )
+        self.assertEqual(
+            "train_test_split",
+            turn_log["working_map_update_events"][-1]["updates"][0]["node_id"],
+        )
         self.assertEqual("turn_001", transcript["turns"][0]["turn_id"])
         self.assertEqual("answer", transcript["turns"][0]["observation"]["kind"])
         transcript_text = json.dumps(transcript, sort_keys=True)
@@ -116,42 +129,49 @@ class V1RuntimeRunnerTest(unittest.TestCase):
             {event["event"] for event in trace["events"]},
         )
 
-    def test_runner_writes_turn_log_before_next_agent_model_call(self):
+    def test_runner_persists_completed_turn_and_working_map_before_scoring(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_runnable_episode(workspace_root, max_turns=1)
-            runner, model_client = _runner_with_fake_simple_llm(
+            runner, _ = _runner_with_fake_simple_llm(
                 workspace_root,
                 responses=(
                     _ask_train_test_split_question_output(),
                     _train_test_split_l4_update_output(),
                 ),
             )
-            observed_turn_logs: list[dict] = []
+            observed_artifacts: list[tuple[dict, dict]] = []
 
-            def observe_model_call(call_number: int) -> None:
-                if call_number == 2:
-                    observed_turn_logs.append(
-                        _read_json(
-                            workspace_root
-                            / "experiments"
-                            / "runs"
-                            / "run_incremental"
-                            / "turns"
-                            / "turn_001.json"
-                        )
+            def inspect_artifacts_before_scoring(**kwargs):
+                run_dir = workspace_root / "experiments" / "runs" / "run_incremental"
+                observed_artifacts.append(
+                    (
+                        _read_json(run_dir / "turns" / "turn_001.json"),
+                        _read_json(run_dir / "working_map.json"),
                     )
-
-            model_client.on_complete = observe_model_call
-            runner.run_episode(
-                EpisodeRunRequest(
-                    episode_id="episode_a",
-                    run_id="run_incremental",
                 )
-            )
+                return real_score_final_reconstruction(**kwargs)
 
-        self.assertEqual(1, len(observed_turn_logs))
-        self.assertEqual("turn_001", observed_turn_logs[0]["turn_id"])
+            with patch(
+                "backend.knowact.runtime.runner.score_final_reconstruction",
+                side_effect=inspect_artifacts_before_scoring,
+            ):
+                runner.run_episode(
+                    EpisodeRunRequest(
+                        episode_id="episode_a",
+                        run_id="run_incremental",
+                    )
+                )
+
+        self.assertEqual(1, len(observed_artifacts))
+        turn_log, working_map = observed_artifacts[0]
+        self.assertEqual("turn_001", turn_log["turn_id"])
+        self.assertEqual("accepted", turn_log["working_map_update_events"][-1]["status"])
+        states_by_node = {state["node_id"]: state for state in working_map["states"]}
+        self.assertEqual(
+            "L4",
+            states_by_node["train_test_split"]["assessed_mastery_level"],
+        )
 
     def test_runner_rejects_reusing_run_id_without_overwrite(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -236,7 +256,6 @@ class _FakeModelClient:
         self._responses = list(responses)
         self.messages: list[tuple[ModelMessage, ...]] = []
         self.temperatures: list[float | None] = []
-        self.on_complete = None
 
     def complete(
         self,
@@ -246,8 +265,6 @@ class _FakeModelClient:
     ) -> str:
         self.messages.append(tuple(messages))
         self.temperatures.append(temperature)
-        if self.on_complete is not None:
-            self.on_complete(len(self.messages))
         if not self._responses:
             raise AssertionError("No fake model response configured")
         return self._responses.pop(0)
