@@ -2,7 +2,9 @@ import { memo, useEffect, useRef } from "react";
 import {
   Graph as G6Graph,
   type EdgeData as G6EdgeData,
+  type IKeyboardEvent,
   type IPointerEvent,
+  type IWheelEvent,
   type NodeData as G6NodeData
 } from "@antv/g6";
 import {
@@ -178,7 +180,17 @@ export const MapPreviewCanvas = memo(function MapPreviewCanvas({
       },
       behaviors: [
         { type: "drag-canvas", key: "map-drag-canvas" },
-        { type: "zoom-canvas", key: "map-zoom-canvas" },
+        {
+          type: "scroll-canvas",
+          key: "map-trackpad-pan",
+          enable: (event: WheelEvent) => !event.ctrlKey,
+          range: Infinity
+        },
+        {
+          type: "zoom-canvas",
+          key: "map-zoom-canvas",
+          enable: (event: IWheelEvent | IKeyboardEvent | IPointerEvent) => event.ctrlKey
+        },
         {
           type: "click-select",
           key: "map-click-select",

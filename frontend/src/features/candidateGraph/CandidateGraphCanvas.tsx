@@ -2,7 +2,9 @@ import { useEffect, useRef } from "react";
 import {
   Graph as G6Graph,
   type EdgeData as G6EdgeData,
+  type IKeyboardEvent,
   type IPointerEvent,
+  type IWheelEvent,
   type NodeData as G6NodeData
 } from "@antv/g6";
 import {
@@ -177,8 +179,16 @@ export function CandidateGraphCanvas({
           onFinish: publishViewportCenter
         },
         {
+          type: "scroll-canvas",
+          key: "candidate-trackpad-pan",
+          enable: (event: WheelEvent) => !event.ctrlKey,
+          range: Infinity,
+          onFinish: publishViewportCenter
+        },
+        {
           type: "zoom-canvas",
           key: "candidate-zoom-canvas",
+          enable: (event: IWheelEvent | IKeyboardEvent | IPointerEvent) => event.ctrlKey,
           onFinish: publishViewportCenter
         },
         {
