@@ -495,8 +495,10 @@ class V1RuntimeApiTest(unittest.TestCase):
             )
             payload = response.json()
             transcript_path = workspace_root / payload["artifacts"]["transcript"]
+            turns_path = workspace_root / payload["artifacts"]["turns"]
             scoring_report_path = workspace_root / payload["artifacts"]["scoring_report"]
             transcript_exists = transcript_path.exists()
+            turn_log_exists = (turns_path / "turn_001.json").exists()
             scoring_report_exists = scoring_report_path.exists()
             transcript_response = client.get("/api/runtime/runs/run_api_001/transcript")
             transcript_payload = transcript_response.json()
@@ -518,6 +520,11 @@ class V1RuntimeApiTest(unittest.TestCase):
         )
         self.assertAlmostEqual(18.0, payload["scoring_report"]["episode_mastery_distance"])
         self.assertTrue(transcript_exists)
+        self.assertEqual(
+            "experiments/runs/run_api_001/turns",
+            payload["artifacts"]["turns"],
+        )
+        self.assertTrue(turn_log_exists)
         self.assertTrue(scoring_report_exists)
         self.assertEqual(200, transcript_response.status_code)
         self.assertEqual(1, len(transcript_payload["turns"]))

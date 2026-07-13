@@ -99,6 +99,7 @@ class EpisodeRunRequest(BaseModel):
 class EpisodeRunArtifacts:
     run_dir: Path
     episode_manifest_snapshot_path: Path
+    turns_dir: Path
     transcript_path: Path
     working_map_path: Path
     agent_tool_trace_path: Path
@@ -149,6 +150,14 @@ class EpisodeRunner:
         manifest = binding.manifest
         graph = binding.reviewed_graph.graph
         hidden_map = binding.hidden_map.knowledge_map
+
+        # Reserve the run id before any model-backed work starts. This also gives
+        # each completed interaction turn a stable location immediately.
+        run_dir = _prepare_run_dir(self._workspace_root, run_id)
+        artifacts = _artifact_paths(run_dir)
+        artifacts.turns_dir.mkdir()
+        _write_json(artifacts.episode_manifest_snapshot_path, manifest)
+
         agent = self._tested_agent_factory(request)
         simulator_service = self._simulator_service_factory(
             request.simulator_client_provider,
@@ -250,6 +259,10 @@ class EpisodeRunner:
                 observation=simulator_response.observation,
                 turn_id=turn_id,
             )
+            _write_json(
+                artifacts.turns_dir / f"{turn_id}.json",
+                visible_dialogue_context.turns[-1],
+            )
             trace.append(
                 {
                     "event": "interaction_turn",
@@ -278,9 +291,6 @@ class EpisodeRunner:
             scoring_profile=manifest.scoring_profile,
         )
 
-        run_dir = _prepare_run_dir(self._workspace_root, run_id)
-        artifacts = _artifact_paths(run_dir)
-        _write_json(artifacts.episode_manifest_snapshot_path, manifest)
         _write_json(artifacts.transcript_path, visible_dialogue_context)
         _write_json(artifacts.working_map_path, working_map)
         _write_json(
@@ -436,6 +446,7 @@ def _artifact_paths(run_dir: Path) -> EpisodeRunArtifacts:
     return EpisodeRunArtifacts(
         run_dir=run_dir,
         episode_manifest_snapshot_path=run_dir / "episode_manifest_snapshot.json",
+        turns_dir=run_dir / "turns",
         transcript_path=run_dir / "transcript.json",
         working_map_path=run_dir / "working_map.json",
         agent_tool_trace_path=run_dir / "agent_tool_trace.json",
@@ -445,9 +456,11 @@ def _artifact_paths(run_dir: Path) -> EpisodeRunArtifacts:
 
 
 def _write_json(path: Path, payload: Any) -> None:
-    with path.open("w", encoding="utf-8") as handle:
+    temporary_path = path.with_name(f".{path.name}.tmp")
+    with temporary_path.open("w", encoding="utf-8") as handle:
         json.dump(_json_payload(payload), handle, indent=2, ensure_ascii=False)
         handle.write("\n")
+    temporary_path.replace(path)
 
 
 def _json_payload(payload: Any) -> Any:

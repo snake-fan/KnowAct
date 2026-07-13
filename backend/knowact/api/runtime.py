@@ -179,6 +179,7 @@ class RuntimeEpisodeRunArtifactsSummary(BaseModel):
 
     run_dir: str
     episode_manifest_snapshot: str
+    turns: str
     transcript: str
     working_map: str
     agent_tool_trace: str
@@ -593,6 +594,7 @@ def _run_response(
                 root,
                 artifacts.episode_manifest_snapshot_path,
             ),
+            turns=_relative_path(root, artifacts.turns_dir),
             transcript=_relative_path(root, artifacts.transcript_path),
             working_map=_relative_path(root, artifacts.working_map_path),
             agent_tool_trace=_relative_path(root, artifacts.agent_tool_trace_path),

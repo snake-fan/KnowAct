@@ -45,6 +45,7 @@ class V1RuntimeRunnerTest(unittest.TestCase):
             )
 
             transcript = _read_json(result.artifacts.transcript_path)
+            turn_log = _read_json(result.artifacts.turns_dir / "turn_001.json")
             working_map = _read_json(result.artifacts.working_map_path)
             trace = _read_json(result.artifacts.agent_tool_trace_path)
             agent_output = _read_json(result.artifacts.agent_output_path)
@@ -60,6 +61,7 @@ class V1RuntimeRunnerTest(unittest.TestCase):
         self.assertEqual([0.1, 0.1], model_client.temperatures)
 
         self.assertEqual(1, len(transcript["turns"]))
+        self.assertEqual(transcript["turns"][0], turn_log)
         self.assertEqual("turn_001", transcript["turns"][0]["turn_id"])
         self.assertEqual("answer", transcript["turns"][0]["observation"]["kind"])
         transcript_text = json.dumps(transcript, sort_keys=True)
@@ -113,6 +115,43 @@ class V1RuntimeRunnerTest(unittest.TestCase):
             "working_map_update",
             {event["event"] for event in trace["events"]},
         )
+
+    def test_runner_writes_turn_log_before_next_agent_model_call(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_runnable_episode(workspace_root, max_turns=1)
+            runner, model_client = _runner_with_fake_simple_llm(
+                workspace_root,
+                responses=(
+                    _ask_train_test_split_question_output(),
+                    _train_test_split_l4_update_output(),
+                ),
+            )
+            observed_turn_logs: list[dict] = []
+
+            def observe_model_call(call_number: int) -> None:
+                if call_number == 2:
+                    observed_turn_logs.append(
+                        _read_json(
+                            workspace_root
+                            / "experiments"
+                            / "runs"
+                            / "run_incremental"
+                            / "turns"
+                            / "turn_001.json"
+                        )
+                    )
+
+            model_client.on_complete = observe_model_call
+            runner.run_episode(
+                EpisodeRunRequest(
+                    episode_id="episode_a",
+                    run_id="run_incremental",
+                )
+            )
+
+        self.assertEqual(1, len(observed_turn_logs))
+        self.assertEqual("turn_001", observed_turn_logs[0]["turn_id"])
 
     def test_runner_rejects_reusing_run_id_without_overwrite(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -197,6 +236,7 @@ class _FakeModelClient:
         self._responses = list(responses)
         self.messages: list[tuple[ModelMessage, ...]] = []
         self.temperatures: list[float | None] = []
+        self.on_complete = None
 
     def complete(
         self,
@@ -206,6 +246,8 @@ class _FakeModelClient:
     ) -> str:
         self.messages.append(tuple(messages))
         self.temperatures.append(temperature)
+        if self.on_complete is not None:
+            self.on_complete(len(self.messages))
         if not self._responses:
             raise AssertionError("No fake model response configured")
         return self._responses.pop(0)

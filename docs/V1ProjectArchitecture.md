@@ -570,6 +570,9 @@ experiments/
 ├── runs/
 │   └── run_2026_...
 │       ├── episode_manifest_snapshot.json
+│       ├── turns/
+│       │   ├── turn_001.json
+│       │   └── turn_002.json
 │       ├── transcript.json
 │       ├── working_map.json
 │       ├── agent_tool_trace.json
@@ -587,6 +590,7 @@ Artifact policy:
 - `runtime/episodes/` 是 `Runtime Episode Registry`；它可以收集跨 benchmark domain 的 runnable episodes，但每个 manifest 仍只绑定一个 benchmark domain、一个 reviewed graph version 和一个 hidden reviewed map。
 - Phase 3 graph promotion 将重新校验后的 candidate snapshot 复制到 `graphs/{version}/`，保留原 candidate run，并生成只绑定 metadata 与 node/edge 文件引用的 `graph_manifest.json`。Reviewed graph version 不允许覆盖；修订必须发布新的 version。
 - `experiments/runs/` 是 generated output，应避免混入人工 authored ground truth。
+- Episode Run 在模型交互开始前创建 `experiments/runs/{run_id}/` 并保存 manifest snapshot；每轮完整的可见 question/answer turn 完成后立即原子写入 `turns/{turn_id}.json`。run 结束时继续生成聚合 `transcript.json`，单轮与聚合文件遵守相同 visibility boundary。
 - 大型 source PDFs 可以本地保存，正式数据只引用 source metadata 和 `Source Locator`。
 
 ## Frontend Architecture

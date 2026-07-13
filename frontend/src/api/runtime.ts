@@ -117,6 +117,7 @@ export type RuntimeEpisodeScoreReport = {
 export type RuntimeEpisodeRunArtifactsSummary = {
   run_dir: string;
   episode_manifest_snapshot: string;
+  turns: string;
   transcript: string;
   working_map: string;
   agent_tool_trace: string;
