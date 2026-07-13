@@ -33,7 +33,11 @@ class V1ProfileContextAuthoringApiTest(unittest.TestCase):
         self.assertNotIn("benchmark author", complete_prompt.lower())
         self.assertNotIn("Knowledge Map", complete_prompt)
         self.assertIn("topic-by-topic knowledge assessment", instruction_prompt)
-        self.assertIn("Do not invent specific institutions", instruction_prompt)
+        self.assertIn("rough description is a seed, not a completeness boundary", instruction_prompt)
+        self.assertIn("Make many plausible extensions", instruction_prompt)
+        self.assertIn("do not respond with a minimal profile", instruction_prompt)
+        self.assertIn("Do not invent real or named institutions", instruction_prompt)
+        self.assertIn("Do not expose assumptions", instruction_prompt)
         self.assertIn("Subject area: classical_supervised_ml_algorithms", user_prompt)
         self.assertIn("Rough person description: A practical beginner.", user_prompt)
 

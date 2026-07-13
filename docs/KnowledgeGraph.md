@@ -649,7 +649,7 @@ selected authoritative source
 
 同样，LLM workflow 可以生成 `Candidate Knowledge Map`，但 candidate map 不能直接作为评分 reference。benchmark author 必须审核每个 node-level `User Knowledge State` 的 consistency、plausibility、edge-aware constraints 和 evidence support 后，才能将其发布为 reviewed map。初始 workflow 每次只为一个 synthetic benchmark user 和一个 reviewed `Authored Knowledge Graph` version 生成一张 `Candidate Knowledge Map`；后续 cohort generation 只在外层重复编排这个单地图 contract。
 
-在生成 `Candidate Knowledge Map` 前，workflow 先接收 benchmark author 提供的粗略用户描述，将其扩写为 reviewable `Profile Context`。benchmark author 可以编辑生成结果。正常 authoring flow 将 `Profile Context Validation` 与 `Profile Context Confirmation` 作为两个独立 gate：前者检查结构合法性，后者表示 benchmark author 显式接受一个已验证的 context snapshot。两个 gate 通过后，正常 flow 才调用 candidate-map generation capability。Candidate-map generation 本身仍保持独立可调用，便于聚焦调试，而不是与正常 workflow gate 熔成一个接口。
+在生成 `Candidate Knowledge Map` 前，workflow 先接收 benchmark author 提供的粗略用户描述，将其作为画像推演的种子，扩展为 reviewable `Profile Context`。生成步骤不应局限于同义改写显式描述，而应在不冲突的前提下选定一条具体、可信的 synthetic trajectory，补充相互关联的学习经历、实践情境、动机、约束、习惯与偏好，使画像足够复杂和独特，能为后续 map generation 提供多组 person-level coherence signals。benchmark author 可以编辑生成结果。正常 authoring flow 将 `Profile Context Validation` 与 `Profile Context Confirmation` 作为两个独立 gate：前者检查结构合法性，后者表示 benchmark author 显式接受一个已验证的 context snapshot。两个 gate 通过后，正常 flow 才调用 candidate-map generation capability。Candidate-map generation 本身仍保持独立可调用，便于聚焦调试，而不是与正常 workflow gate 熔成一个接口。
 
 ``` text
 Authored Knowledge Graph
@@ -694,6 +694,8 @@ extra fields
 Validation 不调用额外 LLM judge，也不对文本做脆弱关键词 blacklist。Prompt 负责避免把逐节点 mastery 写入 `Profile Context`；逐节点状态由后续 map-generation step 生成。
 
 Profile-context authoring step 只读取 benchmark author 提供的粗略用户描述、benchmark-domain identity 和可选 domain summary。它不读取 graph nodes、node rubrics 或 edges，避免在 persona 文本里提前形成一张不可审阅的隐含知识地图。后续 candidate-map generation step 才读取 confirmed `Profile Context` 和完整 reviewed `Authored Knowledge Graph`。
+
+该输入边界不表示只能生成输入中逐字支持的内容。Profile-context prompt 可以把普通、低风险、领域相关的个人经历与行为细节作为 synthetic authoring choices，并通过因果一致性检查形成一个具体个体；但不得虚构具名真实机构、雇主、人物、证书、奖项、敏感人口属性或重大人生事件，也不得把这些推演伪装成经过外部验证的事实。
 
 Reviewed `Knowledge Edges` 在 candidate-map review 中只作为 soft diagnostic signals。Edge-aware consistency check 应对可疑的 node-level state 组合生成 review warnings，但不能自动修改或拒绝不平滑的地图。例如，用户可能会套用 ridge regression，却无法解释 linear regression 的基础；这种画像值得 benchmark author 复核，但不应被系统强制抹平。
 
