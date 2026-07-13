@@ -10,7 +10,6 @@ from backend.knowact.llm.config import (
 from backend.knowact.llm.deepseek_client import DeepSeekChatModelClient
 from backend.knowact.llm.openai_client import OpenAIChatModelClient
 from backend.knowact.logging_config import get_knowact_logger
-from backend.knowact.simulator.checks import ModelClientAnswerValidator
 from backend.knowact.simulator.generators import ModelClientAnswerGenerator
 from backend.knowact.simulator.grounding import ModelClientQuestionGrounder
 from backend.knowact.simulator.policy import ModelClientAnswerPolicy
@@ -45,7 +44,6 @@ def build_simulator_service(
         grounder=ModelClientQuestionGrounder(model_client=model_client),
         policy=ModelClientAnswerPolicy(model_client=model_client),
         generator=ModelClientAnswerGenerator(model_client=model_client),
-        validator=ModelClientAnswerValidator(model_client=model_client),
     )
 
 

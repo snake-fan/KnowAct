@@ -8,10 +8,6 @@ from backend.knowact.core.interaction import (
 )
 from backend.knowact.llm.client import ModelClientError
 from backend.knowact.logging_config import get_knowact_logger
-from backend.knowact.simulator.checks import (
-    HeuristicSimulatorAnswerValidator,
-    SimulatorAnswerValidator,
-)
 from backend.knowact.simulator.context_builder import (
     SimulatorContextBuilder,
     SimulatorTurnContext,
@@ -19,7 +15,6 @@ from backend.knowact.simulator.context_builder import (
 from backend.knowact.simulator.debug_trace import (
     ANSWER_GENERATION_STEP,
     ANSWER_POLICY_STEP,
-    ANSWER_VALIDATION_STEP,
     QUESTION_GROUNDING_STEP,
     SimulatorDebugTraceRecorder,
     active_simulator_debug_trace,
@@ -76,7 +71,6 @@ class SimulatorService:
         grounder: QuestionGrounder | None = None,
         policy: SimulatorAnswerPolicy | None = None,
         generator: SimulatorAnswerGenerator | None = None,
-        validator: SimulatorAnswerValidator | None = None,
     ) -> None:
         self._workspace_root = workspace_root
         self._grounder = grounder or RuleBasedQuestionGrounder()
@@ -84,7 +78,6 @@ class SimulatorService:
         self._fallback_policy = RuleBasedAnswerPolicy()
         self._policy = policy or self._fallback_policy
         self._generator = generator or RuleBasedAnswerGenerator()
-        self._validator = validator or HeuristicSimulatorAnswerValidator()
 
     def answer_turn(self, request: SimulatorTurnRequest) -> SimulatorTurnResponse:
         return self._answer_turn(request, expose_grounded_node_ids=False)
@@ -250,7 +243,7 @@ class SimulatorService:
                             regeneration_guidance=(),
                         ),
                     )
-                    answer = self._generate_validated_answer(
+                    answer = self._generate_answer(
                         intent=policy_result.intent,
                         visible_dialogue_context=request.visible_dialogue_context,
                         style_hint=None,
@@ -404,7 +397,7 @@ class SimulatorService:
                     _visible_dialogue_turn_count(request),
                     style_hint is not None,
                 )
-                answer = self._generate_validated_answer(
+                answer = self._generate_answer(
                     intent=policy_result.intent,
                     visible_dialogue_context=request.visible_dialogue_context,
                     style_hint=style_hint,
@@ -524,7 +517,7 @@ class SimulatorService:
                 }
             )
 
-    def _generate_validated_answer(
+    def _generate_answer(
         self,
         *,
         intent: SimulatorAnswerBlueprint,
@@ -595,99 +588,15 @@ class SimulatorService:
                 map_id,
                 len(candidate_answer.text),
             )
-
-            _LOGGER.info(
-                "Simulator answer validation started benchmark_domain=%s map_id=%s validator=%s answer_chars=%d",
-                benchmark_domain,
-                map_id,
-                type(self._validator).__name__,
-                len(candidate_answer.text),
-            )
-            try:
-                with simulator_model_step(
-                    ANSWER_VALIDATION_STEP,
-                    attempt_index=attempt_number,
-                ):
-                    validation = self._validator.validate(
-                        candidate_answer=candidate_answer,
-                        intent=intent,
-                        visible_dialogue_context=visible_dialogue_context,
-                        style_hint=style_hint,
-                        regeneration_guidance=regeneration_guidance,
-                    )
-            except (ModelClientError, TimeoutError) as exc:
-                _append_generation_attempt(
-                    {
-                        "attempt_index": attempt_number,
-                        "generator": type(self._generator).__name__,
-                        "validator": type(self._validator).__name__,
-                        "status": "validation_unavailable",
-                        "candidate_answer_chars": len(candidate_answer.text),
-                        "error": error_payload(exc),
-                    }
-                )
-                _LOGGER.warning(
-                    "Simulator answer validation unavailable benchmark_domain=%s map_id=%s validator=%s error_type=%s fallback=safe",
-                    benchmark_domain,
-                    map_id,
-                    type(self._validator).__name__,
-                    type(exc).__name__,
-                )
-                fallback = simulator_safe_fallback()
-                _set_fallback_trace("answer_validation_unavailable", fallback)
-                return fallback
-
-            _LOGGER.info(
-                "Simulator answer validation completed benchmark_domain=%s map_id=%s passed=%s blocking_reasons=%d blueprint_coverage_notes=%d",
-                benchmark_domain,
-                map_id,
-                validation.passed,
-                len(validation.blocking_safety_reasons),
-                len(validation.blueprint_coverage_notes),
-            )
-            if validation.passed:
-                _append_generation_attempt(
-                    {
-                        "attempt_index": attempt_number,
-                        "generator": type(self._generator).__name__,
-                        "validator": type(self._validator).__name__,
-                        "status": "validated",
-                        "candidate_answer_chars": len(candidate_answer.text),
-                        "validation": validation.model_dump(mode="json"),
-                    }
-                )
-                return candidate_answer
             _append_generation_attempt(
                 {
                     "attempt_index": attempt_number,
                     "generator": type(self._generator).__name__,
-                    "validator": type(self._validator).__name__,
-                    "status": "validation_failed",
+                    "status": "generated",
                     "candidate_answer_chars": len(candidate_answer.text),
-                    "validation": validation.model_dump(mode="json"),
                 }
             )
-            if attempt_number < _MAX_ANSWER_GENERATION_ATTEMPTS:
-                _LOGGER.warning(
-                    "Simulator answer validation failed benchmark_domain=%s map_id=%s blocking_reasons=%d retry=answer_generation",
-                    benchmark_domain,
-                    map_id,
-                    len(validation.blocking_safety_reasons),
-                )
-                regeneration_guidance = _merge_regeneration_guidance(
-                    regeneration_guidance,
-                    _regeneration_guidance(validation),
-                )
-                continue
-            _LOGGER.warning(
-                "Simulator answer validation failed benchmark_domain=%s map_id=%s blocking_reasons=%d fallback=safe",
-                benchmark_domain,
-                map_id,
-                len(validation.blocking_safety_reasons),
-            )
-            fallback = simulator_safe_fallback()
-            _set_fallback_trace("answer_validation_failed", fallback)
-            return fallback
+            return candidate_answer
         fallback = simulator_safe_fallback()
         _set_fallback_trace("answer_generation_exhausted", fallback)
         return fallback
@@ -902,21 +811,3 @@ def _merge_regeneration_guidance(
     new_guidance: tuple[str, ...],
 ) -> tuple[str, ...]:
     return tuple(dict.fromkeys((*existing_guidance, *new_guidance)))
-
-
-def _regeneration_guidance(validation) -> tuple[str, ...]:
-    guidance: list[str] = []
-    if validation.blocking_safety_reasons:
-        guidance.append(
-            "Remove content flagged by validation: "
-            + "; ".join(validation.blocking_safety_reasons)
-        )
-    if validation.blueprint_coverage_notes:
-        guidance.append(
-            "Improve blueprint coverage: " + "; ".join(validation.blueprint_coverage_notes)
-        )
-    if validation.fallback_guidance:
-        guidance.append(validation.fallback_guidance)
-    return tuple(guidance) or (
-        "Regenerate a safe answer that follows the same answer blueprint.",
-    )

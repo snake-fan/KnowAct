@@ -15,10 +15,10 @@ It is not a state-query API, a scoring component, or a tested-agent question-sel
 - The simulator answers one **Diagnostic Question** per turn, including one **Integrated Diagnostic Question** when the question is genuinely a single multi-node probe.
 - **Question Grounding** is a replaceable contract over the visible graph and dialogue context; it does not use hidden map state or select questions for the tested agent.
 - Hidden map state and evidence enter only after grounding, and only for directly grounded nodes.
-- **Answer Policy** first decides answer content and produces a de-identified **Simulator Answer Blueprint** that generation and validation consume directly.
+- **Answer Policy** first decides answer content and produces a de-identified **Simulator Answer Blueprint** that generation consumes directly.
 - **Profile Context** can only shape wording style and must preserve the content determined by the blueprint.
-- LLM generation and LLM-backed validation are allowed, but both must sit behind interfaces and respect de-identified context boundaries.
-- Unsafe or unvalidated answers fail closed into a **Simulator Safe Fallback**.
+- LLM generation sits behind an interface and receives only de-identified context.
+- Leakage prevention is enforced by the policy-to-generator data boundary rather than a second model review; failed or malformed generation falls back safely.
 - Debug traces are hidden benchmark-author artifacts, separate from visible transcript and scoring outputs.
 - The Phase 5 single-turn endpoint is stateless per turn and must not become a parallel episode runtime.
 
@@ -42,14 +42,10 @@ Answer Policy
 Answer Generator
   (LLM-backed or rule-based)
         |
-        v
-Simulator Answer Validation
-        |
-        v
 Simulator Answer
 ```
 
-This diagram shows workflow components only. **Simulator Answer Blueprint** is the structured intermediate artifact between policy, generation, and validation.
+This diagram shows workflow components only. **Simulator Answer Blueprint** is the structured intermediate artifact between policy and generation.
 
 The implementation may collapse or split these components, but it should preserve their information boundaries.
 
@@ -66,10 +62,7 @@ Component contracts:
   - Output: **Simulator Answer Blueprint**, the structured content blueprint for the answer.
 - **Answer Generator**
   - Input: **Simulator Answer Blueprint**, visible dialogue needed for continuity, optional style hint, and optional regeneration guidance.
-  - Output: candidate natural-language answer.
-- **Simulator Answer Validation**
-  - Input: candidate answer, **Simulator Answer Blueprint**, visible dialogue, style hint, blueprint-coverage expectations, and leakage rules.
-  - Output: pass/fail validation result with blocking reasons and fallback guidance.
+  - Output: natural-language answer.
 
 ## Question Grounding
 
@@ -213,7 +206,7 @@ Current generator-facing blueprint shape:
 }
 ```
 
-Fixed generation rules and visibility guards, such as first-person wording, benchmark-label refusal, hidden-id blocking, state-table blocking, and unsupported-fact blocking, belong in the generator and validator runtime contract. They should not be repeated as LLM-authored policy output fields.
+Fixed generation rules and visibility guards, such as first-person wording, benchmark-label refusal, hidden-id blocking, state-table blocking, and unsupported-fact blocking, belong in the generator runtime contract. They should not be repeated as LLM-authored policy output fields.
 
 LLM-backed policy output must be parsed into a strict schema. Freeform policy prose may appear only inside bounded blueprint fields such as `answer_strategy`, `core_claim`, `boundary`, `mistaken_belief`, `uncertainty`, selected de-identified `supporting_cues`, and `avoid_overclaiming`. Generation should receive the structured blueprint directly rather than raw graph/map information or a policy-authored prompt.
 
@@ -223,7 +216,7 @@ The policy should not collapse mastery into a binary know/do-not-know stance. In
 
 The blueprint must not contain grounded evidence refs. Those refs may appear only in hidden audit trace.
 
-The implementation should distinguish the downstream **Simulator Answer Blueprint** from a hidden **Simulator Policy Decision Trace**. The trace may record node ids, mastery labels, hidden evidence refs, selected rubric text, and policy reasoning metadata for benchmark-author audit. The blueprint consumed by generation and validation must not contain mastery labels, hidden evidence ids, map ids, user ids, or other hidden artifact identifiers.
+The implementation should distinguish the downstream **Simulator Answer Blueprint** from a hidden **Simulator Policy Decision Trace**. The trace may record node ids, mastery labels, hidden evidence refs, selected rubric text, and policy reasoning metadata for benchmark-author audit. The blueprint consumed by generation must not contain mastery labels, hidden evidence ids, map ids, user ids, or other hidden artifact identifiers.
 
 For an **Integrated Diagnostic Question**, the policy should produce one integrated blueprint. It may preserve per-node stance inside `content_units`, but the answer should not merely concatenate separate per-node answers.
 
@@ -233,9 +226,9 @@ The policy must not read hidden map state, hidden evidence, or mastery labels fo
 
 The LLM generator is the naturalness-oriented path for simulator turns. A rule-based generator is useful as a soft fallback and for regression fixtures.
 
-This is a soft implementation preference, not a permanent architectural ban. Any generator must respect the same **Simulator Answer Blueprint** and validation contract.
+This is a soft implementation preference, not a permanent architectural ban. Any generator must respect the same **Simulator Answer Blueprint** contract.
 
-LLM-backed answer prompt/message construction lives in step-specific simulator templates under `backend/knowact/simulator/templates/`. Answer generation uses `templates/answer_generation.py`, answer validation uses `templates/answer_validation.py`, and shared prompt sections live in `templates/common.py`. Do not introduce a catch-all simulator prompt module; each LLM step should keep its own prompt/message builder and output contract.
+LLM-backed answer prompt/message construction lives in `backend/knowact/simulator/templates/answer_generation.py`, with shared prompt sections in `templates/common.py`. Do not introduce a catch-all simulator prompt module.
 
 ## Profile Context
 
@@ -257,64 +250,36 @@ If the tested agent asks for hidden benchmark labels, evidence ids, or a state t
 
 It may answer with a natural self-report consistent with the **Simulator Answer Blueprint**. For example, instead of saying `L2`, it can say that the user has a rough idea but struggles to explain when to use the concept.
 
-Label-seeking questions should still use the normal Answer Blueprint to generator to validator path, with generation instructions that forbid benchmark labels and structured hidden state. Use the label-seeking fallback only when generation or validation cannot produce a safe natural self-report.
+Label-seeking questions still use the normal Answer Blueprint-to-generator path, with generation instructions that forbid benchmark labels and structured hidden state. Use the label-seeking fallback when policy or generation cannot produce a natural self-report.
 
-## Answer Validation
+## Leakage Boundary
 
-**Simulator Answer Validation** checks both safety and usefulness.
+The simulator does not run a separate Answer Validation agent after generation. Leakage prevention is structural: policy converts grounded hidden state into a de-identified **Simulator Answer Blueprint**, and the generator receives only that blueprint, visible dialogue, and an optional style hint. It never receives raw maps, mastery labels, hidden evidence ids, map ids, user ids, scoring fields, or debug details.
 
-The validation mechanism should be behind an explicit interface. The initial implementation may use an LLM-backed validator because semantic leakage and blueprint coverage are not reliably captured by simple string matching. Validator-specific prompt/message construction lives in `backend/knowact/simulator/templates/answer_validation.py`. The interface should allow later replacement with heuristic, rule-based, or hybrid validators without changing simulator policy.
-
-Validator output should be structured, such as pass/fail decisions, blocking safety reasons, blueprint-coverage notes, and retry/fallback guidance. It should not become a benchmark score or primary evaluation signal.
-
-The validator input should be de-identified. It may see the generated answer, **Simulator Answer Blueprint**, de-identified content cues, grounding metadata, and leakage rules. It must not receive raw full map data or hidden evidence ids.
-
-If the validator service fails, times out, or is otherwise unavailable, the simulator should fail closed: do not expose the unvalidated generated answer, return a **Simulator Safe Fallback**, and record the validator failure in hidden debug trace.
-
-If the validator is available and rejects a candidate answer, it must return structured rejection reasons. The simulator should use those reasons for a bounded regeneration loop before falling back. Regeneration must preserve the same **Simulator Answer Blueprint** unless the rejection shows that the blueprint itself is underspecified or unsafe.
-
-Validation retry routing should preserve layer boundaries:
-
-- unsupported wording or weak blueprint coverage should retry answer generation with the same **Simulator Answer Blueprint**
-- generator timeout, invalid JSON, or empty output may retry answer generation briefly before terminal fallback
-- policy-schema failure, unsafe blueprint fields, contradictory blueprint, or an impossible blueprint should retry or fall back at the **Simulator Answer Policy** layer before answer generation
-- validator unavailability should not trigger regeneration from an unvalidated answer; it should fail closed
-
-Blocking safety checks include:
-
-- mastery labels
-- hidden evidence ids
-- full map or state-table language
-- benchmark scoring fields
-
-Blueprint coverage checks are quality checks. The answer should carry the core stance and content limits of the **Simulator Answer Blueprint**, such as uncertainty, partial knowledge, misconception, ability boundary, or overclaim prevention. Weak coverage should be recorded in debug trace and may trigger regeneration or fallback.
-
-A generated answer that violates the **Visibility Boundary** must not become visible to the **Tested Agent**.
-
-Regeneration feedback may include concise blocking safety reasons, blueprint-coverage gaps, and retry guidance. It must not include hidden evidence ids, mastery labels, full hidden state, raw maps, or benchmark-author debug details in the material sent to the generator.
+Generator instructions still forbid benchmark labels, hidden ids, state-table wording, map dumps, scores, debug references, and schema language. Failed, timed-out, empty, or malformed model output may be retried briefly with the same blueprint before terminal fallback.
 
 ## Safe Fallback
 
 When answer generation cannot safely produce a visible answer, the simulator should return a **Simulator Safe Fallback**.
 
-Fallbacks should be natural and non-leaking. They should not expose validator internals, grounding internals, hidden node ids, hidden evidence ids, or benchmark labels.
+Fallbacks should be natural and non-leaking. They should not expose grounding internals, hidden node ids, hidden evidence ids, or benchmark labels.
 
 Initial fallback categories should include:
 
 - no grounding
 - multiple independent questions in one turn
 - hidden-label or structured-state request
-- generator, validator, or system failure
+- generator or system failure
 
-If the LLM generator fails, times out, or returns no usable answer, the simulator should use a safe fallback rather than asking the validator to generate replacement content. The validator judges candidate answers; it does not serve as a backup generator.
+If the LLM generator fails, times out, or returns no usable answer, the simulator should use a safe fallback.
 
-Policy and answer fallback paths should still produce or consume the same **Simulator Answer Blueprint** schema where possible. Safe fallback is the terminal visible response after policy fallback, generation failure, validator unavailability, or bounded regeneration exhaustion.
+Policy and answer fallback paths should still produce or consume the same **Simulator Answer Blueprint** schema where possible. Safe fallback is the terminal visible response after policy fallback or bounded generation failure.
 
 ## Debug Trace
 
 The simulator may record a hidden **Simulator Debug Trace** for benchmark-author debugging.
 
-This trace may include grounding source, grounded node ids, answer blueprint, validation results, fallback reason, and generator metadata. It must remain separate from visible transcript data, must not be shown to the tested agent, and must not be used as primary scoring input.
+This trace may include grounding source, grounded node ids, answer blueprint, fallback reason, and generator metadata. It must remain separate from visible transcript data, must not be shown to the tested agent, and must not be used as primary scoring input.
 
 No-grounding and multiple-question flags belong in this hidden debug trace, not in the visible observation text.
 
@@ -338,7 +303,6 @@ The turn trace directory contains `debug_trace.json` plus optional
 
 - `agent_traces/answer_policy/model_raw_output.txt` and `parser_output.json`
 - `agent_traces/answer_generation/attempt_{n}/model_raw_output.txt` and `parser_output.json`
-- `agent_traces/answer_validation/attempt_{n}/model_raw_output.txt` and `parser_output.json`
 
 Turn debug traces may store raw model outputs and parsed step outputs, but
 they must not store full prompt/messages, full reviewed graph payloads, full
@@ -350,8 +314,7 @@ stores artifact identities and directly grounded turn details instead.
 The simulator implementation should emit operator-facing logger `info` messages at
 workflow boundaries so terminal output shows which step is running: reviewed
 artifact loading, question grounding, simulator context construction, answer
-blueprint derivation, answer generation, answer
-validation, fallback, and final turn completion.
+blueprint derivation, answer generation, fallback, and final turn completion.
 
 Runtime logs are not **Simulator Debug Trace** artifacts and are not visible
 transcript data. They should record only progress metadata such as artifact
@@ -366,9 +329,9 @@ Phase 5 exposes a usable single-turn simulator before formal **Evaluation Episod
 
 Current formal single-turn route: `POST /api/simulator/turn`. The workbench/test route `POST /api/simulator/turn-test` uses the same request contract and visible answer fields, but may add only `grounded_node_ids` so the benchmark-author UI can highlight the latest directly grounded **Knowledge Nodes**.
 
-The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Blueprint** derivation, LLM-backed visible answer generation, LLM-backed answer validation, bounded answer regeneration, persistent local turn debug trace artifacts, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without exposing hidden labels. It intentionally does not implement formal episode persistence yet.
+The current implementation supports visible-graph **Question Grounding**, direct-node-only simulator context construction, **Simulator Answer Blueprint** derivation, LLM-backed visible answer generation, bounded malformed-output retry, persistent local turn debug trace artifacts, and safe fallback behavior. It handles clearly grounded questions, no-grounding non-answers, multiple-question clarifications, and label-seeking requests without passing hidden labels to generation. It intentionally does not implement formal episode persistence yet.
 
-The next simulator-policy implementation slice should keep hardening the structured blueprint boundary before broadening episode runtime integration. The rule-based policy and LLM-backed policy should emit the same **Simulator Answer Blueprint**, generator prompts should consume that blueprint rather than raw map information, and validation-regeneration should preserve the same blueprint unless policy output is unsafe or contradictory.
+The next simulator-policy implementation slice should keep hardening the structured blueprint boundary before broadening episode runtime integration. The rule-based policy and LLM-backed policy should emit the same **Simulator Answer Blueprint**, and generator prompts should consume that blueprint rather than raw map information.
 
 The single-turn endpoint should:
 
@@ -385,7 +348,7 @@ The single-turn endpoint should:
 - accept optional `turn_options.include_debug_trace` and use it only to decide whether the response returns trace availability/reference metadata
 - return only the visible simulator answer plus visible observation metadata
 - keep visible observation metadata coarse, such as `answer`, `clarification`, or `non_answer`
-- keep internal fallback categories and validation reasons out of visible metadata
+- keep internal fallback categories out of visible metadata
 - allow non-leaking configuration warnings in turn metadata, such as missing style context
 - return only a `debug_trace_id` and `debug_trace_available` flag when debug trace metadata is requested
 - keep the full **Simulator Debug Trace** behind a benchmark-author-only debug path or local artifact

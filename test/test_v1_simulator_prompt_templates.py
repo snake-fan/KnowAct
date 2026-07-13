@@ -22,9 +22,6 @@ from backend.knowact.simulator.templates.answer_policy import (
 from backend.knowact.simulator.templates.answer_generation import (
     build_answer_generation_messages,
 )
-from backend.knowact.simulator.templates.answer_validation import (
-    build_answer_validation_messages,
-)
 from backend.knowact.simulator.templates.question_grounding import (
     build_question_grounding_messages,
 )
@@ -176,6 +173,7 @@ class V1SimulatorPromptTemplatesTest(unittest.TestCase):
             with self.subTest(hidden_fragment=hidden_fragment):
                 self.assertNotIn(hidden_fragment, user_payload)
 
+    @unittest.skip("post-generation answer validation was removed")
     def test_answer_validation_template_is_structured_and_deidentified(self):
         intent = _answer_blueprint()
 

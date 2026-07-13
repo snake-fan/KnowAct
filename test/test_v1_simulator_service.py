@@ -16,11 +16,6 @@ from backend.knowact.core.interaction import (
 from backend.knowact.core.map import UserKnowledgeState
 from backend.knowact.llm.client import ModelClientError, ModelClientMetadata
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE
-from backend.knowact.simulator.checks import (
-    HeuristicSimulatorAnswerValidator,
-    ModelClientAnswerValidator,
-    SimulatorAnswerValidationDecision,
-)
 from backend.knowact.simulator.context_builder import (
     GroundedSimulatorNodeContext,
     SimulatorTurnContext,
@@ -105,7 +100,6 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 "Answer generation input prepared",
                 "Simulator answer generation started",
                 "Rule-based simulator answer generation succeeded",
-                "Simulator answer validation completed",
                 "Simulator turn workflow succeeded",
             ):
                 with self.subTest(expected_fragment=expected_fragment):
@@ -985,7 +979,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 self.assertEqual(stance, intent.primary_stance)
                 self.assertIn(answer_fragment, answer.text.lower())
 
-    def test_service_uses_deidentified_llm_generator_and_validator_for_safe_answers(self):
+    def test_service_uses_deidentified_llm_generator_for_safe_answers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_reviewed_simulator_fixture(workspace_root, include_profile_context=True)
@@ -999,11 +993,9 @@ class V1SimulatorServiceTest(unittest.TestCase):
                     }
                 )
             )
-            fake_validator = PassingSimulatorAnswerValidator()
             service = SimulatorService(
                 workspace_root=workspace_root,
                 generator=ModelClientAnswerGenerator(model_client=fake_model_client),
-                validator=fake_validator,
             )
 
             response = service.answer_turn(
@@ -1024,9 +1016,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
             self.assertIn("held-out split", response.answer.text.lower())
             self.assertEqual(1, len(fake_model_client.calls))
-            self.assertIsNotNone(fake_validator.answer_blueprint_json)
             prompt_text = "\n".join(message.content for message in fake_model_client.calls[0])
-            validator_payload = fake_validator.answer_blueprint_json or ""
             for hidden_fragment in (
                 "ev_gt_map_001_train_test_split_001",
                 "synthetic_user_001",
@@ -1040,7 +1030,6 @@ class V1SimulatorServiceTest(unittest.TestCase):
             ):
                 with self.subTest(hidden_fragment=hidden_fragment):
                     self.assertNotIn(hidden_fragment, prompt_text)
-                    self.assertNotIn(hidden_fragment, validator_payload)
                     self.assertNotIn(hidden_fragment, response.answer.text)
 
     def test_llm_generation_payload_includes_visible_dialogue_for_continuity(self):
@@ -1060,7 +1049,6 @@ class V1SimulatorServiceTest(unittest.TestCase):
             service = SimulatorService(
                 workspace_root=workspace_root,
                 generator=ModelClientAnswerGenerator(model_client=fake_model_client),
-                validator=PassingSimulatorAnswerValidator(),
             )
 
             response = service.answer_turn(
@@ -1112,7 +1100,6 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 generator=ModelClientAnswerGenerator(
                     model_client=FixtureSimulatorAnswerModelClient("not-json")
                 ),
-                validator=PassingSimulatorAnswerValidator(),
             )
 
             response = service.answer_turn(
@@ -1144,6 +1131,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 with self.subTest(hidden_fragment=hidden_fragment):
                     self.assertNotIn(hidden_fragment, response_payload)
 
+    @unittest.skip("post-generation answer validation was removed")
     def test_service_returns_safe_fallback_when_validator_is_unavailable(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -1186,6 +1174,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 with self.subTest(hidden_fragment=hidden_fragment):
                     self.assertNotIn(hidden_fragment, response_payload.lower())
 
+    @unittest.skip("post-generation answer validation was removed")
     def test_service_returns_safe_fallback_when_validation_fails(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -1234,6 +1223,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 with self.subTest(hidden_fragment=hidden_fragment):
                     self.assertNotIn(hidden_fragment, response_payload)
 
+    @unittest.skip("post-generation answer validation was removed")
     def test_service_regenerates_answer_when_validation_rejects_candidate(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -1286,6 +1276,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             self.assertNotIn("L4", response_payload)
             self.assertNotIn("ev_gt_map_001_train_test_split_001", response_payload)
 
+    @unittest.skip("post-generation answer validation was removed")
     def test_heuristic_validator_returns_structured_blocking_reasons(self):
         simulator_context = _simulator_context_for_state(
             mastery_level="L4",
@@ -1321,6 +1312,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
             set(decision.blocking_safety_reasons),
         )
 
+    @unittest.skip("post-generation answer validation was removed")
     def test_model_client_validator_parses_deidentified_structured_decision(self):
         simulator_context = _simulator_context_for_state(
             mastery_level="L2",
@@ -1481,6 +1473,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
                 grounding=QuestionGroundingResult(grounded_node_ids=("train_test_split",)),
             )
 
+    @unittest.skip("post-generation answer validation was removed")
     def test_turn_api_uses_llm_generator_and_llm_validator(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -1643,7 +1636,7 @@ class V1SimulatorServiceTest(unittest.TestCase):
 
             self.assertEqual(VisibleObservationKind.ANSWER, response.observation.kind)
             self.assertIn("cross-validation", response.answer.text.lower())
-            self.assertEqual(4, len(fake_model_client.calls))
+            self.assertEqual(3, len(fake_model_client.calls))
             grounding_prompt = "\n".join(
                 message.content for message in fake_model_client.calls[0]
             )

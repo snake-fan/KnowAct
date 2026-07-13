@@ -88,7 +88,7 @@ def build_answer_policy_messages(
                 dedent(
                     """
                     Visibility rules:
-                    - The output is consumed by generation and validation, so it
+                    - The output is consumed by generation, so it
                       must not contain mastery labels such as L0-L5.
                     - Do not include node ids, user ids, map ids, graph versions,
                       hidden evidence ids, evidence_refs, state tables, map dumps,

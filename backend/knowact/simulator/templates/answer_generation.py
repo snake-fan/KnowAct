@@ -63,7 +63,7 @@ def build_answer_generation_messages(
                       continuity only.
                     - style_hint: optional wording preference. Use it only to
                       adjust tone, brevity, or phrasing.
-                    - regeneration_guidance: retry feedback from validation.
+                    - regeneration_guidance: retry feedback after malformed generation output.
                     """
                 ).strip(),
                 dedent(
@@ -81,8 +81,8 @@ def build_answer_generation_messages(
                     5. Use visible dialogue only to make follow-up wording
                        coherent; do not treat dialogue as hidden memory.
                     6. Apply style_hint only after content is fixed.
-                    7. Apply regeneration_guidance only to repair the candidate
-                       wording; do not add unsupported content.
+                    7. Apply regeneration_guidance only to repair malformed
+                       output; do not add unsupported content.
                     8. Remove benchmark labels, hidden ids, state-table wording,
                        map dumps, scores, debug references, and schema language.
                     9. Return only the JSON object described below.

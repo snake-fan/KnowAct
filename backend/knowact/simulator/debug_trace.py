@@ -19,7 +19,6 @@ PARSER_OUTPUT_FILENAME = "parser_output.json"
 ANSWER_POLICY_STEP = "answer_policy"
 QUESTION_GROUNDING_STEP = "question_grounding"
 ANSWER_GENERATION_STEP = "answer_generation"
-ANSWER_VALIDATION_STEP = "answer_validation"
 
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _ACTIVE_RECORDER: ContextVar["SimulatorDebugTraceRecorder | None"] = ContextVar(
