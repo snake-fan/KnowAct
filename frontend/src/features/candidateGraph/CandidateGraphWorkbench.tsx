@@ -26,12 +26,10 @@ import {
   type Selection
 } from "./CandidateGraphWorkbenchModel";
 
-const DEFAULT_DOMAIN = "classical_supervised_ml_algorithms";
-
 export function CandidateGraphWorkbench() {
   const [materials, setMaterials] = useState<SourceMaterialRecord[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState("");
-  const [benchmarkDomain, setBenchmarkDomain] = useState(DEFAULT_DOMAIN);
+  const [benchmarkDomain, setBenchmarkDomain] = useState("");
   const [runId, setRunId] = useState("");
   const [runs, setRuns] = useState<CandidateGraphRunSummary[]>([]);
   const [clientProvider, setClientProvider] = useState<"openai" | "deepseek">("openai");
@@ -101,6 +99,10 @@ export function CandidateGraphWorkbench() {
     event.preventDefault();
     if (!selectedSourceId) {
       setError("Select a source material first.");
+      return;
+    }
+    if (!benchmarkDomain.trim()) {
+      setError("Enter a benchmark domain first.");
       return;
     }
     await runTask("generate", async () => {
@@ -281,15 +283,15 @@ export function CandidateGraphWorkbench() {
             </label>
             <label>
               Source ID
-              <input name="source_id" placeholder="isl_python" required />
+              <input name="source_id" placeholder="Enter a stable identifier for this source" required />
             </label>
             <label>
               Title
-              <input name="title" placeholder="An Introduction to Statistical Learning" required />
+              <input name="title" placeholder="Enter the source material title" required />
             </label>
             <label>
               Citation
-              <input name="citation" placeholder="Optional" />
+              <input name="citation" placeholder="Enter citation details (optional)" />
             </label>
             <button type="submit" disabled={busy !== null}>Upload</button>
           </form>
@@ -309,7 +311,12 @@ export function CandidateGraphWorkbench() {
             </label>
             <label>
               Benchmark Domain
-              <input value={benchmarkDomain} onChange={(event) => setBenchmarkDomain(event.target.value)} />
+              <input
+                value={benchmarkDomain}
+                onChange={(event) => setBenchmarkDomain(event.target.value)}
+                placeholder="Enter the domain identifier for this benchmark"
+                required
+              />
             </label>
             <label>
               Run ID
@@ -331,7 +338,7 @@ export function CandidateGraphWorkbench() {
               </select>
             </label>
             <div className="button-row">
-              <button type="submit" disabled={busy !== null || !selectedSourceId}>Generate</button>
+              <button type="submit" disabled={busy !== null || !selectedSourceId || !benchmarkDomain.trim()}>Generate</button>
               <button type="button" onClick={handleLoadRun} disabled={busy !== null || !runId}>Load</button>
             </div>
           </form>
@@ -413,7 +420,7 @@ export function CandidateGraphWorkbench() {
                 autoFocus
                 value={graphVersion}
                 onChange={(event) => setGraphVersion(event.target.value)}
-                placeholder="v1"
+                placeholder="Enter a unique graph version identifier"
                 pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
                 required
               />
