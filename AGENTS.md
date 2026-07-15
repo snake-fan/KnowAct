@@ -29,11 +29,12 @@
 
 新增或调整源码结构、模块边界、runtime wiring、schema、validation、authoring、simulator、agent、scoring、reports 或 frontend workbench 前，agent 必须先阅读 `docs/V1ProjectArchitecture.md` 和 `docs/V1ProjectBreakdown.md`。架构实现应跟随 `docs/V1ProjectArchitecture.md` 的推荐模块边界和数据流；开发顺序应参考 `docs/V1ProjectBreakdown.md` 的阶段拆解。不要在未对齐这两份文档的情况下随意新增平行目录、替代概念或临时架构。若这两份文档与已接受 ADR 或 `CONTEXT.md` 冲突，以 ADR 和 `CONTEXT.md` 为准，并在最终回复中说明冲突点。
 
-- `frontend/`：React 前端，用于 benchmark 配置、交互界面、实验结果查看和知识地图可视化；当前包含 Knowledge Graph、User Profile 和 User Map 三个 authoring workbench modules。
+- `frontend/`：React 前端，用于 benchmark 配置、交互界面、实验结果查看和知识地图可视化；当前包含 Knowledge Graph、User Profile、User Map、Simulator、Episodes 和 Run Queue workbench modules。
 - `backend/`：FastAPI 后端，用于 profile generation、user simulator、agent loop、evaluation API 和实验任务编排。
 - `backend/knowact/api/`：FastAPI routers；当前包含 `/api/authoring` surface，用于从本地教材 PDF 运行真实 graph authoring workflow、生成 reviewable candidate graph artifacts、通过显式 review confirmation 将校验后的 candidate snapshot promote 为 reviewed authored graph version，并从 reviewed graph 与 confirmed Profile Context snapshot 生成可检查的 single-batch Candidate Knowledge Map。
 - `backend/knowact/core/` 和 `backend/knowact/validation/`：当前 V1 已开始实现的 schema 与 validation spine。
 - `backend/knowact/simulator/`：Phase 5 user simulator contracts；当前包含 usable stateless single-turn DTO/API boundary，用于建立 tested-agent-visible request/response 边界。
+- `backend/knowact/runtime/`：Episode manifest registry、tested-agent visibility boundary、turn runner、持久化 FIFO Episode Run Queue、turn-level checkpoint 和单进程并发调度。
 - `benchmark/fixtures/`：小型 development fixtures，可用于跑通 schema、validation 和 runtime wiring；不要把它们误认为正式 v1 benchmark graph。
 - `test/`：当前 Python `unittest` 测试入口。
 - `docs/`：研究设计、数据 schema、知识地图、评估指标和实验记录。
@@ -122,10 +123,14 @@ This repo uses a single-context domain documentation layout. See `docs/agents/do
 
 当前仓库尚未形成完整测试体系。添加前后端代码后，优先建立以下验证入口：
 
-- Current Python schema checks：`uv run python -m unittest`
-- Backend：`uv run pytest`
-- Backend dev server：`uv run fastapi dev backend/main.py` 或项目实际入口命令
-- Frontend：按实际包管理器记录 `npm` / `pnpm` / `bun` 命令
+- Environment and dependencies：`make setup`
+- Backend + frontend dev servers：`make dev`
+- Backend or frontend only：`make backend` / `make frontend`
+- Current Python schema/runtime checks：`make test`
+- Frontend production build：`make build`
+- Combined verification：`make check`
+
+根目录 `Makefile` 是本地开发命令的主要入口。应用凭据和 provider/service 配置保存在 `.env`，由 backend 自行加载；host、port 和 frontend proxy 等非敏感启动配置通过 Make variables 或进程环境覆盖。不要在 Make output 中打印 `.env` 内容。
 
 在命令未定义前，agents 应通过阅读变更、检查 Markdown 渲染结构和保持文件一致性来完成基础验证。
 

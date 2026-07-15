@@ -9,6 +9,7 @@ from backend.knowact.llm.client import ModelClientMetadata
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage
 from backend.knowact.runtime.runner import (
     EpisodeRunAlreadyExistsError,
+    EpisodeRunCancelledError,
     EpisodeRunRequest,
     EpisodeRunner,
 )
@@ -25,6 +26,106 @@ from test.test_v1_runtime_episode_repository import (
 
 
 class V1RuntimeRunnerTest(unittest.TestCase):
+    def test_running_cancellation_stops_after_completed_turn_checkpoint(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(
+                workspace_root,
+                "episode_a",
+                graph_version="v1",
+                hidden_map_id="gt_map_001",
+                max_turns=2,
+                execution_configuration=True,
+            )
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            runner, _ = _runner_with_fake_simple_llm(
+                workspace_root,
+                responses=(
+                    _ask_train_test_split_question_output(),
+                    _train_test_split_l4_update_output(),
+                ),
+            )
+            prepared = runner.prepare_registered_episode(
+                episode_id="episode_a",
+                run_id="run_cancel_001",
+            )
+            checks = 0
+
+            def should_cancel() -> bool:
+                nonlocal checks
+                checks += 1
+                return checks >= 4
+
+            with self.assertRaises(EpisodeRunCancelledError) as raised:
+                runner.resume_registered_episode(
+                    episode_id="episode_a",
+                    run_id="run_cancel_001",
+                    should_cancel=should_cancel,
+                )
+            checkpoint_payload = _read_json(prepared.artifacts.checkpoint_path)
+
+        self.assertEqual(1, raised.exception.completed_turns)
+        self.assertEqual(1, checkpoint_payload["completed_turns"])
+        self.assertEqual(1, len(checkpoint_payload["visible_dialogue_context"]["turns"]))
+
+    def test_registered_episode_resumes_same_run_from_last_completed_turn(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            _write_manifest(
+                workspace_root,
+                "episode_a",
+                graph_version="v1",
+                hidden_map_id="gt_map_001",
+                max_turns=2,
+                execution_configuration=True,
+            )
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            first_runner, _ = _runner_with_fake_simple_llm(
+                workspace_root,
+                responses=(
+                    _ask_train_test_split_question_output(),
+                    _train_test_split_l4_update_output(),
+                ),
+            )
+            prepared = first_runner.prepare_registered_episode(
+                episode_id="episode_a",
+                run_id="run_resume_001",
+            )
+
+            with self.assertRaises(AssertionError):
+                first_runner.resume_registered_episode(
+                    episode_id="episode_a",
+                    run_id="run_resume_001",
+                )
+            self.assertTrue(prepared.artifacts.checkpoint_path.exists())
+            checkpoint_payload = _read_json(prepared.artifacts.checkpoint_path)
+
+            resumed_runner, _ = _runner_with_fake_simple_llm(
+                workspace_root,
+                responses=(
+                    json.dumps(
+                        {
+                            "action": "finalize_reconstruction",
+                            "reason": "The visible evidence is sufficient.",
+                        }
+                    ),
+                ),
+            )
+            result = resumed_runner.resume_registered_episode(
+                episode_id="episode_a",
+                run_id="run_resume_001",
+            )
+            checkpoint_removed = not result.artifacts.checkpoint_path.exists()
+
+        self.assertEqual(1, checkpoint_payload["completed_turns"])
+        self.assertEqual("run_resume_001", result.run_id)
+        self.assertEqual(1, result.turn_count)
+        self.assertTrue(checkpoint_removed)
+
     def test_runner_completes_simple_llm_episode_and_writes_artifacts(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)

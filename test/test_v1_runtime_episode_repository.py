@@ -455,6 +455,7 @@ def _write_manifest(
     hidden_map_id: str = "dev_user_001_map",
     max_turns: int = 3,
     scoring_overrides: dict[str, int] | None = None,
+    execution_configuration: bool = False,
 ) -> Path:
     manifest_path = _episode_dir(
         workspace_root,
@@ -473,6 +474,8 @@ def _write_manifest(
     }
     if scoring_overrides is not None:
         payload["scoring_overrides"] = scoring_overrides
+    if execution_configuration:
+        payload.update(_execution_configuration_payload())
     manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return manifest_path
 
@@ -494,6 +497,18 @@ def _registration_manifest(
         interaction_rule="single_diagnostic_question_per_turn",
         scoring_profile="squared_mastery_distance_v1",
     )
+
+
+def _execution_configuration_payload() -> dict[str, object]:
+    return {
+        "agent_kind": "simple_llm_agent",
+        "tested_agent_client_provider": "openai",
+        "tested_agent_model": "gpt-4.1-mini",
+        "simulator_client_provider": "openai",
+        "simulator_model": "gpt-4.1-mini",
+        "tested_agent_temperature": 0.0,
+        "max_tool_retries": 3,
+    }
 
 
 def _write_reviewed_graph(workspace_root: Path) -> None:

@@ -185,8 +185,16 @@ A bounded interaction in which a tested agent tries to infer one user's **Review
 _Avoid_: learning session, tutoring session, conversation
 
 **Evaluation Episode Manifest**:
-The configuration record in the **Runtime Episode Registry** that binds an **Evaluation Episode** to one benchmark domain, one reviewed graph version, one hidden **Reviewed Map**, turn budget, interaction rules, and scoring profile.
+The configuration record in the **Runtime Episode Registry** that binds an **Evaluation Episode** to one benchmark domain, one reviewed graph version, one hidden **Reviewed Map**, turn budget, interaction rules, scoring profile, and immutable **Episode Execution Configuration**.
 _Avoid_: loose runner args, experiment notes, prompt metadata
+
+**Episode Execution Configuration**:
+The immutable run configuration selected and resolved during **Episode Manifest Registration**: tested-agent kind, tested-agent provider and model, simulator provider and model, tested-agent temperature, and maximum tool retries.
+_Avoid_: Run Queue form state, per-enqueue override, checkpoint-only configuration, mutable resume setting
+
+**Episode Model Catalog**:
+The backend-owned allowlist of supported model names for each tested-agent or simulator provider, used to populate episode-registration selectors and validate immutable model choices.
+_Avoid_: free-text model input, frontend-only hardcoded list, unvalidated provider model, API credential catalog
 
 **Episode Manifest Registration**:
 The benchmark-author publication of a validated **Evaluation Episode Manifest** into the **Runtime Episode Registry** without starting an **Evaluation Runtime** run.
@@ -195,6 +203,26 @@ _Avoid_: create episode run, start simulator episode, loose manifest save
 **Episode Run**:
 One execution of a registered **Evaluation Episode** by the **Evaluation Runtime** for a selected **Tested Agent**, producing a visible interaction record, a final reconstruction submission, and a score report.
 _Avoid_: episode manifest, episode registration, simulator turn-test, authoring workflow
+
+**Episode Run Queue**:
+The persistent **Evaluation Runtime** queue that accepts eligible registered **Evaluation Episodes** selected in the workbench and schedules their independent **Episode Runs** with bounded backend parallelism.
+_Avoid_: Episode Run Batch, frontend Promise queue, combined episode, reusable completed episode
+
+**Episode Execution Status**:
+The single episode-centric runtime status projected in the workbench: `ready`, `queued`, `running`, `completed`, `failed`, or `cancelled`.
+_Avoid_: batch membership, multiple simultaneous statuses, `waited`, `runned`, episode manifest lifecycle
+
+**Episode Run Checkpoint**:
+The temporary resumable runtime state atomically committed after each completed **Interaction Turn**, recording enough visible dialogue, working-map, phase, budget, and trace progress to continue the same **Episode Run** identity after backend interruption.
+_Avoid_: final run artifact, per-model-call transaction log, hidden map snapshot, permanent duplicate transcript
+
+**Episode Run Restart**:
+The explicit benchmark-author action that abandons an unresumable failed run identity, preserves its existing artifacts, assigns a new run id to the same registered episode, and starts again from an initial checkpoint.
+_Avoid_: silent checkpoint overwrite, automatic retry, completed-episode rerun, resume with the same run id
+
+**Episode Run Queue Scheduler**:
+The single-process **Evaluation Runtime** component that persists and drains the **Episode Run Queue**, enforces bounded global concurrency, dispatches independent runs, and reconciles persisted queue/run state on backend startup.
+_Avoid_: browser Promise queue, Episode Run Batch Scheduler, distributed worker cluster, unbounded thread creation
 
 **Runtime Management View**:
 A benchmark-author-facing view of registered **Evaluation Episodes** and their reviewed artifact bindings.
@@ -622,6 +650,46 @@ _Avoid_: ground-truth edge, authored edge
 - An **Evaluation Episode Manifest** lives in the **Runtime Episode Registry** and selects one **Episode Knowledge Graph** version, one hidden **Reviewed Map**, **Turn Budget**, interaction rules, and scoring profile.
 - The hidden **Reviewed Map** selected by an **Evaluation Episode Manifest** exists before the **Evaluation Episode** starts and remains static during the episode.
 - **Episode Manifest Registration** creates one registered **Evaluation Episode Manifest** and does not start an **Evaluation Runtime** run.
+- The **Episode Run Queue** accepts only existing **Evaluation Episode Manifests** from the **Runtime Episode Registry**; enqueueing does not create, edit, or register episode manifests.
+- The workbench presents registered **Evaluation Episodes** as the primary rows. A user selects eligible episode rows and submits one enqueue command; the browser does not start independent concurrent run requests and no **Episode Run Batch** is created.
+- Every current-schema registered **Evaluation Episode** has exactly one current **Episode Execution Status**. Newly registered current-schema episodes are `ready`; legacy manifests without execution configuration are explicitly excluded.
+- Only `ready`, `failed`, and `cancelled` episodes are selectable for enqueueing. `queued`, `running`, and `completed` episodes are not selectable.
+- Enqueueing a selected episode changes its status to `queued`; scheduler dispatch changes it to `running`; successful finalization and scoring change it to `completed`.
+- A successfully scored **Episode Run** permanently leaves its episode `completed`. Repeating the same setup requires **Episode Manifest Registration** with a new `episode_id`.
+- A `failed` or `cancelled` episode may be enqueued again to resume the same **Episode Run** identity from its latest valid **Episode Run Checkpoint**. It keeps the same run id and run-artifact directory.
+- **Episode Manifest Registration** fixes `agent_kind`, tested-agent provider and model, simulator provider and model, tested-agent temperature, and `max_tool_retries` as the episode's **Episode Execution Configuration**.
+- Registration resolves `tested_agent_model` and `simulator_model` for the selected providers and stores those non-secret model names in the manifest. API keys, base URLs, and credentials remain environment configuration and are never copied into the manifest.
+- The `Episodes` workbench selects tested-agent and simulator models from the backend **Episode Model Catalog**. It does not accept free-text model names, and registration rejects a model that is not allowed for its selected provider.
+- The **Episode Model Catalog** exposes only non-secret provider/model options, provider-scoped defaults, and availability. Providers without configured credentials are disabled in the workbench and rejected by registration; API keys and base URLs are never returned.
+- **Episode Execution Configuration** is immutable with the registered episode. First execution, checkpoint resume, and **Episode Run Restart** all use the same values; changing any value requires a new `episode_id`.
+- Legacy episode manifests that predate required **Episode Execution Configuration** remain read-only in the `Episodes` workbench with a configuration-missing warning. They do not receive an **Episode Execution Status**, enter `Run Queue`, or infer configuration and a unique completed result from historical runs.
+- One enqueue command may mix `ready`, `failed`, and `cancelled` episodes because each selected episode already owns its execution configuration. The enqueue request carries episode ids only and does not override run configuration.
+- Enqueue admission is evaluated per selected episode rather than all-or-nothing. Valid selections enter the queue even when another selected episode is rejected, and the response reports one accepted or rejected outcome per episode.
+- Selected episode ids in one enqueue command must be unique. Each selected episode creates one queue admission; duplicate selections of the same episode in one command are not supported.
+- Failure of one queued or running episode does not cancel or block other episodes in the queue. It changes only that episode to `failed` with a safe structured failure record.
+- Cancelling a `queued` episode changes it to `cancelled` immediately. Cancelling a `running` episode is cooperative: it finishes the current turn, commits its checkpoint, then becomes `cancelled` without force-killing an in-flight model call.
+- The initial `Run Queue` workbench exposes cancellation on individual `queued` or `running` episode rows only. It does not provide cancel-all or selection-wide cancellation.
+- The workbench polls episode execution state approximately every two seconds while any visible episode is `queued` or `running`, and stops when no non-terminal episode remains; it does not require WebSocket or server-sent-event delivery.
+- The queue workbench uses an episode-list/detail layout. The left list shows selection eligibility, execution status, queue position or completed-turn progress; the right panel shows details for one selected episode.
+- The right panel shows the existing score, visible transcript, per-node comparison, and artifact references for `completed`; run id and turn/resume progress for `running`; a safe structured error for `failed`; and manifest plus reviewed-artifact binding for other statuses.
+- The existing `Episodes` workbench owns **Episode Manifest Registration**, immutable **Episode Execution Configuration**, and reviewed-binding inspection. `Run Queue` is the only formal execution workbench and owns enqueueing, global concurrency, cancellation, progress, and result inspection.
+- An **Episode Run Checkpoint** is committed only after one visible question/answer pair and its following working-map update form a completed **Interaction Turn**. It is the commit marker for resumable progress.
+- The latest valid **Episode Run Checkpoint** is authoritative for committed resume progress. Turn, working-map, or trace files written beyond that checkpoint after a crash are uncommitted and must be ignored or deterministically replaced during replay.
+- Before the first provider call, the runtime creates an initial **Episode Run Checkpoint** containing the initial working map, empty visible dialogue, initial decision phase, full remaining turn budget, and run configuration.
+- Once the initial checkpoint exists, tested-agent kind/provider/model, simulator provider/model, tested-agent temperature, and `max_tool_retries` are immutable for that **Episode Run**. Resuming `failed` or `cancelled` uses those original values.
+- A missing or malformed checkpoint for a resumable `failed` or `cancelled` episode rejects only that episode from normal enqueueing, leaves it `failed` with `checkpoint_invalid`, and does not block other selected episodes.
+- A checkpoint-invalid episode remains `failed` until the benchmark author explicitly selects **Episode Run Restart**. Restart preserves the prior run directory, assigns a new run id, and creates a fresh initial checkpoint for the same registered episode.
+- If interruption occurs inside an uncommitted turn, the runtime discards that turn's transient state and re-executes the entire turn from the previous checkpoint. Model calls therefore have at-least-once execution semantics; KnowAct does not claim exactly-once external model calls.
+- On backend startup, any episode left `running` by the interrupted process becomes `failed` with a safe interruption error. It does not resume automatically.
+- Episodes already persisted as `queued` keep their FIFO position across backend restart and return to automatic scheduling when the service is available.
+- When the user re-enqueues a `failed` or `cancelled` episode, the runtime resumes its existing run id from the latest valid checkpoint. An uncommitted partial turn is replayed from the preceding completed-turn checkpoint.
+- Successful **Episode Run** finalization writes the normal run artifacts, then removes resume-only checkpoint and scheduling state. Formal turn artifacts, transcript, working map, agent tool trace, agent output, and scoring report remain available for audit.
+- The initial **Episode Run Queue Scheduler** runs inside one FastAPI application process with one bounded thread pool of at most `8` workers.
+- The queue has one persisted global concurrency setting, defaulting to `3` and constrained to `3` through `8`. Increasing it may dispatch more queued episodes immediately.
+- Lowering queue concurrency never cancels or interrupts already `running` episodes. The scheduler starts no additional work until the running count falls below the new limit, then resumes dispatch up to that limit.
+- The **Episode Run Queue** uses stable FIFO ordering by enqueue time. Episodes selected in one enqueue command enter in their current workbench-list order; re-enqueued `failed` or `cancelled` episodes join the tail.
+- Queue order is persisted and restored without reordering after backend restart.
+- The initial scheduler persists episode execution state, queue state, and checkpoints on the local filesystem and scans non-terminal work during application startup. Multi-process workers, distributed scheduling, Redis, and external task queues are deferred.
 - **Episode Manifest Registration** only succeeds when the selected **Episode Knowledge Graph** and hidden **Reviewed Map** form a valid reviewed artifact binding.
 - **Episode Manifest Registration** never overwrites an existing registered episode identity; changing the selected graph, map, or budget requires a new **Evaluation Episode Manifest** identity.
 - A **Runtime Management View** may show reviewed reference artifact identities, synthetic user identity, and profile-context availability to a benchmark author without making those fields part of the **Tested-Agent-Visible Episode Context**.
@@ -880,6 +948,25 @@ _Avoid_: ground-truth edge, authored edge
 - "remaining turns" can confuse question opportunities with finalization; resolved: use **Remaining Diagnostic Turns** to count how many more **Diagnostic Questions** may be asked.
 - "episode config" can be scattered across runner arguments; resolved: v1 uses an **Evaluation Episode Manifest**.
 - "create episode" can mean either registering an episode manifest or starting a run; resolved: use **Episode Manifest Registration** for the former and keep run starts separate.
+- "batch episodes" can imply a separate persistent batch resource; resolved: the user submits selected episodes to one persistent **Episode Run Queue**, and each episode owns its status and result.
+- "parallel runs" can imply browser-side concurrent requests; resolved: the **Episode Run Queue Scheduler** owns bounded parallel execution in the backend.
+- "waited" can ambiguously mean queued or never started; resolved: use `ready` before enqueueing and `queued` after enqueueing.
+- "runned" is not a stable lifecycle term; resolved: use `running` while execution is active and `completed` after scoring succeeds.
+- "retry failed episodes" can imply reusing a completed result; resolved: only `failed` and `cancelled` episodes may be re-enqueued, while `completed` remains immutable.
+- "change configuration on resume" can mix different agents or providers inside one run; resolved: **Episode Run Checkpoint** configuration is immutable after the first enqueue.
+- "run configuration form" can imply queue-time overrides; resolved: **Episode Execution Configuration** is fixed during **Episode Manifest Registration**, and `Run Queue` only selects episode identities.
+- "model configuration" can imply arbitrary text entry; resolved: episode registration uses provider-scoped options from the backend **Episode Model Catalog**.
+- "provider option" can imply that every known provider is currently runnable; resolved: the **Episode Model Catalog** marks credential-backed availability and registration rejects unavailable choices.
+- "migrate legacy episode" can imply guessing immutable model settings or choosing among historical runs; resolved: legacy manifests remain read-only and a queue-eligible experiment requires new **Episode Manifest Registration**.
+- "checkpoint recovery failure" can imply silently starting over or rejecting the whole selection; resolved: reject only that episode, preserve its failed state, and require explicit **Episode Run Restart** for a new run id.
+- "stop queue" can imply killing all running threads or provider requests; resolved: cancellation targets an episode and is cooperative at the next completed-turn checkpoint for a running episode.
+- "run an episode again" can imply that a registered manifest is a reusable job template; resolved: a successfully completed **Evaluation Episode** is immutable and one-shot, and repetition requires a newly registered episode identity.
+- "persist run progress" can imply retaining another permanent transcript; resolved: an **Episode Run Checkpoint** is temporary resume state, while formal run artifacts remain the durable audit record.
+- "resume a turn" can imply continuing from a half-finished model call; resolved: only complete turns are committed, and an interrupted uncommitted turn is replayed from the previous **Episode Run Checkpoint**.
+- "backend parallel execution" can imply a distributed queue; resolved: the initial **Episode Run Queue Scheduler** is a single-process, local-filesystem, bounded-thread-pool runtime component.
+- "lower queue concurrency" can imply terminating excess running work; resolved: existing runs continue and only future dispatch pauses until active work falls below the new global limit.
+- "restart queue recovery" can imply treating queued and running work the same; resolved: queued episodes remain queued, while interrupted running episodes become `failed` for explicit resume.
+- "queue priority" can imply manual reordering or retries jumping ahead; resolved: the initial **Episode Run Queue** is stable FIFO, and re-enqueued episodes join the tail.
 - "episode detail" can mean either benchmark-author management display or tested-agent delivery; resolved: **Runtime Management View** may show reference identities, while **Tested-Agent-Visible Episode Context** must not.
 - "episode manifests belong to one domain directory" can limit cross-domain experiment orchestration; resolved: v1 stores runnable episode manifests in a **Runtime Episode Registry** while each manifest still selects one domain graph version and one hidden **Reviewed Map**.
 - "scoring profile" can imply per-episode custom metrics; resolved: v1 uses fixed `squared_mastery_distance_v1` for comparability.

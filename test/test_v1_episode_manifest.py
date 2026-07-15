@@ -8,6 +8,47 @@ from backend.knowact.validation.exceptions import KnowActValidationError
 
 
 class V1EpisodeManifestTest(unittest.TestCase):
+    def test_manifest_accepts_complete_immutable_execution_configuration(self):
+        manifest = EvaluationEpisodeManifest.model_validate(
+            {
+                "episode_id": "dev_episode_001",
+                "benchmark_domain": "classical_supervised_ml_algorithms",
+                "graph_version": "v1",
+                "hidden_map_id": "dev_map_001",
+                "max_turns": 3,
+                "interaction_rule": "single_diagnostic_question_per_turn",
+                "scoring_profile": "squared_mastery_distance_v1",
+                "agent_kind": "simple_llm_agent",
+                "tested_agent_client_provider": "openai",
+                "tested_agent_model": "gpt-4.1-mini",
+                "simulator_client_provider": "deepseek",
+                "simulator_model": "deepseek-v4-flash",
+                "tested_agent_temperature": 0.2,
+                "max_tool_retries": 3,
+            }
+        )
+
+        self.assertFalse(manifest.is_legacy)
+        self.assertEqual(
+            "gpt-4.1-mini",
+            manifest.execution_configuration().tested_agent_model,
+        )
+
+    def test_manifest_rejects_partial_execution_configuration(self):
+        with self.assertRaisesRegex(ValidationError, "fully specified"):
+            EvaluationEpisodeManifest.model_validate(
+                {
+                    "episode_id": "dev_episode_001",
+                    "benchmark_domain": "classical_supervised_ml_algorithms",
+                    "graph_version": "v1",
+                    "hidden_map_id": "dev_map_001",
+                    "max_turns": 3,
+                    "interaction_rule": "single_diagnostic_question_per_turn",
+                    "scoring_profile": "squared_mastery_distance_v1",
+                    "agent_kind": "simple_llm_agent",
+                }
+            )
+
     def test_manifest_uses_identity_first_reviewed_episode_binding(self):
         manifest = EvaluationEpisodeManifest(
             episode_id="dev_episode_001",

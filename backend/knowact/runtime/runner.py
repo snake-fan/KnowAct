@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from backend.knowact.agents.agents.simple_llm import SimpleLLMTestedAgent
 from backend.knowact.agents.llm_agent import build_simple_llm_tested_agent_for_provider
@@ -33,10 +33,24 @@ from backend.knowact.agents.working_map import (
     AgentWorkingKnowledgeMap,
     initialize_working_map,
 )
+from backend.knowact.core.episode import EpisodeExecutionConfiguration
 from backend.knowact.core.graph import KnowledgeGraph
 from backend.knowact.core.interaction import VisibleDialogueContext
 from backend.knowact.core.scoring import EpisodeScoreReport
-from backend.knowact.runtime.episode_repository import RuntimeEpisodeRepository
+from backend.knowact.llm.config import deepseek_config_from_env, openai_config_from_env
+from backend.knowact.runtime.checkpoint import (
+    EpisodeRunCheckpoint,
+    EpisodeRunCheckpointRepository,
+    advanced_checkpoint,
+)
+from backend.knowact.runtime.episode_options import (
+    DEFAULT_DEEPSEEK_MODEL,
+    DEFAULT_OPENAI_MODEL,
+)
+from backend.knowact.runtime.episode_repository import (
+    RuntimeEpisodeBinding,
+    RuntimeEpisodeRepository,
+)
 from backend.knowact.runtime.transcript import append_visible_turn, next_turn_id
 from backend.knowact.scoring.compare import score_final_reconstruction
 from backend.knowact.simulator.llm_service import build_simulator_service_for_provider
@@ -67,6 +81,22 @@ class UnsupportedEpisodeRunAgentKindError(ValueError):
     """Raised when the runner cannot construct the selected tested agent."""
 
 
+class LegacyEpisodeExecutionConfigurationError(ValueError):
+    """Raised when formal execution targets a legacy episode manifest."""
+
+
+class EpisodeRunCancelledError(RuntimeError):
+    """Raised after cooperative cancellation reaches a checkpoint boundary."""
+
+    def __init__(self, *, completed_turns: int) -> None:
+        super().__init__("Episode Run cancelled at a completed-turn checkpoint")
+        self.completed_turns = completed_turns
+
+
+class EpisodeRunArtifactError(ValueError):
+    """Raised when a completed Episode Run artifact cannot be read."""
+
+
 class EpisodeRunRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -76,9 +106,11 @@ class EpisodeRunRequest(BaseModel):
     tested_agent_client_provider: TestedAgentClientProvider = (
         DEFAULT_TESTED_AGENT_CLIENT_PROVIDER
     )
+    tested_agent_model: str | None = None
     simulator_client_provider: SimulatorClientProvider = (
         DEFAULT_SIMULATOR_CLIENT_PROVIDER
     )
+    simulator_model: str | None = None
     tested_agent_temperature: float | None = Field(default=None, ge=0.0)
     max_tool_retries: int = Field(default=3, ge=1)
 
@@ -94,17 +126,32 @@ class EpisodeRunRequest(BaseModel):
             return None
         return _validate_safe_id(value, "run_id")
 
+    @field_validator("tested_agent_model", "simulator_model")
+    @classmethod
+    def _optional_model_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
 
 @dataclass(frozen=True)
 class EpisodeRunArtifacts:
     run_dir: Path
     episode_manifest_snapshot_path: Path
+    checkpoint_path: Path
     turns_dir: Path
     transcript_path: Path
     working_map_path: Path
     agent_tool_trace_path: Path
     agent_output_path: Path
     scoring_report_path: Path
+
+
+@dataclass(frozen=True)
+class PreparedEpisodeRun:
+    run_id: str
+    episode_id: str
+    artifacts: EpisodeRunArtifacts
 
 
 @dataclass(frozen=True)
@@ -121,10 +168,12 @@ class EpisodeRunResult:
 
 TestedAgentFactory = Callable[[EpisodeRunRequest], TestedAgent]
 SimulatorServiceFactory = Callable[[SimulatorClientProvider, Path], SimulatorService]
+CancellationCheck = Callable[[], bool]
+ProgressCallback = Callable[[int], None]
 
 
 class EpisodeRunner:
-    """Run registered Evaluation Episodes and persist formal run artifacts."""
+    """Run registered Evaluation Episodes with turn-level resumable state."""
 
     def __init__(
         self,
@@ -137,33 +186,94 @@ class EpisodeRunner:
         self._episode_repository = RuntimeEpisodeRepository(
             workspace_root=workspace_root
         )
-        self._tested_agent_factory = tested_agent_factory or _build_tested_agent
-        self._simulator_service_factory = (
-            simulator_service_factory or _build_simulator_service
+        self._checkpoint_repository = EpisodeRunCheckpointRepository(
+            workspace_root=workspace_root
+        )
+        self._tested_agent_factory = tested_agent_factory
+        self._simulator_service_factory = simulator_service_factory
+
+    def prepare_registered_episode(
+        self,
+        *,
+        episode_id: str,
+        run_id: str | None = None,
+    ) -> PreparedEpisodeRun:
+        binding = self._episode_repository.load_episode_binding(episode_id)
+        configuration = binding.manifest.execution_configuration()
+        if configuration is None:
+            raise LegacyEpisodeExecutionConfigurationError(
+                f"Episode {episode_id} has no execution configuration"
+            )
+        return self._prepare(
+            binding=binding,
+            configuration=configuration,
+            run_id=run_id or default_episode_run_id(),
+        )
+
+    def resume_registered_episode(
+        self,
+        *,
+        episode_id: str,
+        run_id: str,
+        should_cancel: CancellationCheck | None = None,
+        progress_callback: ProgressCallback | None = None,
+    ) -> EpisodeRunResult:
+        binding = self._episode_repository.load_episode_binding(episode_id)
+        configuration = binding.manifest.execution_configuration()
+        if configuration is None:
+            raise LegacyEpisodeExecutionConfigurationError(
+                f"Episode {episode_id} has no execution configuration"
+            )
+        checkpoint = self._checkpoint_repository.read_validated(
+            run_id=run_id,
+            episode_id=episode_id,
+            execution_configuration=configuration,
+        )
+        return self._execute(
+            binding=binding,
+            checkpoint=checkpoint,
+            should_cancel=should_cancel or (lambda: False),
+            progress_callback=progress_callback or (lambda completed_turns: None),
         )
 
     def run_episode(self, request: EpisodeRunRequest) -> EpisodeRunResult:
-        run_id = request.run_id or default_episode_run_id()
-        _ensure_run_dir_available(self._workspace_root, run_id)
+        """Compatibility entry for direct runner tests and development code."""
 
         binding = self._episode_repository.load_episode_binding(request.episode_id)
+        configuration = binding.manifest.execution_configuration() or _request_configuration(
+            request
+        )
+        prepared = self._prepare(
+            binding=binding,
+            configuration=configuration,
+            run_id=request.run_id or default_episode_run_id(),
+        )
+        checkpoint = self._checkpoint_repository.read_validated(
+            run_id=prepared.run_id,
+            episode_id=request.episode_id,
+            execution_configuration=configuration,
+        )
+        return self._execute(
+            binding=binding,
+            checkpoint=checkpoint,
+            should_cancel=lambda: False,
+            progress_callback=lambda completed_turns: None,
+        )
+
+    def _prepare(
+        self,
+        *,
+        binding: RuntimeEpisodeBinding,
+        configuration: EpisodeExecutionConfiguration,
+        run_id: str,
+    ) -> PreparedEpisodeRun:
+        _ensure_run_dir_available(self._workspace_root, run_id)
         manifest = binding.manifest
         graph = binding.reviewed_graph.graph
-        hidden_map = binding.hidden_map.knowledge_map
-
-        # Reserve the run id before any model-backed work starts. This also gives
-        # each completed interaction turn a stable location immediately.
         run_dir = _prepare_run_dir(self._workspace_root, run_id)
         artifacts = _artifact_paths(run_dir)
         artifacts.turns_dir.mkdir()
         _write_json(artifacts.episode_manifest_snapshot_path, manifest)
-
-        agent = self._tested_agent_factory(request)
-        simulator_service = self._simulator_service_factory(
-            request.simulator_client_provider,
-            self._workspace_root,
-        )
-
         working_map = initialize_working_map(
             episode_id=manifest.episode_id,
             benchmark_domain=manifest.benchmark_domain,
@@ -171,41 +281,81 @@ class EpisodeRunner:
             graph=graph,
         )
         _write_json(artifacts.working_map_path, working_map)
-        visible_dialogue_context = VisibleDialogueContext()
-        trace: list[dict[str, Any]] = []
+        checkpoint = self._checkpoint_repository.initial_checkpoint(
+            run_id=run_id,
+            episode_id=manifest.episode_id,
+            execution_configuration=configuration,
+            working_map=working_map,
+            max_turns=manifest.max_turns,
+        )
+        self._checkpoint_repository.write(checkpoint)
+        return PreparedEpisodeRun(
+            run_id=run_id,
+            episode_id=manifest.episode_id,
+            artifacts=artifacts,
+        )
+
+    def _execute(
+        self,
+        *,
+        binding: RuntimeEpisodeBinding,
+        checkpoint: EpisodeRunCheckpoint,
+        should_cancel: CancellationCheck,
+        progress_callback: ProgressCallback,
+    ) -> EpisodeRunResult:
+        manifest = binding.manifest
+        graph = binding.reviewed_graph.graph
+        hidden_map = binding.hidden_map.knowledge_map
+        configuration = checkpoint.execution_configuration
+        request = _request_from_configuration(
+            episode_id=manifest.episode_id,
+            run_id=checkpoint.run_id,
+            configuration=configuration,
+        )
+        artifacts = _artifact_paths(
+            _run_dir_path(self._workspace_root, checkpoint.run_id)
+        )
+        if should_cancel():
+            raise EpisodeRunCancelledError(
+                completed_turns=checkpoint.completed_turns
+            )
+        agent = (
+            self._tested_agent_factory(request)
+            if self._tested_agent_factory is not None
+            else _build_tested_agent(request)
+        )
+        simulator_service = (
+            self._simulator_service_factory(
+                request.simulator_client_provider,
+                self._workspace_root,
+            )
+            if self._simulator_service_factory is not None
+            else _build_simulator_service(
+                request.simulator_client_provider,
+                request.simulator_model,
+                self._workspace_root,
+            )
+        )
+
+        visible_dialogue_context = checkpoint.visible_dialogue_context
+        working_map = checkpoint.working_map
+        trace = list(checkpoint.trace)
+        remaining_turns = checkpoint.remaining_turns
+        phase = checkpoint.phase
         final_decision: TestedAgentDecision | None = None
         finalized: FinalizedReconstruction | None = None
-        remaining_turns = manifest.max_turns
-        phase = DecisionPhase.INITIAL_QUESTION
-        forced_finalization_fallback = False
         forced_finalization = False
+        forced_finalization_fallback = False
 
         while finalized is None:
+            if should_cancel():
+                raise EpisodeRunCancelledError(
+                    completed_turns=checkpoint.completed_turns
+                )
             decision_context = DecisionPhaseContext(
                 phase=phase,
                 remaining_diagnostic_turns=remaining_turns,
             )
-            if phase != DecisionPhase.INITIAL_QUESTION:
-                working_map, update_events = _apply_working_map_updates(
-                    agent=agent,
-                    graph=graph,
-                    working_map=working_map,
-                    visible_dialogue_context=visible_dialogue_context,
-                    decision_context=decision_context,
-                    max_tool_retries=request.max_tool_retries,
-                )
-                trace.extend(update_events)
-                _write_json(artifacts.working_map_path, working_map)
-                completed_dialogue_turn = visible_dialogue_context.turns[-1]
-                _write_json(
-                    artifacts.turns_dir / f"{completed_dialogue_turn.turn_id}.json",
-                    {
-                        "turn_id": completed_dialogue_turn.turn_id,
-                        "dialogue": completed_dialogue_turn,
-                        "working_map_update_events": update_events,
-                    },
-                )
-
             decision = agent.decide_next_action(
                 graph=graph,
                 working_map=working_map,
@@ -222,6 +372,10 @@ class EpisodeRunner:
                     "decision": _model_payload(decision),
                 }
             )
+            if should_cancel():
+                raise EpisodeRunCancelledError(
+                    completed_turns=checkpoint.completed_turns
+                )
 
             if not isinstance(decision, AskDiagnosticQuestionDecision):
                 forced_finalization = phase == DecisionPhase.FORCED_FINALIZATION
@@ -290,6 +444,43 @@ class EpisodeRunner:
                 if remaining_turns > 0
                 else DecisionPhase.FORCED_FINALIZATION
             )
+            update_context = DecisionPhaseContext(
+                phase=phase,
+                remaining_diagnostic_turns=remaining_turns,
+            )
+            working_map, update_events = _apply_working_map_updates(
+                agent=agent,
+                graph=graph,
+                working_map=working_map,
+                visible_dialogue_context=visible_dialogue_context,
+                decision_context=update_context,
+                max_tool_retries=request.max_tool_retries,
+            )
+            trace.extend(update_events)
+            completed_dialogue_turn = visible_dialogue_context.turns[-1]
+            _write_json(
+                artifacts.turns_dir / f"{completed_dialogue_turn.turn_id}.json",
+                {
+                    "turn_id": completed_dialogue_turn.turn_id,
+                    "dialogue": completed_dialogue_turn,
+                    "working_map_update_events": update_events,
+                },
+            )
+            _write_json(artifacts.working_map_path, working_map)
+            checkpoint = advanced_checkpoint(
+                checkpoint,
+                visible_dialogue_context=visible_dialogue_context,
+                working_map=working_map,
+                phase=phase,
+                remaining_turns=remaining_turns,
+                trace=trace,
+            )
+            self._checkpoint_repository.write(checkpoint)
+            progress_callback(checkpoint.completed_turns)
+            if should_cancel():
+                raise EpisodeRunCancelledError(
+                    completed_turns=checkpoint.completed_turns
+                )
 
         scoring_report = score_final_reconstruction(
             graph=graph,
@@ -297,13 +488,12 @@ class EpisodeRunner:
             submission=finalized.submission,
             scoring_profile=manifest.scoring_profile,
         )
-
         _write_json(artifacts.transcript_path, visible_dialogue_context)
         _write_json(artifacts.working_map_path, working_map)
         _write_json(
             artifacts.agent_tool_trace_path,
             {
-                "run_id": run_id,
+                "run_id": checkpoint.run_id,
                 "episode_id": manifest.episode_id,
                 "agent_kind": request.agent_kind.value,
                 "max_tool_retries": request.max_tool_retries,
@@ -313,11 +503,13 @@ class EpisodeRunner:
         _write_json(
             artifacts.agent_output_path,
             {
-                "run_id": run_id,
+                "run_id": checkpoint.run_id,
                 "episode_id": manifest.episode_id,
                 "agent_kind": request.agent_kind.value,
                 "tested_agent_client_provider": request.tested_agent_client_provider,
+                "tested_agent_model": request.tested_agent_model,
                 "simulator_client_provider": request.simulator_client_provider,
+                "simulator_model": request.simulator_model,
                 "final_decision": _model_payload(final_decision),
                 "forced_finalization": forced_finalization,
                 "forced_finalization_fallback": forced_finalization_fallback,
@@ -329,9 +521,9 @@ class EpisodeRunner:
             },
         )
         _write_json(artifacts.scoring_report_path, scoring_report)
-
+        self._checkpoint_repository.delete(checkpoint.run_id)
         return EpisodeRunResult(
-            run_id=run_id,
+            run_id=checkpoint.run_id,
             episode_id=manifest.episode_id,
             agent_kind=request.agent_kind,
             turn_count=len(visible_dialogue_context.turns),
@@ -340,6 +532,46 @@ class EpisodeRunner:
             artifacts=artifacts,
             scoring_report=scoring_report,
         )
+
+
+def load_completed_episode_run(
+    *,
+    workspace_root: Path,
+    run_id: str,
+) -> EpisodeRunResult:
+    artifacts = _artifact_paths(_run_dir_path(workspace_root, run_id))
+    try:
+        manifest_payload = _read_json(artifacts.episode_manifest_snapshot_path)
+        agent_output = _read_json(artifacts.agent_output_path)
+        scoring_report = EpisodeScoreReport.model_validate(
+            _read_json(artifacts.scoring_report_path)
+        )
+        transcript = VisibleDialogueContext.model_validate(
+            _read_json(artifacts.transcript_path)
+        )
+        return EpisodeRunResult(
+            run_id=run_id,
+            episode_id=str(manifest_payload["episode_id"]),
+            agent_kind=EpisodeRunAgentKind(agent_output["agent_kind"]),
+            turn_count=len(transcript.turns),
+            forced_finalization=bool(agent_output["forced_finalization"]),
+            forced_finalization_fallback=bool(
+                agent_output["forced_finalization_fallback"]
+            ),
+            artifacts=artifacts,
+            scoring_report=scoring_report,
+        )
+    except (
+        OSError,
+        KeyError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+        ValidationError,
+    ) as exc:
+        raise EpisodeRunArtifactError(
+            f"Completed Episode Run {run_id} artifacts are malformed"
+        ) from exc
 
 
 def default_episode_run_id() -> str:
@@ -382,7 +614,6 @@ def _apply_working_map_updates(
                 }
             )
             continue
-
         update_events.append(
             {
                 "event": "working_map_update",
@@ -393,7 +624,6 @@ def _apply_working_map_updates(
             }
         )
         return updated_working_map, update_events
-
     update_events.append(
         {
             "event": "working_map_update",
@@ -406,24 +636,92 @@ def _apply_working_map_updates(
     return working_map, update_events
 
 
+def _request_configuration(request: EpisodeRunRequest) -> EpisodeExecutionConfiguration:
+    return EpisodeExecutionConfiguration(
+        agent_kind=request.agent_kind.value,
+        tested_agent_client_provider=request.tested_agent_client_provider,
+        tested_agent_model=request.tested_agent_model
+        or _default_model(request.tested_agent_client_provider),
+        simulator_client_provider=request.simulator_client_provider,
+        simulator_model=request.simulator_model
+        or _default_model(request.simulator_client_provider),
+        tested_agent_temperature=(
+            request.tested_agent_temperature
+            if request.tested_agent_temperature is not None
+            else 0.0
+        ),
+        max_tool_retries=request.max_tool_retries,
+    )
+
+
+def _request_from_configuration(
+    *,
+    episode_id: str,
+    run_id: str,
+    configuration: EpisodeExecutionConfiguration,
+) -> EpisodeRunRequest:
+    return EpisodeRunRequest(
+        episode_id=episode_id,
+        run_id=run_id,
+        agent_kind=configuration.agent_kind,
+        tested_agent_client_provider=configuration.tested_agent_client_provider,
+        tested_agent_model=configuration.tested_agent_model,
+        simulator_client_provider=configuration.simulator_client_provider,
+        simulator_model=configuration.simulator_model,
+        tested_agent_temperature=configuration.tested_agent_temperature,
+        max_tool_retries=configuration.max_tool_retries,
+    )
+
+
+def _default_model(provider: str) -> str:
+    return DEFAULT_OPENAI_MODEL if provider == "openai" else DEFAULT_DEEPSEEK_MODEL
+
+
 def _build_tested_agent(request: EpisodeRunRequest) -> SimpleLLMTestedAgent:
-    if request.agent_kind == EpisodeRunAgentKind.SIMPLE_LLM_AGENT:
-        return build_simple_llm_tested_agent_for_provider(
-            client_provider=request.tested_agent_client_provider,
-            temperature=request.tested_agent_temperature,
+    if request.agent_kind != EpisodeRunAgentKind.SIMPLE_LLM_AGENT:
+        raise UnsupportedEpisodeRunAgentKindError(
+            f"Unsupported tested agent kind: {request.agent_kind}"
         )
-    raise UnsupportedEpisodeRunAgentKindError(
-        f"Unsupported tested agent kind: {request.agent_kind}"
+    if request.tested_agent_client_provider == "openai":
+        config = openai_config_from_env()
+        if request.tested_agent_model is not None:
+            config = config.model_copy(update={"model": request.tested_agent_model})
+        return build_simple_llm_tested_agent_for_provider(
+            client_provider="openai",
+            temperature=request.tested_agent_temperature,
+            openai_config=config,
+        )
+    config = deepseek_config_from_env()
+    if request.tested_agent_model is not None:
+        config = config.model_copy(update={"model": request.tested_agent_model})
+    return build_simple_llm_tested_agent_for_provider(
+        client_provider="deepseek",
+        temperature=request.tested_agent_temperature,
+        deepseek_config=config,
     )
 
 
 def _build_simulator_service(
     client_provider: SimulatorClientProvider,
+    model: str | None,
     workspace_root: Path,
 ) -> SimulatorService:
+    if client_provider == "openai":
+        config = openai_config_from_env()
+        if model is not None:
+            config = config.model_copy(update={"model": model})
+        return build_simulator_service_for_provider(
+            workspace_root=workspace_root,
+            client_provider="openai",
+            openai_config=config,
+        )
+    config = deepseek_config_from_env()
+    if model is not None:
+        config = config.model_copy(update={"model": model})
     return build_simulator_service_for_provider(
         workspace_root=workspace_root,
-        client_provider=client_provider,
+        client_provider="deepseek",
+        deepseek_config=config,
     )
 
 
@@ -439,20 +737,21 @@ def _prepare_run_dir(workspace_root: Path, run_id: str) -> Path:
 
 
 def _ensure_run_dir_available(workspace_root: Path, run_id: str) -> None:
-    run_dir = _run_dir_path(workspace_root, run_id)
-    if run_dir.exists():
+    if _run_dir_path(workspace_root, run_id).exists():
         raise EpisodeRunAlreadyExistsError(f"Episode Run {run_id} already exists")
 
 
 def _run_dir_path(workspace_root: Path, run_id: str) -> Path:
-    run_id = _validate_safe_id(run_id, "run_id")
-    return workspace_root / "experiments" / "runs" / run_id
+    return workspace_root / "experiments" / "runs" / _validate_safe_id(
+        run_id, "run_id"
+    )
 
 
 def _artifact_paths(run_dir: Path) -> EpisodeRunArtifacts:
     return EpisodeRunArtifacts(
         run_dir=run_dir,
         episode_manifest_snapshot_path=run_dir / "episode_manifest_snapshot.json",
+        checkpoint_path=run_dir / "checkpoint.json",
         turns_dir=run_dir / "turns",
         transcript_path=run_dir / "transcript.json",
         working_map_path=run_dir / "working_map.json",
@@ -468,6 +767,11 @@ def _write_json(path: Path, payload: Any) -> None:
         json.dump(_json_payload(payload), handle, indent=2, ensure_ascii=False)
         handle.write("\n")
     temporary_path.replace(path)
+
+
+def _read_json(path: Path) -> Any:
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def _json_payload(payload: Any) -> Any:

@@ -1,5 +1,6 @@
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -10,17 +11,158 @@ from backend.knowact.api.app import create_app
 from backend.knowact.agents.agents.simple_llm import SimpleLLMTestedAgent
 from backend.knowact.llm.client import ModelClientMetadata
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage
+from backend.knowact.runtime.episode_repository import RuntimeEpisodeRepository
+from backend.knowact.runtime.execution_repository import EpisodeExecutionRepository
+from backend.knowact.runtime.runner import EpisodeRunner
 from backend.knowact.simulator.service import SimulatorService
 from backend.knowact.validation.exceptions import KnowActValidationError
 from test.test_v1_runtime_episode_repository import (
     _write_confirmed_profile_context,
+    _execution_configuration_payload,
     _write_manifest,
     _write_reviewed_graph,
     _write_reviewed_map,
 )
 
 
+def _configured_client(workspace_root: Path, **app_kwargs) -> TestClient:
+    with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
+        return TestClient(create_app(workspace_root=workspace_root, **app_kwargs))
+
+
+def _registration_payload(**overrides) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "episode_id": "episode_a",
+        "benchmark_domain": "classical_supervised_ml_algorithms",
+        "graph_version": "v1",
+        "hidden_map_id": "gt_map_001",
+        "max_turns": 4,
+        **_execution_configuration_payload(),
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _wait_for_status(
+    client: TestClient,
+    episode_id: str,
+    expected_status: str,
+) -> dict[str, object]:
+    payload: dict[str, object] = {}
+    for _ in range(100):
+        response = client.get(f"/api/runtime/run-queue/episodes/{episode_id}")
+        if response.status_code == 200:
+            payload = response.json()
+            if payload["episode"]["status"] == expected_status:
+                return payload
+        time.sleep(0.01)
+    raise AssertionError(
+        f"Episode {episode_id} did not reach {expected_status}: {payload}"
+    )
+
+
 class V1RuntimeApiTest(unittest.TestCase):
+    def test_enqueue_is_per_episode_and_checkpoint_restart_uses_new_run_id(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            for episode_id in ("episode_a", "episode_b"):
+                _write_manifest(
+                    workspace_root,
+                    episode_id,
+                    graph_version="v1",
+                    hidden_map_id="gt_map_001",
+                    max_turns=1,
+                    execution_configuration=True,
+                )
+            _write_reviewed_graph(workspace_root)
+            _write_reviewed_map(workspace_root)
+            _write_confirmed_profile_context(workspace_root)
+            runner = EpisodeRunner(workspace_root=workspace_root)
+            prepared = runner.prepare_registered_episode(
+                episode_id="episode_a",
+                run_id="run_broken_001",
+            )
+            episode_repository = RuntimeEpisodeRepository(
+                workspace_root=workspace_root
+            )
+            execution_repository = EpisodeExecutionRepository(
+                workspace_root=workspace_root
+            )
+            execution_repository.initialize(
+                tuple(
+                    record.manifest for record in episode_repository.list_episodes()
+                )
+            )
+            execution_repository.enqueue(
+                episode_id="episode_a",
+                run_id=prepared.run_id,
+            )
+            execution_repository.mark_running("episode_a")
+            execution_repository.mark_failed(
+                "episode_a",
+                code="episode_run_failed",
+                message="The run stopped.",
+            )
+            prepared.artifacts.checkpoint_path.unlink()
+            model_client = _FakeModelClient(
+                responses=(
+                    _ask_train_test_split_question_output(),
+                    _train_test_split_l4_update_output(),
+                    _ask_train_test_split_question_output(),
+                    _train_test_split_l4_update_output(),
+                )
+            )
+            client = TestClient(
+                create_app(
+                    workspace_root=workspace_root,
+                    simple_llm_tested_agent_factory=lambda provider, temperature: SimpleLLMTestedAgent(
+                        model_client=model_client,
+                        temperature=temperature,
+                    ),
+                    simulator_service_factory=lambda provider, root: SimulatorService(
+                        workspace_root=root
+                    ),
+                )
+            )
+
+            response = client.post(
+                "/api/runtime/run-queue/enqueue",
+                json={
+                    "selections": [
+                        {"episode_id": "episode_a"},
+                        {"episode_id": "episode_b"},
+                    ]
+                },
+            )
+            outcomes = response.json()["outcomes"]
+            self.assertFalse(outcomes[0]["accepted"])
+            self.assertEqual("checkpoint_invalid", outcomes[0]["error_code"])
+            self.assertTrue(outcomes[1]["accepted"])
+            _wait_for_status(client, "episode_b", "completed")
+
+            completed_requeue = client.post(
+                "/api/runtime/run-queue/enqueue",
+                json={"selections": [{"episode_id": "episode_b"}]},
+            )
+            self.assertFalse(completed_requeue.json()["outcomes"][0]["accepted"])
+
+            restart = client.post(
+                "/api/runtime/run-queue/enqueue",
+                json={
+                    "selections": [
+                        {"episode_id": "episode_a", "action": "restart"}
+                    ]
+                },
+            )
+            restart_outcome = restart.json()["outcomes"][0]
+            self.assertTrue(restart_outcome["accepted"])
+            self.assertNotEqual("run_broken_001", restart_outcome["run_id"])
+            _wait_for_status(client, "episode_a", "completed")
+            old_run_preserved = prepared.artifacts.run_dir.exists()
+
+        self.assertEqual(200, response.status_code)
+        self.assertTrue(old_run_preserved)
+
     def test_list_runtime_episodes_returns_visible_summaries_only(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -93,7 +235,11 @@ class V1RuntimeApiTest(unittest.TestCase):
             "loaded",
             reviewed_artifacts["reference_map"]["profile_context_status"],
         )
-        self.assertEqual([], payload["warnings"])
+        self.assertEqual("legacy_missing", manifest["configuration_status"])
+        self.assertEqual(
+            "execution_configuration_missing",
+            payload["warnings"][0]["code"],
+        )
 
         self.assertEqual("episode_a", preview["episode_id"])
         self.assertEqual("classical_supervised_ml_algorithms", preview["benchmark_domain"])
@@ -139,17 +285,11 @@ class V1RuntimeApiTest(unittest.TestCase):
             _write_reviewed_graph(workspace_root)
             _write_reviewed_map(workspace_root)
             _write_confirmed_profile_context(workspace_root)
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _configured_client(workspace_root)
 
             response = client.post(
                 "/api/runtime/episodes",
-                json={
-                    "episode_id": "episode_a",
-                    "benchmark_domain": "classical_supervised_ml_algorithms",
-                    "graph_version": "v1",
-                    "hidden_map_id": "gt_map_001",
-                    "max_turns": 4,
-                },
+                json=_registration_payload(),
             )
             manifest_path = (
                 workspace_root
@@ -171,6 +311,7 @@ class V1RuntimeApiTest(unittest.TestCase):
                 "max_turns": 4,
                 "interaction_rule": "single_diagnostic_question_per_turn",
                 "scoring_profile": "squared_mastery_distance_v1",
+                **_execution_configuration_payload(),
             },
             manifest_payload,
         )
@@ -206,17 +347,11 @@ class V1RuntimeApiTest(unittest.TestCase):
             workspace_root = Path(temp_dir)
             _write_reviewed_graph(workspace_root)
             _write_reviewed_map(workspace_root)
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _configured_client(workspace_root)
 
             response = client.post(
                 "/api/runtime/episodes",
-                json={
-                    "episode_id": "episode_a",
-                    "benchmark_domain": "classical_supervised_ml_algorithms",
-                    "graph_version": "v1",
-                    "hidden_map_id": "gt_map_001",
-                    "max_turns": 4,
-                },
+                json=_registration_payload(),
             )
 
         self.assertEqual(201, response.status_code)
@@ -246,17 +381,11 @@ class V1RuntimeApiTest(unittest.TestCase):
                 graph_version="v1",
                 hidden_map_id="gt_map_001",
             )
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _configured_client(workspace_root)
 
             response = client.post(
                 "/api/runtime/episodes",
-                json={
-                    "episode_id": "episode_a",
-                    "benchmark_domain": "classical_supervised_ml_algorithms",
-                    "graph_version": "v1",
-                    "hidden_map_id": "gt_map_001",
-                    "max_turns": 4,
-                },
+                json=_registration_payload(),
             )
 
         self.assertEqual(409, response.status_code)
@@ -267,17 +396,11 @@ class V1RuntimeApiTest(unittest.TestCase):
             workspace_root = Path(temp_dir)
             _write_reviewed_graph(workspace_root)
             _write_reviewed_map(workspace_root, graph_version="v2")
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _configured_client(workspace_root)
 
             response = client.post(
                 "/api/runtime/episodes",
-                json={
-                    "episode_id": "episode_a",
-                    "benchmark_domain": "classical_supervised_ml_algorithms",
-                    "graph_version": "v1",
-                    "hidden_map_id": "gt_map_001",
-                    "max_turns": 4,
-                },
+                json=_registration_payload(),
             )
             manifest_path = (
                 workspace_root
@@ -295,17 +418,11 @@ class V1RuntimeApiTest(unittest.TestCase):
     def test_register_runtime_episode_rejects_missing_reviewed_artifacts_without_write(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
-            client = TestClient(create_app(workspace_root=workspace_root))
+            client = _configured_client(workspace_root)
 
             response = client.post(
                 "/api/runtime/episodes",
-                json={
-                    "episode_id": "episode_a",
-                    "benchmark_domain": "classical_supervised_ml_algorithms",
-                    "graph_version": "v1",
-                    "hidden_map_id": "gt_map_001",
-                    "max_turns": 4,
-                },
+                json=_registration_payload(),
             )
             manifest_path = (
                 workspace_root
@@ -451,7 +568,7 @@ class V1RuntimeApiTest(unittest.TestCase):
             response.json()["detail"]["error_code"],
         )
 
-    def test_run_runtime_episode_starts_episode_run_and_returns_report(self):
+    def test_run_queue_executes_episode_and_returns_report(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_manifest(
@@ -460,6 +577,7 @@ class V1RuntimeApiTest(unittest.TestCase):
                 graph_version="v1",
                 hidden_map_id="gt_map_001",
                 max_turns=1,
+                execution_configuration=True,
             )
             _write_reviewed_graph(workspace_root)
             _write_reviewed_map(workspace_root)
@@ -484,34 +602,47 @@ class V1RuntimeApiTest(unittest.TestCase):
             )
 
             response = client.post(
-                "/api/runtime/episodes/episode_a/runs",
+                "/api/runtime/run-queue/enqueue",
                 json={
-                    "run_id": "run_api_001",
-                    "agent_kind": "simple_llm_agent",
-                    "tested_agent_client_provider": "deepseek",
-                    "simulator_client_provider": "openai",
-                    "tested_agent_temperature": 0.1,
+                    "selections": [
+                        {"episode_id": "episode_a", "action": "start_or_resume"}
+                    ]
                 },
             )
-            payload = response.json()
+            self.assertEqual(200, response.status_code)
+            self.assertTrue(response.json()["outcomes"][0]["accepted"])
+            detail_response = None
+            for _ in range(100):
+                detail_response = client.get(
+                    "/api/runtime/run-queue/episodes/episode_a"
+                )
+                self.assertEqual(200, detail_response.status_code, detail_response.text)
+                if detail_response.json()["episode"]["status"] == "completed":
+                    break
+                time.sleep(0.01)
+            self.assertIsNotNone(detail_response)
+            payload = detail_response.json()["result"]
+            run_id = payload["run_id"]
             transcript_path = workspace_root / payload["artifacts"]["transcript"]
             turns_path = workspace_root / payload["artifacts"]["turns"]
             scoring_report_path = workspace_root / payload["artifacts"]["scoring_report"]
             transcript_exists = transcript_path.exists()
             turn_log_exists = (turns_path / "turn_001.json").exists()
             scoring_report_exists = scoring_report_path.exists()
-            transcript_response = client.get("/api/runtime/runs/run_api_001/transcript")
+            transcript_response = client.get(
+                f"/api/runtime/runs/{run_id}/transcript"
+            )
             transcript_payload = transcript_response.json()
 
-        self.assertEqual(201, response.status_code)
-        self.assertEqual("run_api_001", payload["run_id"])
+        self.assertEqual(200, response.status_code)
+        self.assertTrue(payload["run_id"].startswith("run_"))
         self.assertEqual("episode_a", payload["episode_id"])
         self.assertEqual("simple_llm_agent", payload["agent_kind"])
         self.assertEqual(1, payload["turn_count"])
         self.assertTrue(payload["forced_finalization"])
         self.assertFalse(payload["forced_finalization_fallback"])
         self.assertEqual(
-            "experiments/runs/run_api_001/scoring_report.json",
+            f"experiments/runs/{payload['run_id']}/scoring_report.json",
             payload["artifacts"]["scoring_report"],
         )
         self.assertEqual(
@@ -521,7 +652,7 @@ class V1RuntimeApiTest(unittest.TestCase):
         self.assertAlmostEqual(18.0, payload["scoring_report"]["episode_mastery_distance"])
         self.assertTrue(transcript_exists)
         self.assertEqual(
-            "experiments/runs/run_api_001/turns",
+            f"experiments/runs/{payload['run_id']}/turns",
             payload["artifacts"]["turns"],
         )
         self.assertTrue(turn_log_exists)
@@ -549,7 +680,7 @@ class V1RuntimeApiTest(unittest.TestCase):
                     json.dumps(transcript_payload, sort_keys=True),
                 )
 
-    def test_run_runtime_episode_rejects_duplicate_run_id(self):
+    def test_synchronous_episode_run_route_is_not_exposed(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             (workspace_root / "experiments" / "runs" / "run_api_001").mkdir(
@@ -565,11 +696,7 @@ class V1RuntimeApiTest(unittest.TestCase):
                 },
             )
 
-        self.assertEqual(409, response.status_code)
-        self.assertEqual(
-            "episode_run_already_exists",
-            response.json()["detail"]["error_code"],
-        )
+        self.assertEqual(404, response.status_code)
 
     def test_read_runtime_run_transcript_reports_missing_run(self):
         with tempfile.TemporaryDirectory() as temp_dir:

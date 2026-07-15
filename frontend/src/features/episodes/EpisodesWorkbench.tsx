@@ -7,22 +7,21 @@ import {
   readReviewedMap
 } from "../../api/authoring";
 import {
+  EpisodeModelCatalog,
   RUNTIME_INTERACTION_RULE,
   RUNTIME_SCORING_PROFILE,
-  RuntimeEpisodeAgentKind,
   RuntimeEpisodeDetail,
-  RuntimeEpisodeRunResponse,
   RuntimeEpisodeSummary,
+  SimulatorClientProvider,
   TestedAgentClientProvider,
   listRuntimeEpisodes,
-  readRuntimeRunTranscript,
   readRuntimeEpisode,
-  registerRuntimeEpisode,
-  startRuntimeEpisodeRun
+  readRuntimeEpisodeOptions,
+  registerRuntimeEpisode
 } from "../../api/runtime";
-import type { SimulatorClientProvider, VisibleDialogueContext } from "../../api/simulator";
 
 export function EpisodesWorkbench() {
+  const [catalog, setCatalog] = useState<EpisodeModelCatalog | null>(null);
   const [benchmarkDomains, setBenchmarkDomains] = useState<string[]>([]);
   const [benchmarkDomain, setBenchmarkDomain] = useState("");
   const [reviewedMaps, setReviewedMaps] = useState<ReviewedMapSummary[]>([]);
@@ -30,15 +29,15 @@ export function EpisodesWorkbench() {
   const [selectedReviewedMap, setSelectedReviewedMap] = useState<ReviewedMapPayload | null>(null);
   const [episodeId, setEpisodeId] = useState("");
   const [maxTurns, setMaxTurns] = useState(3);
+  const [testedAgentProvider, setTestedAgentProvider] = useState<TestedAgentClientProvider>("openai");
+  const [testedAgentModel, setTestedAgentModel] = useState("");
+  const [simulatorProvider, setSimulatorProvider] = useState<SimulatorClientProvider>("openai");
+  const [simulatorModel, setSimulatorModel] = useState("");
+  const [temperature, setTemperature] = useState(0);
+  const [maxToolRetries, setMaxToolRetries] = useState(3);
   const [episodes, setEpisodes] = useState<RuntimeEpisodeSummary[]>([]);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState("");
   const [episodeDetail, setEpisodeDetail] = useState<RuntimeEpisodeDetail | null>(null);
-  const [runAgentKind, setRunAgentKind] = useState<RuntimeEpisodeAgentKind>("simple_llm_agent");
-  const [testedAgentClientProvider, setTestedAgentClientProvider] = useState<TestedAgentClientProvider>("openai");
-  const [simulatorClientProvider, setSimulatorClientProvider] = useState<SimulatorClientProvider>("openai");
-  const [runId, setRunId] = useState("");
-  const [episodeRunResult, setEpisodeRunResult] = useState<RuntimeEpisodeRunResponse | null>(null);
-  const [episodeRunTranscript, setEpisodeRunTranscript] = useState<VisibleDialogueContext | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,12 +66,16 @@ export function EpisodesWorkbench() {
   const derivedGraphVersion = selectedReviewedMap?.map_manifest.graph_version
     ?? selectedMapSummary?.graph_version
     ?? "";
+  const testedProviderOption = catalog?.providers.find((item) => item.provider === testedAgentProvider) ?? null;
+  const simulatorProviderOption = catalog?.providers.find((item) => item.provider === simulatorProvider) ?? null;
+  const executionOptionsAvailable = Boolean(testedProviderOption?.available && simulatorProviderOption?.available);
 
   async function refreshInitialData() {
     await runTask("initial data", async () => {
-      const [domains, runtimeEpisodes] = await Promise.all([
+      const [domains, runtimeEpisodes, options] = await Promise.all([
         listBenchmarkDomains(),
-        listRuntimeEpisodes()
+        listRuntimeEpisodes(),
+        readRuntimeEpisodeOptions()
       ]);
       setBenchmarkDomains(domains);
       setBenchmarkDomain((current) => current || domains[0] || "");
@@ -82,6 +85,16 @@ export function EpisodesWorkbench() {
           ? current
           : runtimeEpisodes[0]?.episode_id ?? ""
       );
+      setCatalog(options);
+      const defaultProvider = options.providers.find((item) => item.available) ?? options.providers[0];
+      if (defaultProvider) {
+        setTestedAgentProvider(defaultProvider.provider);
+        setTestedAgentModel(defaultProvider.default_model);
+        setSimulatorProvider(defaultProvider.provider);
+        setSimulatorModel(defaultProvider.default_model);
+      }
+      setTemperature(options.default_tested_agent_temperature);
+      setMaxToolRetries(options.default_max_tool_retries);
     });
   }
 
@@ -93,9 +106,7 @@ export function EpisodesWorkbench() {
         : maps[0]?.map_id ?? "";
       setReviewedMaps(maps);
       setSelectedMapId(nextSelectedMapId);
-      if (!nextSelectedMapId) {
-        setSelectedReviewedMap(null);
-      }
+      if (!nextSelectedMapId) setSelectedReviewedMap(null);
     });
   }
 
@@ -108,9 +119,6 @@ export function EpisodesWorkbench() {
           ? current
           : runtimeEpisodes[0]?.episode_id ?? ""
       );
-      if (selectedEpisodeId && !runtimeEpisodes.some((episode) => episode.episode_id === selectedEpisodeId)) {
-        setEpisodeDetail(null);
-      }
     });
   }
 
@@ -118,6 +126,18 @@ export function EpisodesWorkbench() {
     await runTask("reviewed map", async () => {
       setSelectedReviewedMap(await readReviewedMap(domain, mapId));
     });
+  }
+
+  function changeTestedAgentProvider(provider: TestedAgentClientProvider) {
+    const option = catalog?.providers.find((item) => item.provider === provider);
+    setTestedAgentProvider(provider);
+    setTestedAgentModel(option?.default_model ?? "");
+  }
+
+  function changeSimulatorProvider(provider: SimulatorClientProvider) {
+    const option = catalog?.providers.find((item) => item.provider === provider);
+    setSimulatorProvider(provider);
+    setSimulatorModel(option?.default_model ?? "");
   }
 
   async function handleRegisterEpisode(event: FormEvent<HTMLFormElement>) {
@@ -131,21 +151,29 @@ export function EpisodesWorkbench() {
       setError("Select a benchmark domain and reviewed map.");
       return;
     }
-
+    if (!executionOptionsAvailable || !testedAgentModel || !simulatorModel) {
+      setError("Select configured tested-agent and simulator model options.");
+      return;
+    }
     await runTask("register episode", async () => {
       const detail = await registerRuntimeEpisode({
         episode_id: trimmedEpisodeId,
         benchmark_domain: benchmarkDomain,
         graph_version: derivedGraphVersion,
         hidden_map_id: selectedMapId,
-        max_turns: maxTurns
+        max_turns: maxTurns,
+        agent_kind: "simple_llm_agent",
+        tested_agent_client_provider: testedAgentProvider,
+        tested_agent_model: testedAgentModel,
+        simulator_client_provider: simulatorProvider,
+        simulator_model: simulatorModel,
+        tested_agent_temperature: temperature,
+        max_tool_retries: maxToolRetries
       });
       const runtimeEpisodes = await listRuntimeEpisodes();
       setEpisodes(runtimeEpisodes);
       setSelectedEpisodeId(detail.manifest.episode_id);
       setEpisodeDetail(detail);
-      setEpisodeRunResult(null);
-      setEpisodeRunTranscript(null);
       setEpisodeId("");
       setNotice(`Registered Evaluation Episode ${detail.manifest.episode_id}.`);
     });
@@ -153,43 +181,8 @@ export function EpisodesWorkbench() {
 
   async function handleLoadEpisode(episode: RuntimeEpisodeSummary) {
     await runTask("episode detail", async () => {
-      const detail = await readRuntimeEpisode(episode.episode_id);
       setSelectedEpisodeId(episode.episode_id);
-      setEpisodeDetail(detail);
-      setEpisodeRunResult(null);
-      setEpisodeRunTranscript(null);
-      setNotice(`Loaded Evaluation Episode ${episode.episode_id}.`);
-    });
-  }
-
-  async function handleRunEpisode() {
-    if (!selectedEpisodeId) {
-      setError("Select an episode first.");
-      return;
-    }
-
-    const episodeIdToRun = selectedEpisodeId;
-    const trimmedRunId = runId.trim();
-    await runTask("run episode", async () => {
-      setEpisodeRunResult(null);
-      setEpisodeRunTranscript(null);
-      const result = await startRuntimeEpisodeRun({
-        episodeId: episodeIdToRun,
-        request: {
-          run_id: trimmedRunId || null,
-          agent_kind: runAgentKind,
-          tested_agent_client_provider: testedAgentClientProvider,
-          simulator_client_provider: simulatorClientProvider,
-          max_tool_retries: 3
-        }
-      });
-      const transcript = await readRuntimeRunTranscript(result.run_id);
-      setSelectedEpisodeId(episodeIdToRun);
-      setEpisodeDetail(await readRuntimeEpisode(episodeIdToRun));
-      setEpisodeRunResult(result);
-      setEpisodeRunTranscript(transcript);
-      setRunId("");
-      setNotice(`Episode run ${result.run_id} completed.`);
+      setEpisodeDetail(await readRuntimeEpisode(episode.episode_id));
     });
   }
 
@@ -212,7 +205,7 @@ export function EpisodesWorkbench() {
         <div>
           <p className="eyebrow">Runtime</p>
           <h1>Episodes</h1>
-          <p>Register Evaluation Episode manifests, inspect visible context previews, and run the initial tested-agent loop.</p>
+          <p>Register immutable Evaluation Episode manifests and inspect reviewed bindings. Execution lives in Run Queue.</p>
         </div>
         <div className="status-strip" aria-live="polite">
           {busy && <span className="status busy">Working: {busy}</span>}
@@ -238,12 +231,9 @@ export function EpisodesWorkbench() {
               Benchmark Domain
               <select value={benchmarkDomain} onChange={(event) => setBenchmarkDomain(event.target.value)} disabled={busy !== null}>
                 <option value="">Select domain</option>
-                {benchmarkDomains.map((domain) => (
-                  <option key={domain} value={domain}>{domain}</option>
-                ))}
+                {benchmarkDomains.map((domain) => <option key={domain} value={domain}>{domain}</option>)}
               </select>
             </label>
-
             <label>
               Reviewed Map
               <select value={selectedMapId} onChange={(event) => setSelectedMapId(event.target.value)} disabled={busy !== null || reviewedMaps.length === 0}>
@@ -265,29 +255,66 @@ export function EpisodesWorkbench() {
 
             <label>
               Episode ID
-              <input
-                value={episodeId}
-                onChange={(event) => setEpisodeId(event.target.value)}
-                placeholder="episode_classical_ml_001"
-                pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
-                disabled={busy !== null}
-                required
-              />
+              <input value={episodeId} onChange={(event) => setEpisodeId(event.target.value)} placeholder="episode_classical_ml_001" pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,127}" disabled={busy !== null} required />
             </label>
-
             <label>
               Max Turns
-              <input
-                type="number"
-                min={1}
-                value={maxTurns}
-                onChange={(event) => setMaxTurns(Math.max(1, Number(event.target.value) || 1))}
-                disabled={busy !== null}
-              />
+              <input type="number" min={1} value={maxTurns} onChange={(event) => setMaxTurns(Math.max(1, Number(event.target.value) || 1))} disabled={busy !== null} />
             </label>
 
+            <div className="episode-configuration-block">
+              <div>
+                <p className="eyebrow">Immutable Execution Configuration</p>
+                <p>Changing any option requires a new Episode ID.</p>
+              </div>
+              <label>
+                Tested agent provider
+                <select value={testedAgentProvider} onChange={(event) => changeTestedAgentProvider(event.target.value as TestedAgentClientProvider)} disabled={busy !== null}>
+                  {catalog?.providers.map((provider) => (
+                    <option key={provider.provider} value={provider.provider} disabled={!provider.available}>
+                      {provider.provider}{provider.available ? "" : " (unavailable)"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Tested agent model
+                <select value={testedAgentModel} onChange={(event) => setTestedAgentModel(event.target.value)} disabled={busy !== null || !testedProviderOption?.available}>
+                  {testedProviderOption?.models.map((model) => <option key={model} value={model}>{model}</option>)}
+                </select>
+              </label>
+              <label>
+                Simulator provider
+                <select value={simulatorProvider} onChange={(event) => changeSimulatorProvider(event.target.value as SimulatorClientProvider)} disabled={busy !== null}>
+                  {catalog?.providers.map((provider) => (
+                    <option key={provider.provider} value={provider.provider} disabled={!provider.available}>
+                      {provider.provider}{provider.available ? "" : " (unavailable)"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Simulator model
+                <select value={simulatorModel} onChange={(event) => setSimulatorModel(event.target.value)} disabled={busy !== null || !simulatorProviderOption?.available}>
+                  {simulatorProviderOption?.models.map((model) => <option key={model} value={model}>{model}</option>)}
+                </select>
+              </label>
+              <label>
+                Tested agent temperature
+                <select value={temperature} onChange={(event) => setTemperature(Number(event.target.value))} disabled={busy !== null}>
+                  {catalog?.tested_agent_temperature_options.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </label>
+              <label>
+                Max tool retries
+                <select value={maxToolRetries} onChange={(event) => setMaxToolRetries(Number(event.target.value))} disabled={busy !== null}>
+                  {catalog?.max_tool_retry_options.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </label>
+            </div>
+
             <div className="episode-registration-actions">
-              <button type="submit" disabled={busy !== null || !benchmarkDomain || !selectedMapId || !derivedGraphVersion}>
+              <button type="submit" disabled={busy !== null || !benchmarkDomain || !selectedMapId || !derivedGraphVersion || !executionOptionsAvailable}>
                 Register Episode
               </button>
             </div>
@@ -299,77 +326,27 @@ export function EpisodesWorkbench() {
                 <p className="eyebrow">Runtime Registry</p>
                 <h2>Registered Episodes</h2>
               </div>
-              <button type="button" className="secondary" onClick={() => void refreshEpisodes()} disabled={busy !== null}>
-                Refresh
-              </button>
+              <button type="button" className="secondary" onClick={() => void refreshEpisodes()} disabled={busy !== null}>Refresh</button>
             </div>
-            {episodes.length === 0 ? (
-              <p className="empty">No runtime episodes are registered.</p>
-            ) : (
+            {episodes.length === 0 ? <p className="empty">No runtime episodes are registered.</p> : (
               <div className="map-run-list">
                 {episodes.map((episode) => (
-                  <button
-                    type="button"
-                    key={episode.episode_id}
-                    className={episode.episode_id === selectedEpisodeId ? "list-row episode-row active" : "list-row episode-row"}
-                    onClick={() => void handleLoadEpisode(episode)}
-                  >
+                  <button type="button" key={episode.episode_id} className={episode.episode_id === selectedEpisodeId ? "list-row episode-row active" : "list-row episode-row"} onClick={() => void handleLoadEpisode(episode)}>
                     <strong>{episode.episode_id}</strong>
                     <span>{episode.benchmark_domain} / {episode.graph_version}</span>
-                    <small>{episode.max_turns} turns / {episode.scoring_profile}</small>
+                    <small>{episode.max_turns} turns / {episode.configuration_status === "configured" ? "queue ready" : "legacy"}</small>
                   </button>
                 ))}
               </div>
             )}
           </section>
-
-          <section className="episode-run-panel">
-            <div>
-              <p className="eyebrow">Run Episode</p>
-              <h2>Episode Run</h2>
-            </div>
-            <label>
-              Agent
-              <select value={runAgentKind} onChange={(event) => setRunAgentKind(event.target.value as RuntimeEpisodeAgentKind)} disabled>
-                <option value="simple_llm_agent">Simple LLM Agent</option>
-              </select>
-            </label>
-            <label>
-              Tested agent provider
-              <select value={testedAgentClientProvider} onChange={(event) => setTestedAgentClientProvider(event.target.value as TestedAgentClientProvider)} disabled={busy !== null}>
-                <option value="openai">OpenAI</option>
-                <option value="deepseek">DeepSeek</option>
-              </select>
-            </label>
-            <label>
-              Simulator provider
-              <select value={simulatorClientProvider} onChange={(event) => setSimulatorClientProvider(event.target.value as SimulatorClientProvider)} disabled={busy !== null}>
-                <option value="openai">OpenAI</option>
-                <option value="deepseek">DeepSeek</option>
-              </select>
-            </label>
-            <label>
-              Run ID
-              <input value={runId} onChange={(event) => setRunId(event.target.value)} placeholder="Optional" disabled={busy !== null} />
-            </label>
-            <button type="button" onClick={() => void handleRunEpisode()} disabled={busy !== null || !selectedEpisodeId}>
-              Run Episode
-            </button>
-            <p className="episode-run-note">POST /api/runtime/episodes/{selectedEpisodeId || "{episode_id}"}/runs</p>
-          </section>
         </section>
 
-        {episodeDetail ? (
-          <EpisodeDetailPanel
-            detail={episodeDetail}
-            runResult={episodeRunResult}
-            runTranscript={episodeRunTranscript}
-          />
-        ) : (
+        {episodeDetail ? <EpisodeDetailPanel detail={episodeDetail} /> : (
           <section className="episode-empty-panel">
             <p className="eyebrow">Episode Detail</p>
             <h2>Select an episode</h2>
-            <p>Runtime details show reviewed artifact binding and the tested-agent-visible context preview.</p>
+            <p>Runtime details show immutable configuration, reviewed artifact binding, and the tested-agent-visible context preview.</p>
           </section>
         )}
       </div>
@@ -377,16 +354,9 @@ export function EpisodesWorkbench() {
   );
 }
 
-function EpisodeDetailPanel({
-  detail,
-  runResult,
-  runTranscript
-}: {
-  detail: RuntimeEpisodeDetail;
-  runResult: RuntimeEpisodeRunResponse | null;
-  runTranscript: VisibleDialogueContext | null;
-}) {
+function EpisodeDetailPanel({ detail }: { detail: RuntimeEpisodeDetail }) {
   const preview = detail.tested_agent_visible_context_preview;
+  const configuration = detail.manifest.execution_configuration;
   return (
     <section className="episode-detail-panel">
       <div className="episode-detail-header">
@@ -397,9 +367,13 @@ function EpisodeDetailPanel({
         </div>
         <div className="map-review-actions">
           <span className="lifecycle-badge confirmed">Registered</span>
-          <span className="warning-count">Preview Only</span>
+          <span className={configuration ? "warning-count" : "warning-count active"}>{configuration ? "Configured" : "Legacy"}</span>
         </div>
       </div>
+
+      {detail.warnings.map((warning) => (
+        <div key={warning.code} className="status error">{warning.message}</div>
+      ))}
 
       <div className="episode-detail-grid">
         <EpisodeMeta label="Max Turns" value={String(detail.manifest.max_turns)} />
@@ -408,12 +382,21 @@ function EpisodeDetailPanel({
         <EpisodeMeta label="Scoring Profile" value={detail.manifest.scoring_profile} />
       </div>
 
+      {configuration && (
+        <section className="episode-preview-card">
+          <div><p className="eyebrow">Execution Configuration</p><h3>{configuration.agent_kind}</h3></div>
+          <div className="episode-detail-grid compact">
+            <EpisodeMeta label="Tested Agent" value={`${configuration.tested_agent_client_provider} / ${configuration.tested_agent_model}`} />
+            <EpisodeMeta label="Simulator" value={`${configuration.simulator_client_provider} / ${configuration.simulator_model}`} />
+            <EpisodeMeta label="Temperature" value={String(configuration.tested_agent_temperature)} />
+            <EpisodeMeta label="Tool Retries" value={String(configuration.max_tool_retries)} />
+          </div>
+        </section>
+      )}
+
       <div className="episode-binding-grid">
         <section className="episode-preview-card">
-          <div>
-            <p className="eyebrow">Reviewed Graph Binding</p>
-            <h3>{detail.reviewed_artifacts.graph.graph_id}</h3>
-          </div>
+          <div><p className="eyebrow">Reviewed Graph Binding</p><h3>{detail.reviewed_artifacts.graph.graph_id}</h3></div>
           <div className="episode-detail-grid compact">
             <EpisodeMeta label="Status" value={detail.reviewed_artifacts.graph.status} />
             <EpisodeMeta label="Version" value={detail.reviewed_artifacts.graph.version} />
@@ -421,12 +404,8 @@ function EpisodeDetailPanel({
             <EpisodeMeta label="Edges" value={String(detail.reviewed_artifacts.graph.edge_count)} />
           </div>
         </section>
-
         <section className="episode-preview-card">
-          <div>
-            <p className="eyebrow">Reference Map Binding</p>
-            <h3>{detail.reviewed_artifacts.reference_map.kind}</h3>
-          </div>
+          <div><p className="eyebrow">Reference Map Binding</p><h3>{detail.reviewed_artifacts.reference_map.kind}</h3></div>
           <div className="episode-detail-grid compact">
             <EpisodeMeta label="Status" value={detail.reviewed_artifacts.reference_map.status} />
             <EpisodeMeta label="Domain" value={detail.reviewed_artifacts.reference_map.benchmark_domain} />
@@ -437,191 +416,19 @@ function EpisodeDetailPanel({
       </div>
 
       <section className="episode-preview-card episode-visible-context">
-        <div>
-          <p className="eyebrow">Tested-Agent-Visible Context</p>
-          <h3>{preview.graph.nodes.length} nodes / {preview.graph.edges.length} edges</h3>
-        </div>
+        <div><p className="eyebrow">Tested-Agent-Visible Context</p><h3>{preview.graph.nodes.length} nodes / {preview.graph.edges.length} edges</h3></div>
         <div className="episode-node-list">
           {preview.graph.nodes.slice(0, 8).map((node) => (
             <article key={node.id} className="episode-node-card">
-              <strong>{node.name}</strong>
-              <span>{node.id}</span>
-              <p>{node.diagnostic_goal ?? node.definition ?? "No diagnostic goal."}</p>
+              <strong>{node.name}</strong><span>{node.id}</span><p>{node.diagnostic_goal ?? node.definition ?? "No diagnostic goal."}</p>
             </article>
           ))}
-          {preview.graph.nodes.length > 8 && (
-            <p className="empty">{preview.graph.nodes.length - 8} additional nodes are available in the visible context payload.</p>
-          )}
         </div>
       </section>
-
-      {runResult && <EpisodeRunResultPanel runResult={runResult} transcript={runTranscript} />}
     </section>
-  );
-}
-
-function EpisodeRunResultPanel({
-  runResult,
-  transcript
-}: {
-  runResult: RuntimeEpisodeRunResponse;
-  transcript: VisibleDialogueContext | null;
-}) {
-  const report = runResult.scoring_report;
-  const artifacts = [
-    ["Run Dir", runResult.artifacts.run_dir],
-    ["Transcript", runResult.artifacts.transcript],
-    ["Working Map", runResult.artifacts.working_map],
-    ["Agent Tool Trace", runResult.artifacts.agent_tool_trace],
-    ["Agent Output", runResult.artifacts.agent_output],
-    ["Scoring Report", runResult.artifacts.scoring_report],
-    ["Manifest Snapshot", runResult.artifacts.episode_manifest_snapshot]
-  ];
-
-  return (
-    <section className="episode-preview-card episode-run-result-panel">
-      <div className="episode-run-result-header">
-        <div>
-          <p className="eyebrow">Latest Run Result</p>
-          <h3>{runResult.run_id}</h3>
-        </div>
-        <div className="map-review-actions">
-          <span className="lifecycle-badge confirmed">{runResult.agent_kind}</span>
-          <span className={runResult.forced_finalization ? "warning-count active" : "warning-count"}>
-            {runResult.forced_finalization ? "Forced Final" : "Finalized"}
-          </span>
-        </div>
-      </div>
-
-      <div className="episode-run-metrics">
-        <EpisodeMetric label="Turns" value={String(runResult.turn_count)} />
-        <EpisodeMetric label="Mastery Distance" value={formatScore(report.episode_mastery_distance)} />
-        <EpisodeMetric label="Exact Match" value={formatRatio(report.exact_match_rate)} />
-        <EpisodeMetric label="Missing Prediction" value={formatRatio(report.missing_prediction_rate)} />
-        <EpisodeMetric label="Unsupported Inference" value={formatRatio(report.unsupported_inference_rate)} />
-        <EpisodeMetric label="Forced Fallback" value={runResult.forced_finalization_fallback ? "Yes" : "No"} />
-      </div>
-
-      <div className="episode-run-transcript">
-        <div className="episode-run-subheader">
-          <div>
-            <p className="eyebrow">Run Transcript</p>
-            <h4>{transcript?.turns.length ?? 0} visible turns</h4>
-          </div>
-          <span className="warning-count">Visible Only</span>
-        </div>
-        {transcript && transcript.turns.length > 0 ? (
-          <div className="episode-run-transcript-list">
-            {transcript.turns.map((turn, index) => (
-              <article key={turn.turn_id ?? index} className="episode-run-turn">
-                <div>
-                  <strong>{turn.turn_id ?? `turn_${String(index + 1).padStart(3, "0")}`}</strong>
-                  <span className="simulator-turn-kind">{turn.observation.kind}</span>
-                </div>
-                <p className="episode-run-question">{turn.question.text}</p>
-                <p>{turn.answer.text}</p>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="empty">No visible transcript turns are available for this run.</p>
-        )}
-      </div>
-
-      <div className="episode-score-table-wrap">
-        <table className="episode-score-table">
-          <thead>
-            <tr>
-              <th>Node</th>
-              <th>Ground Truth</th>
-              <th>Prediction</th>
-              <th>Distance</th>
-              <th>Error</th>
-              <th>Flags</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.per_node.map((node) => (
-              <tr key={node.node_id}>
-                <td>{node.node_id}</td>
-                <td>{node.ground_truth_mastery}</td>
-                <td>{node.predicted_mastery ?? "Missing"}</td>
-                <td>{formatScore(node.mastery_distance)}</td>
-                <td>{node.signed_mastery_error === null ? "-" : formatScore(node.signed_mastery_error)}</td>
-                <td>
-                  <ScoreFlags
-                    exactMatch={node.exact_match}
-                    missingPrediction={node.missing_prediction}
-                    unsupportedInference={node.unsupported_inference}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="episode-run-artifacts">
-        <p className="eyebrow">Artifacts</p>
-        {artifacts.map(([label, value]) => (
-          <div key={label} className="episode-run-artifact-row">
-            <span>{label}</span>
-            <code>{value}</code>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function EpisodeMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="episode-run-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function ScoreFlags({
-  exactMatch,
-  missingPrediction,
-  unsupportedInference
-}: {
-  exactMatch: boolean;
-  missingPrediction: boolean;
-  unsupportedInference: boolean;
-}) {
-  const flags = [
-    exactMatch ? "Exact" : null,
-    missingPrediction ? "Missing" : null,
-    unsupportedInference ? "Unsupported" : null
-  ].filter((flag): flag is string => flag !== null);
-
-  if (flags.length === 0) {
-    return <span className="score-flag neutral">Distance</span>;
-  }
-
-  return (
-    <span className={exactMatch ? "score-flag ok" : "score-flag warning"}>
-      {flags.join(" / ")}
-    </span>
   );
 }
 
 function EpisodeMeta({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="map-meta episode-meta">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function formatScore(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(3);
-}
-
-function formatRatio(value: number) {
-  return `${(value * 100).toFixed(1)}%`;
+  return <div className="map-meta episode-meta"><span>{label}</span><strong>{value}</strong></div>;
 }

@@ -1,6 +1,6 @@
 import { Suspense, lazy, useState } from "react";
 
-type WorkbenchModule = "knowledge-graph" | "user-profile" | "user-map" | "simulator" | "episodes";
+type WorkbenchModule = "knowledge-graph" | "user-profile" | "user-map" | "simulator" | "episodes" | "run-queue";
 
 const CandidateGraphWorkbench = lazy(() =>
   import("./features/candidateGraph/CandidateGraphWorkbench").then((module) => ({
@@ -27,13 +27,19 @@ const EpisodesWorkbench = lazy(() =>
     default: module.EpisodesWorkbench
   }))
 );
+const RunQueueWorkbench = lazy(() =>
+  import("./features/runQueue/RunQueueWorkbench").then((module) => ({
+    default: module.RunQueueWorkbench
+  }))
+);
 
 const WORKBENCH_COMPONENTS = {
   "knowledge-graph": CandidateGraphWorkbench,
   "user-profile": UserProfileWorkbench,
   "user-map": MapAuthoringWorkbench,
   simulator: SimulatorWorkbench,
-  episodes: EpisodesWorkbench
+  episodes: EpisodesWorkbench,
+  "run-queue": RunQueueWorkbench
 };
 
 export function App() {
@@ -106,7 +112,18 @@ export function App() {
             <span className="module-nav-icon" aria-hidden="true">&#9635;</span>
             <span>
               <strong>Episodes</strong>
-              <small>Manifests, runs</small>
+              <small>Immutable manifests</small>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={activeModule === "run-queue" ? "module-nav-item active" : "module-nav-item"}
+            onClick={() => setActiveModule("run-queue")}
+          >
+            <span className="module-nav-icon" aria-hidden="true">&#8644;</span>
+            <span>
+              <strong>Run Queue</strong>
+              <small>Parallel episode execution</small>
             </span>
           </button>
         </nav>

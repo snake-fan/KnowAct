@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from collections.abc import Callable
 from json import JSONDecodeError
@@ -7,49 +9,62 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from backend.knowact.agents.protocol import TestedAgent
+from backend.knowact.agents.providers import TestedAgentClientProvider
 from backend.knowact.core.episode import (
+    EpisodeExecutionConfiguration,
     EvaluationEpisodeManifest,
     INTERACTION_RULE_SINGLE_DIAGNOSTIC_QUESTION_PER_TURN,
     SCORING_PROFILE_SQUARED_MASTERY_DISTANCE_V1,
 )
 from backend.knowact.core.interaction import VisibleDialogueContext
 from backend.knowact.core.scoring import EpisodeScoreReport
-from backend.knowact.agents.protocol import TestedAgent
-from backend.knowact.agents.providers import (
-    DEFAULT_TESTED_AGENT_CLIENT_PROVIDER,
-    TestedAgentClientProvider,
+from backend.knowact.runtime.checkpoint import EpisodeRunCheckpointRepository
+from backend.knowact.runtime.episode_options import (
+    EpisodeExecutionConfigurationError,
+    EpisodeModelCatalog,
+    build_episode_model_catalog,
+    validate_execution_configuration,
 )
-from backend.knowact.agents.llm_agent import TestedAgentConfigurationError
-from backend.knowact.llm.client import ModelClientError
 from backend.knowact.runtime.episode_repository import (
     RuntimeEpisodeAlreadyExistsError,
     RuntimeEpisodeArtifactError,
-    RuntimeEpisodeBindingError,
     RuntimeEpisodeBinding,
+    RuntimeEpisodeBindingError,
     RuntimeEpisodeIdentityMismatchError,
     RuntimeEpisodeIdError,
     RuntimeEpisodeNotFoundError,
     RuntimeEpisodeReviewedArtifactLoadError,
     RuntimeEpisodeRepository,
 )
+from backend.knowact.runtime.execution_repository import (
+    EpisodeExecutionFailure,
+    EpisodeExecutionNotFoundError,
+    EpisodeExecutionRecord,
+    EpisodeExecutionRepository,
+    EpisodeExecutionRepositoryError,
+    EpisodeExecutionStatus,
+    EpisodeExecutionTransitionError,
+    EpisodeRunQueueState,
+)
+from backend.knowact.runtime.queue_scheduler import (
+    EpisodeEnqueueSelection,
+    EpisodeRunQueueScheduler,
+)
 from backend.knowact.runtime.runner import (
     EpisodeRunAgentKind,
-    EpisodeRunAlreadyExistsError,
+    EpisodeRunArtifactError,
     EpisodeRunIdError,
     EpisodeRunRequest,
     EpisodeRunResult,
     EpisodeRunner,
     SimulatorServiceFactory as RunnerSimulatorServiceFactory,
     UnsupportedEpisodeRunAgentKindError,
+    load_completed_episode_run,
 )
 from backend.knowact.runtime.visibility import (
     TestedAgentVisibleEpisodeContext,
     build_tested_agent_visible_episode_context,
-)
-from backend.knowact.simulator.llm_service import SimulatorServiceConfigurationError
-from backend.knowact.simulator.providers import (
-    DEFAULT_SIMULATOR_CLIENT_PROVIDER,
-    SimulatorClientProvider,
 )
 from backend.knowact.validation.exceptions import KnowActValidationError
 
@@ -69,6 +84,9 @@ class RuntimeEpisodeSummary(BaseModel):
     max_turns: int
     interaction_rule: str
     scoring_profile: str
+    configuration_status: Literal["configured", "legacy_missing"]
+    execution_configuration: EpisodeExecutionConfiguration | None = None
+    warnings: tuple["RuntimeEpisodeWarningSummary", ...] = ()
 
 
 class RuntimeEpisodeRegistrationRequest(BaseModel):
@@ -79,18 +97,38 @@ class RuntimeEpisodeRegistrationRequest(BaseModel):
     graph_version: str
     hidden_map_id: str
     max_turns: int = Field(gt=0)
+    agent_kind: Literal["simple_llm_agent"]
+    tested_agent_client_provider: Literal["openai", "deepseek"]
+    tested_agent_model: str
+    simulator_client_provider: Literal["openai", "deepseek"]
+    simulator_model: str
+    tested_agent_temperature: float = Field(ge=0.0)
+    max_tool_retries: int = Field(ge=1)
 
     @field_validator(
         "episode_id",
         "benchmark_domain",
         "graph_version",
         "hidden_map_id",
+        "tested_agent_model",
+        "simulator_model",
     )
     @classmethod
     def _must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("must not be blank")
         return value
+
+    def execution_configuration(self) -> EpisodeExecutionConfiguration:
+        return EpisodeExecutionConfiguration(
+            agent_kind=self.agent_kind,
+            tested_agent_client_provider=self.tested_agent_client_provider,
+            tested_agent_model=self.tested_agent_model,
+            simulator_client_provider=self.simulator_client_provider,
+            simulator_model=self.simulator_model,
+            tested_agent_temperature=self.tested_agent_temperature,
+            max_tool_retries=self.max_tool_retries,
+        )
 
 
 class RuntimeEpisodeManagementManifestSummary(BaseModel):
@@ -103,6 +141,8 @@ class RuntimeEpisodeManagementManifestSummary(BaseModel):
     max_turns: int
     interaction_rule: str
     scoring_profile: str
+    configuration_status: Literal["configured", "legacy_missing"]
+    execution_configuration: EpisodeExecutionConfiguration | None = None
 
 
 class RuntimeReviewedGraphBindingSummary(BaseModel):
@@ -152,28 +192,6 @@ class RuntimeEpisodeDetail(BaseModel):
     tested_agent_visible_context_preview: TestedAgentVisibleEpisodeContext
 
 
-class RuntimeEpisodeRunRequest(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    run_id: str | None = None
-    agent_kind: EpisodeRunAgentKind
-    tested_agent_client_provider: TestedAgentClientProvider = (
-        DEFAULT_TESTED_AGENT_CLIENT_PROVIDER
-    )
-    simulator_client_provider: SimulatorClientProvider = (
-        DEFAULT_SIMULATOR_CLIENT_PROVIDER
-    )
-    tested_agent_temperature: float | None = Field(default=None, ge=0.0)
-    max_tool_retries: int = Field(default=3, ge=1)
-
-    @field_validator("run_id")
-    @classmethod
-    def _run_id_must_not_be_blank(cls, value: str | None) -> str | None:
-        if value is not None and not value.strip():
-            raise ValueError("must not be blank")
-        return value
-
-
 class RuntimeEpisodeRunArtifactsSummary(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -200,6 +218,92 @@ class RuntimeEpisodeRunResponse(BaseModel):
     scoring_report: EpisodeScoreReport
 
 
+class RuntimeRunQueueRow(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    episode_id: str
+    benchmark_domain: str
+    graph_version: str
+    status: EpisodeExecutionStatus
+    selectable: bool
+    queue_position: int | None = None
+    run_id: str | None = None
+    completed_turns: int
+    max_turns: int
+    checkpoint_health: Literal["not_applicable", "valid", "missing", "invalid"]
+    cancel_requested: bool
+    failure: EpisodeExecutionFailure | None = None
+
+
+class RuntimeRunQueueResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    concurrency: int
+    episodes: tuple[RuntimeRunQueueRow, ...]
+
+
+class RuntimeRunQueueConcurrencyRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    concurrency: int
+
+
+class RuntimeRunQueueEnqueueSelection(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    episode_id: str
+    action: Literal["start_or_resume", "restart"] = "start_or_resume"
+
+    @field_validator("episode_id")
+    @classmethod
+    def _episode_id_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
+class RuntimeRunQueueEnqueueRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    selections: tuple[RuntimeRunQueueEnqueueSelection, ...] = Field(min_length=1)
+
+    @field_validator("selections")
+    @classmethod
+    def _episode_ids_must_be_unique(
+        cls,
+        value: tuple[RuntimeRunQueueEnqueueSelection, ...],
+    ) -> tuple[RuntimeRunQueueEnqueueSelection, ...]:
+        episode_ids = [selection.episode_id for selection in value]
+        if len(episode_ids) != len(set(episode_ids)):
+            raise ValueError("selections must contain unique episode ids")
+        return value
+
+
+class RuntimeRunQueueEnqueueOutcome(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    episode_id: str
+    accepted: bool
+    status: EpisodeExecutionStatus
+    run_id: str | None = None
+    error_code: str | None = None
+    message: str | None = None
+
+
+class RuntimeRunQueueEnqueueResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    outcomes: tuple[RuntimeRunQueueEnqueueOutcome, ...]
+
+
+class RuntimeRunQueueEpisodeDetail(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    episode: RuntimeRunQueueRow
+    manifest: RuntimeEpisodeManagementManifestSummary
+    result: RuntimeEpisodeRunResponse | None = None
+
+
 def build_runtime_router(
     *,
     workspace_root: Path | None = None,
@@ -208,6 +312,8 @@ def build_runtime_router(
 ) -> APIRouter:
     root = workspace_root or _default_workspace_root()
     repository = RuntimeEpisodeRepository(workspace_root=root)
+    execution_repository = EpisodeExecutionRepository(workspace_root=root)
+    checkpoint_repository = EpisodeRunCheckpointRepository(workspace_root=root)
     runner = EpisodeRunner(
         workspace_root=root,
         tested_agent_factory=(
@@ -217,7 +323,32 @@ def build_runtime_router(
         ),
         simulator_service_factory=simulator_service_factory,
     )
+    scheduler = EpisodeRunQueueScheduler(
+        episode_repository=repository,
+        execution_repository=execution_repository,
+        checkpoint_repository=checkpoint_repository,
+        runner=runner,
+    )
+    provider_overrides = None
+    if (
+        simple_llm_tested_agent_factory is not None
+        and simulator_service_factory is not None
+    ):
+        provider_overrides = {"openai": True, "deepseek": True}
+    catalog = build_episode_model_catalog(
+        available_provider_overrides=provider_overrides
+    )
     router = APIRouter()
+    router.add_event_handler("startup", scheduler.start)
+    router.add_event_handler("shutdown", scheduler.stop)
+
+    @router.get(
+        "/episode-options",
+        response_model=EpisodeModelCatalog,
+        summary="List non-secret episode execution options.",
+    )
+    def episode_options() -> EpisodeModelCatalog:
+        return catalog
 
     @router.get(
         "/episodes",
@@ -249,6 +380,8 @@ def build_runtime_router(
         request: RuntimeEpisodeRegistrationRequest,
     ) -> RuntimeEpisodeDetail:
         try:
+            configuration = request.execution_configuration()
+            validate_execution_configuration(configuration, catalog)
             manifest = EvaluationEpisodeManifest(
                 episode_id=request.episode_id,
                 benchmark_domain=request.benchmark_domain,
@@ -257,13 +390,20 @@ def build_runtime_router(
                 max_turns=request.max_turns,
                 interaction_rule=INTERACTION_RULE_SINGLE_DIAGNOSTIC_QUESTION_PER_TURN,
                 scoring_profile=SCORING_PROFILE_SQUARED_MASTERY_DISTANCE_V1,
+                **configuration.model_dump(),
             )
             binding = repository.register_episode(manifest)
+            execution_repository.initialize((manifest,))
             context = build_tested_agent_visible_episode_context(
                 manifest=binding.manifest,
                 graph=binding.reviewed_graph.graph,
             )
             return _episode_detail(binding=binding, context=context)
+        except EpisodeExecutionConfigurationError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=_error_detail("invalid_execution_configuration", str(exc)),
+            ) from exc
         except RuntimeEpisodeIdError as exc:
             raise HTTPException(
                 status_code=422,
@@ -277,10 +417,12 @@ def build_runtime_router(
         except RuntimeEpisodeArtifactError as exc:
             raise HTTPException(
                 status_code=422,
-                detail=_error_detail(
-                    "malformed_manifest",
-                    "Runtime episode manifest is malformed.",
-                ),
+                detail=_error_detail("malformed_manifest", str(exc)),
+            ) from exc
+        except RuntimeEpisodeIdentityMismatchError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail=_error_detail("identity_mismatch", str(exc)),
             ) from exc
         except RuntimeEpisodeReviewedArtifactLoadError as exc:
             raise HTTPException(
@@ -288,14 +430,6 @@ def build_runtime_router(
                 detail=_error_detail(
                     "reviewed_artifact_loading_failure",
                     "Runtime episode reviewed artifacts could not be loaded.",
-                ),
-            ) from exc
-        except RuntimeEpisodeIdentityMismatchError as exc:
-            raise HTTPException(
-                status_code=409,
-                detail=_error_detail(
-                    "identity_mismatch",
-                    "Runtime episode manifest does not match reviewed artifact identities.",
                 ),
             ) from exc
         except RuntimeEpisodeBindingError as exc:
@@ -320,9 +454,7 @@ def build_runtime_router(
         response_model=RuntimeEpisodeDetail,
         summary="Read one runtime episode with tested-agent-visible context preview.",
     )
-    def read_episode(
-        episode_id: str,
-    ) -> RuntimeEpisodeDetail:
+    def read_episode(episode_id: str) -> RuntimeEpisodeDetail:
         try:
             binding = repository.load_episode_binding(episode_id)
             context = build_tested_agent_visible_episode_context(
@@ -343,33 +475,19 @@ def build_runtime_router(
         except RuntimeEpisodeArtifactError as exc:
             raise HTTPException(
                 status_code=422,
-                detail=_error_detail(
-                    "malformed_manifest",
-                    "Runtime episode manifest is malformed.",
-                ),
-            ) from exc
-        except RuntimeEpisodeReviewedArtifactLoadError as exc:
-            raise HTTPException(
-                status_code=424,
-                detail=_error_detail(
-                    "reviewed_artifact_loading_failure",
-                    "Runtime episode reviewed artifacts could not be loaded.",
-                ),
+                detail=_error_detail("malformed_manifest", str(exc)),
             ) from exc
         except RuntimeEpisodeIdentityMismatchError as exc:
             raise HTTPException(
                 status_code=409,
-                detail=_error_detail(
-                    "identity_mismatch",
-                    "Runtime episode manifest does not match reviewed artifact identities.",
-                ),
+                detail=_error_detail("identity_mismatch", str(exc)),
             ) from exc
         except RuntimeEpisodeBindingError as exc:
             raise HTTPException(
                 status_code=424,
                 detail=_error_detail(
                     "reviewed_artifact_loading_failure",
-                    "Runtime episode could not be bound to reviewed artifacts.",
+                    "Runtime episode reviewed artifacts could not be loaded.",
                 ),
             ) from exc
         except KnowActValidationError as exc:
@@ -381,103 +499,135 @@ def build_runtime_router(
                 ),
             ) from exc
 
-    @router.post(
-        "/episodes/{episode_id}/runs",
-        response_model=RuntimeEpisodeRunResponse,
-        status_code=status.HTTP_201_CREATED,
-        summary="Run one registered runtime episode.",
+    @router.get(
+        "/run-queue",
+        response_model=RuntimeRunQueueResponse,
+        summary="Read the persistent Episode Run Queue.",
     )
-    def run_episode(
-        episode_id: str,
-        request: RuntimeEpisodeRunRequest,
-    ) -> RuntimeEpisodeRunResponse:
+    def read_run_queue() -> RuntimeRunQueueResponse:
         try:
-            result = runner.run_episode(
-                EpisodeRunRequest(
-                    episode_id=episode_id,
-                    run_id=request.run_id,
-                    agent_kind=request.agent_kind,
-                    tested_agent_client_provider=request.tested_agent_client_provider,
-                    simulator_client_provider=request.simulator_client_provider,
-                    tested_agent_temperature=request.tested_agent_temperature,
-                    max_tool_retries=request.max_tool_retries,
-                )
+            return _queue_response(
+                state=scheduler.snapshot(),
+                repository=repository,
             )
-            return _run_response(root=root, result=result)
-        except RuntimeEpisodeIdError as exc:
+        except (RuntimeEpisodeArtifactError, EpisodeExecutionRepositoryError) as exc:
             raise HTTPException(
                 status_code=422,
-                detail=_error_detail("invalid_episode_id", str(exc)),
+                detail=_error_detail("malformed_run_queue", str(exc)),
             ) from exc
-        except EpisodeRunIdError as exc:
+
+    @router.put(
+        "/run-queue/concurrency",
+        response_model=RuntimeRunQueueResponse,
+        summary="Update persisted global Episode Run concurrency.",
+    )
+    def update_run_queue_concurrency(
+        request: RuntimeRunQueueConcurrencyRequest,
+    ) -> RuntimeRunQueueResponse:
+        try:
+            return _queue_response(
+                state=scheduler.set_concurrency(request.concurrency),
+                repository=repository,
+            )
+        except EpisodeExecutionRepositoryError as exc:
             raise HTTPException(
                 status_code=422,
-                detail=_error_detail("invalid_run_id", str(exc)),
+                detail=_error_detail("invalid_queue_concurrency", str(exc)),
             ) from exc
-        except EpisodeRunAlreadyExistsError as exc:
-            raise HTTPException(
-                status_code=409,
-                detail=_error_detail("episode_run_already_exists", str(exc)),
-            ) from exc
-        except RuntimeEpisodeNotFoundError as exc:
+
+    @router.post(
+        "/run-queue/enqueue",
+        response_model=RuntimeRunQueueEnqueueResponse,
+        summary="Admit selected episodes independently into the persistent queue.",
+    )
+    def enqueue_episodes(
+        request: RuntimeRunQueueEnqueueRequest,
+    ) -> RuntimeRunQueueEnqueueResponse:
+        outcomes = scheduler.enqueue(
+            tuple(
+                EpisodeEnqueueSelection(
+                    episode_id=selection.episode_id,
+                    action=selection.action,
+                )
+                for selection in request.selections
+            )
+        )
+        return RuntimeRunQueueEnqueueResponse(
+            outcomes=tuple(
+                RuntimeRunQueueEnqueueOutcome(
+                    episode_id=outcome.episode_id,
+                    accepted=outcome.accepted,
+                    status=outcome.status,
+                    run_id=outcome.run_id,
+                    error_code=outcome.error_code,
+                    message=outcome.message,
+                )
+                for outcome in outcomes
+            )
+        )
+
+    @router.post(
+        "/run-queue/episodes/{episode_id}/cancel",
+        response_model=RuntimeRunQueueRow,
+        summary="Cancel one queued or running episode.",
+    )
+    def cancel_episode(episode_id: str) -> RuntimeRunQueueRow:
+        try:
+            record = scheduler.cancel(episode_id)
+            state = scheduler.snapshot()
+            return _queue_row(
+                manifest=repository.read_episode_manifest(episode_id),
+                record=record,
+                queue_positions=_queue_positions(state),
+            )
+        except (EpisodeExecutionNotFoundError, RuntimeEpisodeNotFoundError) as exc:
             raise HTTPException(
                 status_code=404,
                 detail=_error_detail("episode_not_found", str(exc)),
             ) from exc
-        except RuntimeEpisodeArtifactError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=_error_detail(
-                    "malformed_manifest",
-                    "Runtime episode manifest is malformed.",
-                ),
-            ) from exc
-        except RuntimeEpisodeIdentityMismatchError as exc:
+        except EpisodeExecutionTransitionError as exc:
             raise HTTPException(
                 status_code=409,
-                detail=_error_detail(
-                    "identity_mismatch",
-                    "Runtime episode manifest does not match reviewed artifact identities.",
-                ),
+                detail=_error_detail("episode_not_cancellable", str(exc)),
             ) from exc
-        except RuntimeEpisodeReviewedArtifactLoadError as exc:
+
+    @router.get(
+        "/run-queue/episodes/{episode_id}",
+        response_model=RuntimeRunQueueEpisodeDetail,
+        summary="Read one episode's queue state and completed result.",
+    )
+    def read_queue_episode(episode_id: str) -> RuntimeRunQueueEpisodeDetail:
+        try:
+            manifest = repository.read_episode_manifest(episode_id)
+            state = scheduler.snapshot()
+            record = state.episodes[episode_id]
+            result = None
+            if record.status == EpisodeExecutionStatus.COMPLETED and record.run_id:
+                result = _run_response(
+                    root=root,
+                    result=load_completed_episode_run(
+                        workspace_root=root,
+                        run_id=record.run_id,
+                    ),
+                )
+            return RuntimeRunQueueEpisodeDetail(
+                episode=_queue_row(
+                    manifest=manifest,
+                    record=record,
+                    queue_positions=_queue_positions(state),
+                ),
+                manifest=_management_manifest_summary(manifest),
+                result=result,
+            )
+        except (RuntimeEpisodeNotFoundError, KeyError, EpisodeExecutionNotFoundError) as exc:
             raise HTTPException(
-                status_code=424,
-                detail=_error_detail(
-                    "reviewed_artifact_loading_failure",
-                    "Runtime episode reviewed artifacts could not be loaded.",
-                ),
+                status_code=404,
+                detail=_error_detail("episode_not_found", str(exc)),
             ) from exc
-        except RuntimeEpisodeBindingError as exc:
-            raise HTTPException(
-                status_code=424,
-                detail=_error_detail(
-                    "reviewed_artifact_loading_failure",
-                    "Runtime episode could not be bound to reviewed artifacts.",
-                ),
-            ) from exc
-        except UnsupportedEpisodeRunAgentKindError as exc:
+        except EpisodeRunArtifactError as exc:
             raise HTTPException(
                 status_code=422,
-                detail=_error_detail("unsupported_agent_kind", str(exc)),
-            ) from exc
-        except (TestedAgentConfigurationError, SimulatorServiceConfigurationError) as exc:
-            raise HTTPException(
-                status_code=503,
-                detail=_error_detail(
-                    "runtime_service_not_configured",
-                    "Episode Run provider-backed runtime service is not configured.",
-                ),
-            ) from exc
-        except ModelClientError as exc:
-            raise HTTPException(
-                status_code=502,
-                detail=_error_detail("runtime_model_error", str(exc)),
-            ) from exc
-        except KnowActValidationError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=_error_detail("invalid_episode_run", str(exc)),
+                detail=_error_detail("malformed_episode_result", str(exc)),
             ) from exc
 
     @router.get(
@@ -493,17 +643,17 @@ def build_runtime_router(
                 status_code=422,
                 detail=_error_detail("invalid_run_id", str(exc)),
             ) from exc
-
         if not transcript_path.exists():
             raise HTTPException(
                 status_code=404,
-                detail=_error_detail("episode_run_not_found", "Episode Run transcript not found."),
+                detail=_error_detail(
+                    "episode_run_not_found",
+                    "Episode Run transcript not found.",
+                ),
             )
-
         try:
             with transcript_path.open("r", encoding="utf-8") as handle:
-                payload = json.load(handle)
-            return VisibleDialogueContext.model_validate(payload)
+                return VisibleDialogueContext.model_validate(json.load(handle))
         except (JSONDecodeError, ValidationError) as exc:
             raise HTTPException(
                 status_code=422,
@@ -517,13 +667,46 @@ def build_runtime_router(
 
 
 def _episode_summary(manifest: EvaluationEpisodeManifest) -> RuntimeEpisodeSummary:
+    configuration = manifest.execution_configuration()
+    warnings = ()
+    if configuration is None:
+        warnings = (
+            RuntimeEpisodeWarningSummary(
+                code="execution_configuration_missing",
+                message="This legacy episode is read-only and cannot enter Run Queue.",
+            ),
+        )
     return RuntimeEpisodeSummary(
         episode_id=manifest.episode_id,
         benchmark_domain=manifest.benchmark_domain,
         graph_version=manifest.graph_version,
         max_turns=manifest.max_turns,
-        interaction_rule=INTERACTION_RULE_SINGLE_DIAGNOSTIC_QUESTION_PER_TURN,
-        scoring_profile=SCORING_PROFILE_SQUARED_MASTERY_DISTANCE_V1,
+        interaction_rule=manifest.interaction_rule,
+        scoring_profile=manifest.scoring_profile,
+        configuration_status=(
+            "legacy_missing" if configuration is None else "configured"
+        ),
+        execution_configuration=configuration,
+        warnings=warnings,
+    )
+
+
+def _management_manifest_summary(
+    manifest: EvaluationEpisodeManifest,
+) -> RuntimeEpisodeManagementManifestSummary:
+    configuration = manifest.execution_configuration()
+    return RuntimeEpisodeManagementManifestSummary(
+        episode_id=manifest.episode_id,
+        benchmark_domain=manifest.benchmark_domain,
+        graph_version=manifest.graph_version,
+        hidden_map_id=manifest.hidden_map_id,
+        max_turns=manifest.max_turns,
+        interaction_rule=manifest.interaction_rule,
+        scoring_profile=manifest.scoring_profile,
+        configuration_status=(
+            "legacy_missing" if configuration is None else "configured"
+        ),
+        execution_configuration=configuration,
     )
 
 
@@ -534,16 +717,22 @@ def _episode_detail(
 ) -> RuntimeEpisodeDetail:
     graph = binding.reviewed_graph.graph
     reference_map = binding.hidden_map.knowledge_map
+    warnings = [
+        RuntimeEpisodeWarningSummary(
+            code=warning.code.value,
+            message=warning.message,
+        )
+        for warning in binding.warnings
+    ]
+    if binding.manifest.is_legacy:
+        warnings.append(
+            RuntimeEpisodeWarningSummary(
+                code="execution_configuration_missing",
+                message="This legacy episode is read-only and cannot enter Run Queue.",
+            )
+        )
     return RuntimeEpisodeDetail(
-        manifest=RuntimeEpisodeManagementManifestSummary(
-            episode_id=binding.manifest.episode_id,
-            benchmark_domain=binding.manifest.benchmark_domain,
-            graph_version=binding.manifest.graph_version,
-            hidden_map_id=binding.manifest.hidden_map_id,
-            max_turns=binding.manifest.max_turns,
-            interaction_rule=INTERACTION_RULE_SINGLE_DIAGNOSTIC_QUESTION_PER_TURN,
-            scoring_profile=SCORING_PROFILE_SQUARED_MASTERY_DISTANCE_V1,
-        ),
+        manifest=_management_manifest_summary(binding.manifest),
         reviewed_artifacts=RuntimeReviewedArtifactBindingSummary(
             graph=RuntimeReviewedGraphBindingSummary(
                 status="loaded",
@@ -564,14 +753,72 @@ def _episode_detail(
                 profile_context_status=binding.profile_context.status.value,
             ),
         ),
-        warnings=tuple(
-            RuntimeEpisodeWarningSummary(
-                code=warning.code.value,
-                message=warning.message,
-            )
-            for warning in binding.warnings
-        ),
+        warnings=tuple(warnings),
         tested_agent_visible_context_preview=context,
+    )
+
+
+def _queue_response(
+    *,
+    state: EpisodeRunQueueState,
+    repository: RuntimeEpisodeRepository,
+) -> RuntimeRunQueueResponse:
+    positions = _queue_positions(state)
+    manifests = {
+        record.episode_id: record.manifest
+        for record in repository.list_episodes()
+        if not record.manifest.is_legacy
+    }
+    return RuntimeRunQueueResponse(
+        concurrency=state.concurrency,
+        episodes=tuple(
+            _queue_row(
+                manifest=manifests[episode_id],
+                record=record,
+                queue_positions=positions,
+            )
+            for episode_id, record in state.episodes.items()
+            if episode_id in manifests
+        ),
+    )
+
+
+def _queue_positions(state: EpisodeRunQueueState) -> dict[str, int]:
+    queued = sorted(
+        (
+            record
+            for record in state.episodes.values()
+            if record.status == EpisodeExecutionStatus.QUEUED
+        ),
+        key=lambda record: record.queue_order or 0,
+    )
+    return {record.episode_id: index + 1 for index, record in enumerate(queued)}
+
+
+def _queue_row(
+    *,
+    manifest: EvaluationEpisodeManifest,
+    record: EpisodeExecutionRecord,
+    queue_positions: dict[str, int],
+) -> RuntimeRunQueueRow:
+    return RuntimeRunQueueRow(
+        episode_id=manifest.episode_id,
+        benchmark_domain=manifest.benchmark_domain,
+        graph_version=manifest.graph_version,
+        status=record.status,
+        selectable=record.status
+        in {
+            EpisodeExecutionStatus.READY,
+            EpisodeExecutionStatus.FAILED,
+            EpisodeExecutionStatus.CANCELLED,
+        },
+        queue_position=queue_positions.get(manifest.episode_id),
+        run_id=record.run_id,
+        completed_turns=record.completed_turns,
+        max_turns=record.max_turns,
+        checkpoint_health=record.checkpoint_health,
+        cancel_requested=record.cancel_requested,
+        failure=record.failure,
     )
 
 

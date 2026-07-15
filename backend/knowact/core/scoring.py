@@ -81,9 +81,9 @@ class NodeComparison(BaseModel):
 
     node_id: str
     ground_truth_mastery: MasteryLevel
-    predicted_mastery: MasteryLevel | None
+    predicted_mastery: MasteryLevel | None = None
     mastery_distance: float = Field(ge=0.0)
-    signed_mastery_error: int | None
+    signed_mastery_error: int | None = None
     missing_prediction: bool
     unsupported_inference: bool
     exact_match: bool

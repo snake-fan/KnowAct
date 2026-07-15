@@ -38,6 +38,7 @@ Authoritative Source
 /
 ├── AGENTS.md
 ├── CONTEXT.md
+├── Makefile
 ├── README.md
 ├── README.zh-CN.md
 ├── pyproject.toml
@@ -383,9 +384,12 @@ Run output policy:
 
 - `episode_repository.py`: 读取 `Runtime Episode Registry` 中的 episode manifest。
 - `episode_loader.py`: 加载 identity-first manifest、reviewed graph、reviewed map、derived profile context。
+- `execution_repository.py`: 原子读写 episode-centric execution status、FIFO queue order、global concurrency、safe failure records 和 current/prior run references。
+- `queue_scheduler.py`: 单进程 bounded thread-pool scheduler；消费 persistent `Episode Run Queue`、应用 3-8 global concurrency、处理 startup reconciliation 和 cooperative cancellation。
+- `checkpoint.py`: `Episode Run Checkpoint` schema、initial/turn-level atomic commit、resume validation 和 successful-run cleanup。
 - `visibility.py`: 构造 tested-agent-visible context 和 simulator-only context reference，并验证 hidden data 不进入 tested-agent-visible payload。
 - `turn_loop.py`: one diagnostic question + one simulator answer。
-- `runner.py`: orchestrate episode start/end。
+- `runner.py`: orchestrate episode start/resume/restart/end，并在完整 turn boundary 接受 cancellation check。
 - `transcript.py`: transcript and interaction observation recording。
 
 Phase 6 的初始 runtime scope 是 contract skeleton：episode registry、manifest loading、artifact binding、visibility context construction 和 read-only runtime API。它不启动 formal run，不调用 tested agent 或 simulator，不产生 transcript、agent output 或 scoring report；`turn_loop.py`、`runner.py` 和 `transcript.py` 在 Phase 7-9 接入。
@@ -399,6 +403,15 @@ Phase 6 的初始 runtime scope 是 contract skeleton：episode registry、manif
 - `max_turns`
 - `interaction_rule = single_diagnostic_question_per_turn`
 - `scoring_profile = squared_mastery_distance_v1`
+- `agent_kind`
+- `tested_agent_client_provider`
+- `tested_agent_model`
+- `simulator_client_provider`
+- `simulator_model`
+- `tested_agent_temperature`
+- `max_tool_retries`
+
+后七项构成 immutable `Episode Execution Configuration`。它们在 `Episode Manifest Registration` 时由 benchmark author 选择，其中 provider-scoped model 必须来自 backend `Episode Model Catalog`。Model name 可以进入 manifest；API key、base URL 和 credential 只存在于 backend environment。Legacy manifests 若缺少 execution configuration，只在 `Episodes` workbench 只读显示 compatibility warning，不进入 `Run Queue`。
 
 runtime 的核心 flow：
 
@@ -424,6 +437,27 @@ load Evaluation Episode Manifest from Runtime Episode Registry
   -> scoring compares final submission with hidden map
   -> report is written
 ```
+
+Formal execution 不再由 frontend 同步调用 single-episode run route。`Run Queue` workbench 提交 selected episode identities 到 persistent `Episode Run Queue`：
+
+```text
+list queue-eligible registered episodes
+  -> select ready / failed / cancelled episodes
+  -> enqueue per episode
+       ready      -> allocate run id + run dir + initial checkpoint -> queued
+       resumable  -> validate existing checkpoint                 -> queued
+       invalid checkpoint -> reject only that episode             -> failed
+       explicit restart   -> preserve prior run, allocate new run -> queued
+  -> FIFO scheduler dispatches up to global concurrency (default 3, range 3-8)
+  -> queued -> running
+  -> checkpoint after each complete Interaction Turn
+  -> running -> completed | failed | cancelled
+  -> completed keeps formal artifacts and deletes resume-only checkpoint state
+```
+
+`Episode Execution Status` is exactly `ready | queued | running | completed | failed | cancelled`. Only `ready`, `failed`, and `cancelled` are selectable. `completed` is permanent and rerunning the same setup requires a new `episode_id`. Failed/cancelled normal resume keeps the same `run_id`; backend restart changes interrupted `running` to `failed`, while persisted `queued` work retains FIFO position and continues automatically. Checkpoint-invalid restart is explicit, uses a new run id, preserves the old run directory, and still uses the immutable execution configuration from the episode manifest.
+
+The initial scheduler runs in one FastAPI process with a thread pool capped at 8. Lowering global concurrency never kills running work; it only prevents further dispatch until the active count falls below the new limit. Multi-worker and distributed queue execution are out of scope for this slice.
 
 ### `scoring/`
 
@@ -487,7 +521,12 @@ load Evaluation Episode Manifest from Runtime Episode Registry
 - `POST /api/runtime/episodes`
 - `GET /api/runtime/episodes`
 - `GET /api/runtime/episodes/{episode_id}`
-- `POST /api/runtime/episodes/{episode_id}/runs`
+- `GET /api/runtime/episode-options`
+- `GET /api/runtime/run-queue`
+- `PUT /api/runtime/run-queue/concurrency`
+- `POST /api/runtime/run-queue/enqueue`
+- `POST /api/runtime/run-queue/episodes/{episode_id}/cancel`
+- `GET /api/runtime/run-queue/episodes/{episode_id}`
 - `GET /api/runtime/runs/{run_id}/transcript`
 - `POST /api/tested-agents/simple-llm/turn-test`
 - `GET /runs/{run_id}`
@@ -495,9 +534,13 @@ load Evaluation Episode Manifest from Runtime Episode Registry
 
 Phase 4 的初始 authoring surface 保持 narrow and functional：profile-context candidate 支持生成、读取、编辑和显式 confirmation；candidate map 支持生成、读取、列出 runs 和显式 promotion，但不提供 map `PUT`，因为 poor candidate maps 应重新生成而不是手工 patch。为支持 workbench selectors 和 simulator 前端入口，允许只读 `GET /api/authoring/benchmark-domains`、reviewed graph/profile list/read、candidate-map run list，以及 reviewed-map list/read；这些接口不创建或修改 benchmark data，也不启动 simulator runtime。调用方显式串联窄接口，使 profile-context editing、confirmation、candidate-map inspection 和 promotion 保持可见 gate；待闭环调通后再考虑更宽的 orchestration 产品形态。
 
-Phase 6 的 runtime surface 开放 `POST /api/runtime/episodes`、`GET /api/runtime/episodes` 和 `GET /api/runtime/episodes/{episode_id}`。`POST /api/runtime/episodes` 执行 `Episode Manifest Registration`，request 只暴露 `episode_id`、`benchmark_domain`、`graph_version`、`hidden_map_id` 和 `max_turns`；runtime service 固定写入 `interaction_rule = single_diagnostic_question_per_turn` 与 `scoring_profile = squared_mastery_distance_v1`，同步加载并校验 reviewed graph 与 reviewed hidden map binding，只有 binding 通过且 `episode_id` 尚不存在时才把 `Evaluation Episode Manifest` 发布到 `Runtime Episode Registry`，不启动 run。Successful registration 返回 `201 Created` 和 runtime management detail envelope；重复 `episode_id` 或 graph/map identity mismatch 返回 `409 Conflict`，reviewed artifact loading failure 返回 `424 Failed Dependency`。Missing confirmed Profile Context 不阻塞 registration；它只作为 runtime management status/warning 返回。Episode registration 不支持 overwrite；修改 graph、map 或 budget 必须注册新的 `episode_id`。Runtime management detail response 面向 benchmark author，可返回 `hidden_map_id`、reviewed map `user_id`、profile-context load status 和 non-leaking missing-profile warning 供前端展示，但不返回 hidden states、hidden evidence、profile context payload、debug traces、simulator answer blueprint、transcript 或 scoring report；profile context 正文应通过 profile/user inspection surface 查看。其中的 tested-agent-visible context preview 是同一 response 中唯一可交付给 tested agent 的子对象，必须排除 `hidden_map_id`、`map_id`、`user_id`、profile-context status、warnings 和任何 hidden payload。不要为了 frontend management 和 tested-agent delivery 拆出两套 Phase 6 HTTP routes；边界靠 response 分层和 runtime 交付选择来保证。
+Phase 6 的 runtime surface 开放 `POST /api/runtime/episodes`、`GET /api/runtime/episodes` 和 `GET /api/runtime/episodes/{episode_id}`。`POST /api/runtime/episodes` 执行 `Episode Manifest Registration`，request 暴露 identity fields、`max_turns` 和 immutable `Episode Execution Configuration`；runtime service 仍固定写入 `interaction_rule = single_diagnostic_question_per_turn` 与 `scoring_profile = squared_mastery_distance_v1`。Registration 同步校验 reviewed graph/map binding、provider availability 和 provider-scoped model catalog membership，只有全部通过且 `episode_id` 尚不存在时才发布 manifest。Successful registration 返回 `201 Created`；重复 identity 或 graph/map mismatch 返回 `409 Conflict`，reviewed artifact loading failure 返回 `424 Failed Dependency`，unavailable provider/model 返回 `422 Unprocessable Entity`。Missing confirmed Profile Context 仍只产生 management warning。Execution configuration 与 episode identity 一起 immutable；改变 graph、map、budget、agent、provider、model、temperature 或 retry policy 必须注册新 `episode_id`。Runtime management detail response 的 visibility boundary 保持不变。
 
-Phase 7-9 的初始 run surface 开放 `POST /api/runtime/episodes/{episode_id}/runs`。它从已注册 episode 启动一个 Episode Run，request 使用 `agent_kind` 选择 tested-agent implementation（首版仅 `simple_llm_agent`），并分离 `tested_agent_client_provider` 与 `simulator_client_provider`，可选 `run_id` 不覆盖已有 run。成功 response 返回 run metadata、artifact paths 和 scoring report；正式 artifacts 写入 `experiments/runs/{run_id}/`。该 response 不内联 transcript、working map、agent tool trace、hidden map identity、profile context、simulator debug trace、answer blueprint 或 hidden evidence。`GET /api/runtime/runs/{run_id}/transcript` 是 benchmark-author-facing run artifact read endpoint，只返回 visible `VisibleDialogueContext` turns，仍不得返回 simulator debug trace ids、grounded node ids、answer blueprints、hidden evidence ids、profile context 或 validation internals。
+`GET /api/runtime/episode-options` 返回 non-secret `Episode Model Catalog`、agent kinds、provider-scoped model defaults 和 availability；不返回 API keys 或 base URLs。Legacy manifests missing execution configuration remain read-only in `Episodes` list/detail responses with a compatibility warning and are excluded from queue responses.
+
+Formal run trigger is the queue surface. `GET /api/runtime/run-queue` returns global concurrency plus lightweight current-schema episode rows with execution status, selection eligibility, queue position, run id, completed-turn progress, checkpoint health, and safe failure summary. `PUT /api/runtime/run-queue/concurrency` accepts `3..8`. `POST /api/runtime/run-queue/enqueue` accepts unique selections with per-episode action `start_or_resume | restart`, performs per-episode admission, and returns accepted/rejected outcomes without rolling back unrelated valid selections. `restart` is valid only after explicit checkpoint failure and allocates a new run id while retaining prior artifacts. `POST /api/runtime/run-queue/episodes/{episode_id}/cancel` cancels queued work immediately or requests cooperative cancellation for running work. `GET /api/runtime/run-queue/episodes/{episode_id}` returns selected-row detail and, for `completed`, the existing run result envelope plus references to visible transcript and artifacts.
+
+The old synchronous `POST /api/runtime/episodes/{episode_id}/runs` route is retired from the formal workbench surface so completed one-shot episodes cannot bypass queue state. `GET /api/runtime/runs/{run_id}/transcript` remains benchmark-author-facing and visible-only; it must not return simulator debug trace ids, grounded node ids, answer blueprints, hidden evidence ids, profile context, or validation internals.
 
 Phase 7 的 development/test surface 允许 `POST /api/tested-agents/simple-llm/turn-test` 直接调用 `Simple LLM Agent` 做人工调试。该 route stateless 地加载 reviewed graph，接收 tested-agent-visible `VisibleDialogueContext` 和可选 `AgentWorkingKnowledgeMap`，必要时初始化 working map，应用本轮 working-map updates，然后返回下一步 tested-agent decision。它不读取 hidden map、不调用 simulator、不写 transcript、不注册 runtime run，也不产生 scoring report。
 
@@ -569,9 +612,12 @@ benchmark/
 
 ```text
 experiments/
+├── runtime/
+│   └── run_queue.json
 ├── runs/
 │   └── run_2026_...
 │       ├── episode_manifest_snapshot.json
+│       ├── checkpoint.json
 │       ├── turns/
 │       │   ├── turn_001.json
 │       │   └── turn_002.json
@@ -591,8 +637,12 @@ Artifact policy:
 - `graphs/{version}/` 和 `maps/` 是 reviewed benchmark data；只有明确要发布或保留时才应加入版本库。
 - `runtime/episodes/` 是 `Runtime Episode Registry`；它可以收集跨 benchmark domain 的 runnable episodes，但每个 manifest 仍只绑定一个 benchmark domain、一个 reviewed graph version 和一个 hidden reviewed map。
 - Phase 3 graph promotion 将重新校验后的 candidate snapshot 复制到 `graphs/{version}/`，保留原 candidate run，并生成只绑定 metadata 与 node/edge 文件引用的 `graph_manifest.json`。Reviewed graph version 不允许覆盖；修订必须发布新的 version。
+- `experiments/runtime/run_queue.json` 是 generated runtime control state，原子保存 global concurrency、stable FIFO order、episode execution status、current/prior run references、cooperative-cancel request 和 safe failure summary。它不是 benchmark authored data，也不建模为 batch history。
 - `experiments/runs/` 是 generated output，应避免混入人工 authored ground truth。
-- Episode Run 在模型交互开始前创建 `experiments/runs/{run_id}/`，保存 manifest snapshot 和初始 `working_map.json`。一个 runtime turn 包含 diagnostic question、simulator answer 和随后基于该回答执行的 working-map update；update 完成后立即原子写入 `turns/{turn_id}.json`，其中保存 visible dialogue 与 update attempts/outcome，并同步原子更新顶层 `working_map.json`。不默认复制完整 per-turn map snapshot。run 结束时继续生成纯 visible dialogue 的聚合 `transcript.json`。
+- Episode Run 在任何 model/provider call 前创建 `experiments/runs/{run_id}/`，保存 manifest snapshot、初始 `working_map.json` 和 initial `checkpoint.json`。一个 runtime turn 包含 diagnostic question、simulator answer 和随后基于该回答执行的 working-map update；只有这三部分全部完成才 commit 该 turn，原子写入 `turns/{turn_id}.json`、顶层 `working_map.json` 与新 checkpoint。不默认复制完整 per-turn map snapshot。
+- `checkpoint.json` 是 resume-only transient state；它保存 visible context、working map、runner phase、remaining turn budget、trace progress 和 immutable execution configuration。中断在 turn 中间时丢弃未 commit turn，从上一个 checkpoint 重放，因此 provider call 是 at-least-once，不保证 exactly-once。
+- Latest valid `checkpoint.json` 是 resumable progress 的 authoritative commit marker。Crash 若留下超前于 checkpoint 的 turn、working-map 或 trace 内容，这些内容属于 uncommitted progress，resume 时必须忽略或确定性覆盖。
+- `failed` 和 `cancelled` 保留 checkpoint 以便同一 run id 续跑。`completed` 先写完 transcript、tool trace、agent output 和 scoring report，再删除 `checkpoint.json` 与该 run 的 resume-only scheduling state；formal audit artifacts 继续保留。
 - 大型 source PDFs 可以本地保存，正式数据只引用 source metadata 和 `Source Locator`。
 
 ## Frontend Architecture
@@ -611,7 +661,7 @@ frontend/src/
 │   ├── graphs/
 │   ├── maps/
 │   ├── episodes/
-│   ├── runs/
+│   ├── runQueue/
 │   └── reports/
 └── components/
     ├── layout/
@@ -623,13 +673,16 @@ frontend/src/
 
 - Graph inspector: 展示 nodes、edges、source locators、edge rationale、weight、curation confidence。
 - Map inspector: 展示 node-level `User Knowledge State`、mastery、evidence refs。
-- Episode runner: 展示 manifest、turn budget、visible context、transcript。
+- Episode registry: 创建与检查 manifest、reviewed bindings、turn budget 和 immutable execution configuration，不触发 run。
+- Run Queue: 左侧加载 episode rows 并勾选 eligible episodes，右侧显示 selected episode 的 progress、failure、recovery 或 completed result。
 - Report viewer: 展示 per-node distances、missing prediction、unsupported inference、episode mastery distance。
 - Review helper: 辅助 benchmark author 检查 candidate nodes/edges/maps，但不自动 promote。
 
-当前 `Episodes` frontend module 属于 Runtime navigation，排在 `Simulator` 之后。Create Episode 入口执行 **Episode Manifest Registration**：用户选择 `benchmark_domain` 和一个 reviewed `map_id`，前端从 reviewed map manifest 派生 `graph_version`，再向 `POST /api/runtime/episodes` 提交 `episode_id`、`benchmark_domain`、`graph_version`、`hidden_map_id` 和 `max_turns`。`interaction_rule = single_diagnostic_question_per_turn` 与 `scoring_profile = squared_mastery_distance_v1` 是固定 v1 runtime contract，不作为可编辑表单字段。
+当前 `Episodes` frontend module 属于 Runtime navigation，排在 `Simulator` 之后。Create Episode 入口执行 **Episode Manifest Registration**：用户选择 `benchmark_domain` 和一个 reviewed `map_id`，前端从 reviewed map manifest 派生 `graph_version`，并从 `GET /api/runtime/episode-options` 返回的 provider-scoped options 选择 `agent_kind`、tested-agent provider/model、simulator provider/model、tested-agent temperature 和 `max_tool_retries`。Model 必须使用 dropdown，不允许 free text。前端将这些字段与 `episode_id`、`benchmark_domain`、`graph_version`、`hidden_map_id` 和 `max_turns` 一起提交到 `POST /api/runtime/episodes`。`interaction_rule = single_diagnostic_question_per_turn` 与 `scoring_profile = squared_mastery_distance_v1` 仍为固定 v1 contract。缺少 execution configuration 的 legacy manifest 只读显示 warning，不提供编辑或运行入口。
 
-Run Episode backend route 已经开放为 `POST /api/runtime/episodes/{episode_id}/runs`，`frontend/src/api/runtime.ts` 与 `Episodes` workbench 保持与该 request/response contract 对齐。Workbench 中的 Run Episode UI 调用初始 `simple_llm_agent` runner slice，允许 benchmark author 选择 tested-agent/simulator provider、提交可选 `run_id`，并查看 run metadata、visible transcript、score summary、per-node comparison 与 artifact paths。Run transcript 通过 `GET /api/runtime/runs/{run_id}/transcript` 读取；Run trigger 必须继续与 Episode Manifest Registration 分离。
+Runtime navigation 顺序是 `Simulator -> Episodes -> Run Queue`。`Run Queue` 是唯一 formal run entry：左侧列表仅对 `ready | failed | cancelled` 显示 checkbox，不可入队状态不渲染勾选交互；行中同时显示 status 与 queue position 或 completed-turn progress。顶部提供 3-8 的 global concurrency 选项、enqueue 按钮和 per-episode admission result。右侧 detail 在 `running` 时显示 run id、turn progress 与 recovery state，在 `failed` 时显示 safe error code/message 与必要的 explicit restart action，在 `completed` 时复用现有 metrics、transcript、per-node comparison 和 artifact result panel。Running/queued 中的 episode 可单独 cancel，不提供 cancel-all。
+
+Frontend 通过 `frontend/src/api/runtime.ts` 调用 queue APIs，在当前可见数据中存在 `queued` 或 `running` 时约每 2 秒 polling，不使用 WebSocket/SSE，进入 terminal/no-active state 后停止。结果展示组件从原 `Episodes` workbench 抽离为可复用 runtime result component；原 synchronous Run Episode form 和 route 不再从正式 workbench 触发。
 
 UI 边界：
 
@@ -647,11 +700,11 @@ UI 边界：
 | M3 graph review promotion | `storage/`, `validation/`, optional review UI | reviewed graph 才能进入 runtime |
 | M4 maps | `authoring/`, `core/`, `validation/`, `storage/` | map coverage 和 evidence visibility 是重点 |
 | M5 simulator | `simulator/`, `llm/`, `storage/`, `validation/` | reviewed-map grounded turns 和 leakage guard 是关键风险 |
-| M6 episode contract | `core/episode.py`, `storage/`, `runtime/episode_repository.py`, `runtime/episode_loader.py`, `runtime/visibility.py`, `api/`, `validation/` | runtime registry、identity-first manifest、reviewed artifact binding、visible context inspection |
+| M6 episode contract | `core/episode.py`, `storage/`, `runtime/episode_repository.py`, `runtime/episode_loader.py`, `runtime/visibility.py`, `api/`, `validation/` | runtime registry、identity-first manifest、immutable execution configuration、model catalog、reviewed artifact binding |
 | M7 baselines | `agents/`, `runtime/turn_loop.py` | fixed/random/simple LLM 共用协议 |
 | M8 scoring reports | `scoring/`, `reports/`, `storage/` | 不调用 LLM，不读取 persona 作主分数 |
-| M9 end-to-end v1 | `runtime/`, `agents/`, `simulator/`, `scoring/` | 第一份可解释 experiment report |
-| M10 workbench | `api/`, `frontend/` | 支持检查、运行、报告浏览 |
+| M9 end-to-end v1 | `runtime/`, `agents/`, `simulator/`, `scoring/` | persistent queue、turn checkpoint、resume/cancel/restart 和第一份可解释 report |
+| M10 workbench | `api/`, `frontend/` | `Episodes` 负责 registration，`Run Queue` 负责并发运行与结果浏览 |
 
 ## Test Strategy
 
@@ -662,14 +715,14 @@ UI 边界：
 - schema tests: Pydantic object parsing and serialization。
 - validation tests: graph references、map coverage、evidence visibility、manifest scoring profile。
 - scoring tests: squared mastery distance、missing penalty 36、unsupported inference rate。
-- runtime tests: registry loading、manifest artifact binding、max_turns、visibility context construction。
+- runtime tests: registry loading、manifest artifact binding、execution configuration/catalog validation、status transitions、FIFO/concurrency、checkpoint resume/restart、cooperative cancellation、startup reconciliation 和 visibility context construction。
 - simulator guard tests: 不泄露 mastery labels、hidden evidence ids、full map。
 - end-to-end fixture tests: 5-8 node development fixture 跑完整 episode。
 
-首个推荐命令仍可保持简单：
+统一验证命令保持简单：
 
 ```text
-uv run python -m unittest
+make check
 ```
 
 ## Open Review Questions

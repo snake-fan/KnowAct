@@ -69,42 +69,52 @@ The ground-truth user profile is hidden from the tested agent. The agent must in
 
 Prerequisites:
 
+- `make` for the repository-level development commands
 - Python 3.12, matching `.python-version`
 - `uv` for Python dependency management
 - Node.js and `npm` for the React workbench
 
-From the repository root, install backend dependencies and prepare local environment variables:
+From the repository root, prepare `.env` and install backend/frontend dependencies:
 
 ```bash
-uv sync
-test -f .env || cp .env.example .env
+make setup
 ```
 
 Fill in `.env` only for workflows that call external services, such as LLM-backed graph authoring, simulator turns, MinerU parsing, or Aliyun OSS staging. The backend can still be started for health checks and local UI/API wiring without real secrets.
 
-Start the FastAPI backend:
+Episode registration reads provider-scoped model dropdowns from `KNOWACT_OPENAI_MODELS` and `KNOWACT_DEEPSEEK_MODELS` (comma-separated), with `KNOWACT_OPENAI_MODEL` and `KNOWACT_DEEPSEEK_MODEL` as defaults. A provider is available only when its API key is configured. The initial persistent Episode Run Queue is single-process; do not start the backend with multiple Uvicorn workers.
+
+Start the FastAPI backend and React workbench together:
 
 ```bash
-uv run uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+make dev
 ```
 
-The backend listens on `http://127.0.0.1:8000` by default. Useful development URLs include `http://127.0.0.1:8000/health` and `http://127.0.0.1:8000/docs`.
+The backend listens on `http://127.0.0.1:8000` and the frontend on `http://127.0.0.1:5173` by default. Useful development URLs include `http://127.0.0.1:8000/health` and `http://127.0.0.1:8000/docs`. The frontend proxies `/api` and `/health` to the configured backend URL.
 
-In a second terminal, install and start the frontend:
+Use separate terminals when only one service is needed:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+make backend
+make frontend
 ```
 
-Open the Vite URL printed by the command, usually `http://localhost:5173`. The Vite dev server proxies `/api` and `/health` to `http://127.0.0.1:8000`; if the backend runs elsewhere, start the frontend with `VITE_API_PROXY_TARGET=http://127.0.0.1:8001 npm run dev`.
+Startup settings are non-secret Make variables. Inspect them with `make config` and override them from the command line or process environment without editing source files:
+
+```bash
+make dev BACKEND_PORT=8001 FRONTEND_PORT=5174
+make frontend VITE_API_PROXY_TARGET=http://127.0.0.1:8001
+```
+
+Application credentials and model/service settings remain in the root `.env`; Make does not print or parse those secrets. `make env` creates `.env` from `.env.example` only when it is missing and never overwrites an existing file. Run `make help` for the complete command list.
 
 Basic verification commands:
 
 ```bash
-uv run python -m unittest
-cd frontend && npm run build
+make test
+make build
+# or run both
+make check
 ```
 
 ---
@@ -119,7 +129,7 @@ V1 starts with a single benchmark domain, `statistical_learning_with_python`, so
 
    A project-owned graph authoring agent workflow will use model API calls to generate candidate knowledge graphs and candidate knowledge maps. Graph authoring first derives Parsed Source Segments from Parsed Source Markdown, extracts segment-level node drafts with bounded internal parallelism, defaulting to 8 concurrent requests, and runs a dedicated reconciliation step to produce source-grounded node skeletons with source locators and concise source grounding notes. Draft ids, outputs, and traces remain assembled in original segment order for deterministic replay, while progress logs expose completed and remaining segment counts during long runs. Later node rubric and edge proposal steps consume those structured intermediate artifacts rather than full source text. The node rubric step completes diagnostic goals, L0-L5 rubrics, diagnostic signals, and simulator behavior; the edge step uses complete candidate nodes, rubrics, locators, and source grounding notes to propose candidate edges. The graph authoring workflow's final review output is two JSON list files, one for nodes and one for edges; candidate status belongs to filenames or review state, not to the node or edge objects themselves. After review, authored graph data remains split into separate node and edge JSON list files. Candidate nodes must be extracted from selected authoritative sources and carry source locators; they should not be brainstormed from model memory. Persona, background, preferences, and task goals can guide map generation, but v1 evaluation uses only benchmark-author reviewed authored knowledge graphs and ground-truth knowledge maps for scoring.
 
-   Each v1 evaluation episode is declared by an explicit manifest that binds the authored graph, hidden map, optional profile context, `max_turns`, interaction rule, and the fixed `squared_mastery_distance_v1` scoring profile.
+   Each v1 evaluation episode is declared by an explicit immutable manifest that binds the authored graph, hidden map, optional profile context, `max_turns`, interaction rule, fixed `squared_mastery_distance_v1` scoring profile, and pinned agent/provider/model/temperature/retry configuration. The runtime workbench loads eligible episodes into one persistent FIFO run queue for bounded parallel execution, turn-level checkpoint recovery, individual cancellation, and per-episode result inspection; it does not create batch resources.
 
 2. **Human Verification**
 
