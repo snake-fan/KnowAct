@@ -32,6 +32,7 @@ type CandidateGraphCanvasProps = {
   graph: CandidateGraphPayload;
   selection: Selection;
   onSelect: (selection: Selection) => void;
+  ariaLabel?: string;
   nodePositionOverrides?: NodePositionMap;
   onViewportCenterChange?: (position: NodePosition) => void;
   layoutVersion: number;
@@ -50,6 +51,7 @@ export function CandidateGraphCanvas({
   graph,
   selection,
   onSelect,
+  ariaLabel = "Candidate knowledge graph",
   nodePositionOverrides,
   onViewportCenterChange,
   layoutVersion
@@ -320,7 +322,7 @@ export function CandidateGraphCanvas({
         className="graph-canvas"
         ref={containerRef}
         role="img"
-        aria-label="Candidate knowledge graph"
+        aria-label={ariaLabel}
       />
     </div>
   );

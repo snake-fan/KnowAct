@@ -6,12 +6,16 @@ import {
   CandidateGraphRunSummary,
   KnowledgeEdge,
   KnowledgeNode,
+  ReviewedGraphVersionSummary,
   SourceMaterialRecord,
   generateCandidateGraph,
+  listBenchmarkDomains,
   listCandidateGraphRuns,
+  listReviewedGraphs,
   listSourceMaterials,
   promoteCandidateGraph,
   readCandidateGraph,
+  readReviewedGraph,
   saveCandidateGraph,
   uploadSourceMaterial
 } from "../../api/authoring";
@@ -43,10 +47,17 @@ export function CandidateGraphWorkbench() {
   const [layoutVersion, setLayoutVersion] = useState(0);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [graphVersion, setGraphVersion] = useState("");
+  const [reviewedDomains, setReviewedDomains] = useState<string[]>([]);
+  const [reviewedDomain, setReviewedDomain] = useState("");
+  const [reviewedVersions, setReviewedVersions] = useState<ReviewedGraphVersionSummary[]>([]);
+  const [reviewedVersion, setReviewedVersion] = useState("");
+  const [graphMode, setGraphMode] = useState<"candidate" | "reviewed">("candidate");
 
   useEffect(() => {
-    refreshMaterials();
+    void initializeWorkbench();
   }, []);
+
+  const isReviewedGraph = graphMode === "reviewed";
 
   const selectedNode = useMemo(() => {
     if (!graph || selection?.kind !== "node") return null;
@@ -57,6 +68,27 @@ export function CandidateGraphWorkbench() {
     if (!graph || selection?.kind !== "edge") return null;
     return graph.candidate_edges.find((edge) => edge.id === selection.id) ?? null;
   }, [graph, selection]);
+
+  async function initializeWorkbench() {
+    await runTask("workspace", async () => {
+      const [nextMaterials, nextDomains] = await Promise.all([
+        listSourceMaterials(),
+        listBenchmarkDomains()
+      ]);
+      setMaterials(nextMaterials);
+      if (nextMaterials.length > 0) {
+        setSelectedSourceId(nextMaterials[0].source_id);
+      }
+      setReviewedDomains(nextDomains);
+      const initialDomain = nextDomains[0] ?? "";
+      setReviewedDomain(initialDomain);
+      if (initialDomain) {
+        const versions = await listReviewedGraphs(initialDomain);
+        setReviewedVersions(versions);
+        setReviewedVersion(versions[0]?.version ?? "");
+      }
+    });
+  }
 
   async function refreshMaterials() {
     await runTask("materials", async () => {
@@ -73,6 +105,44 @@ export function CandidateGraphWorkbench() {
     await runTask("runs", async () => {
       const response = await listCandidateGraphRuns(benchmarkDomain);
       setRuns(response.runs);
+    });
+  }
+
+  async function handleReviewedDomainChange(domain: string) {
+    setReviewedDomain(domain);
+    setReviewedVersions([]);
+    setReviewedVersion("");
+    if (!domain) return;
+    await runTask("reviewed graphs", async () => {
+      const versions = await listReviewedGraphs(domain);
+      setReviewedVersions(versions);
+      setReviewedVersion(versions[0]?.version ?? "");
+    });
+  }
+
+  async function handleLoadReviewedGraph() {
+    if (!reviewedDomain || !reviewedVersion) return;
+    await runTask("reviewed graph", async () => {
+      const reviewedGraph = await readReviewedGraph(reviewedDomain, reviewedVersion);
+      const nextGraph: CandidateGraphPayload = {
+        benchmark_domain: reviewedGraph.benchmark_domain,
+        run_id: `reviewed:${reviewedGraph.graph_manifest.version}`,
+        candidate_nodes: reviewedGraph.authored_nodes,
+        candidate_edges: reviewedGraph.authored_edges,
+        artifact_paths: {
+          output_dir_uri: reviewedGraph.artifact_paths.output_dir_uri,
+          candidate_nodes_uri: reviewedGraph.artifact_paths.authored_nodes_uri,
+          candidate_edges_uri: reviewedGraph.artifact_paths.authored_edges_uri,
+          workflow_log_uri: reviewedGraph.artifact_paths.graph_manifest_uri
+        }
+      };
+      setGraph(nextGraph);
+      setGraphMode("reviewed");
+      setConfirmDialogOpen(false);
+      setNodePositions({});
+      setSelection(nextGraph.candidate_nodes[0] ? { kind: "node", id: nextGraph.candidate_nodes[0].id } : null);
+      setLayoutVersion((version) => version + 1);
+      setNotice(`Loaded reviewed graph ${reviewedGraph.graph_manifest.version}.`);
     });
   }
 
@@ -123,6 +193,7 @@ export function CandidateGraphWorkbench() {
         artifact_paths: response.artifact_paths
       };
       setGraph(nextGraph);
+      setGraphMode("candidate");
       setNodePositions({});
       setRunId(nextGraph.run_id);
       setSelection(nextGraph.candidate_nodes[0] ? { kind: "node", id: nextGraph.candidate_nodes[0].id } : null);
@@ -139,6 +210,7 @@ export function CandidateGraphWorkbench() {
     await runTask("load", async () => {
       const nextGraph = await readCandidateGraph(benchmarkDomain, runId);
       setGraph(nextGraph);
+      setGraphMode("candidate");
       setNodePositions({});
       setSelection(nextGraph.candidate_nodes[0] ? { kind: "node", id: nextGraph.candidate_nodes[0].id } : null);
       setLayoutVersion((version) => version + 1);
@@ -147,7 +219,7 @@ export function CandidateGraphWorkbench() {
   }
 
   async function handleSave() {
-    if (!graph) return;
+    if (!graph || isReviewedGraph) return;
     await runTask("save", async () => {
       const saved = await saveCandidateGraph(graph);
       setGraph(saved);
@@ -156,7 +228,7 @@ export function CandidateGraphWorkbench() {
   }
 
   function openConfirmDialog() {
-    if (!graph) return;
+    if (!graph || isReviewedGraph) return;
     setError(null);
     setGraphVersion("");
     setConfirmDialogOpen(true);
@@ -164,7 +236,7 @@ export function CandidateGraphWorkbench() {
 
   async function handleConfirm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!graph) return;
+    if (!graph || isReviewedGraph) return;
     const version = graphVersion.trim();
     if (!version) {
       setError("Graph version is required.");
@@ -204,7 +276,7 @@ export function CandidateGraphWorkbench() {
   }
 
   function updateNode(id: string, patch: Partial<KnowledgeNode>) {
-    if (!graph) return;
+    if (!graph || isReviewedGraph) return;
     setGraph({
       ...graph,
       candidate_nodes: graph.candidate_nodes.map((node) =>
@@ -224,7 +296,7 @@ export function CandidateGraphWorkbench() {
   }
 
   function updateEdge(id: string, patch: Partial<KnowledgeEdge>) {
-    if (!graph) return;
+    if (!graph || isReviewedGraph) return;
     setGraph({
       ...graph,
       candidate_edges: graph.candidate_edges.map((edge) =>
@@ -237,7 +309,7 @@ export function CandidateGraphWorkbench() {
   }
 
   function addNode() {
-    if (!graph) return;
+    if (!graph || isReviewedGraph) return;
     const edit = addCandidateNodeAtPosition(graph, viewportCenter);
     setGraph(edit.graph);
     setSelection(edit.selection);
@@ -245,14 +317,14 @@ export function CandidateGraphWorkbench() {
   }
 
   function addEdge() {
-    if (!graph || graph.candidate_nodes.length < 2) return;
+    if (!graph || isReviewedGraph || graph.candidate_nodes.length < 2) return;
     const edit = addCandidateEdgeFromSelection(graph, selection);
     setGraph(edit.graph);
     setSelection(edit.selection);
   }
 
   function deleteSelection() {
-    if (!graph || !selection) return;
+    if (!graph || isReviewedGraph || !selection) return;
     const edit = deleteCandidateGraphSelection(graph, selection, nodePositions);
     setGraph(edit.graph);
     setSelection(edit.selection);
@@ -263,8 +335,8 @@ export function CandidateGraphWorkbench() {
     <main className="app-shell">
       <section className="topbar">
         <div>
-          <h1>Candidate Graph Review Workbench</h1>
-          <p>Upload source material, generate a candidate graph, inspect nodes and edges, then save reviewed candidate artifacts.</p>
+          <h1>Knowledge Graph Workbench</h1>
+          <p>Generate and review candidate graphs, or load a reviewed graph for read-only preview.</p>
         </div>
         <div className="status-strip" aria-live="polite">
           {busy && <span className="status busy">Working: {busy}</span>}
@@ -275,6 +347,40 @@ export function CandidateGraphWorkbench() {
 
       <section className="workspace">
         <aside className="left-panel">
+          <div className="panel-block">
+            <h2>Load Reviewed Graph</h2>
+            <label>
+              Domain
+              <select
+                value={reviewedDomain}
+                onChange={(event) => void handleReviewedDomainChange(event.target.value)}
+              >
+                <option value="">Select domain</option>
+                {reviewedDomains.map((domain) => (
+                  <option key={domain} value={domain}>{domain}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Version
+              <select value={reviewedVersion} onChange={(event) => setReviewedVersion(event.target.value)}>
+                <option value="">Select version</option>
+                {reviewedVersions.map((version) => (
+                  <option key={version.version} value={version.version}>
+                    {version.version}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={handleLoadReviewedGraph}
+              disabled={busy !== null || !reviewedDomain || !reviewedVersion}
+            >
+              Load Reviewed Graph
+            </button>
+          </div>
+
           <form className="panel-block" onSubmit={handleUpload}>
             <h2>Source Material</h2>
             <label>
@@ -366,18 +472,25 @@ export function CandidateGraphWorkbench() {
         <section className="graph-panel">
           <div className="graph-toolbar">
             <div>
-              <h2>{graph ? graph.run_id : "No candidate graph loaded"}</h2>
+              <h2>
+                {graph
+                  ? isReviewedGraph
+                    ? `${graph.benchmark_domain} · ${graph.run_id.replace("reviewed:", "")}`
+                    : graph.run_id
+                  : "No knowledge graph loaded"}
+              </h2>
               {graph && <p>{graph.candidate_nodes.length} nodes / {graph.candidate_edges.length} edges</p>}
+              {graph && isReviewedGraph && <p className="reviewed-graph-notice">Reviewed snapshot · read-only</p>}
             </div>
             <div className="button-row">
               <button type="button" onClick={() => setLayoutVersion((version) => version + 1)} disabled={!graph}>
                 Reflow
               </button>
-              <button type="button" onClick={addNode} disabled={!graph}>Add Node</button>
-              <button type="button" onClick={addEdge} disabled={!graph || graph.candidate_nodes.length < 2}>Add Edge</button>
-              <button type="button" onClick={deleteSelection} disabled={!selection}>Delete</button>
-              <button type="button" onClick={handleSave} disabled={!graph || busy !== null}>Save</button>
-              <button type="button" onClick={openConfirmDialog} disabled={!graph || busy !== null}>Confirm</button>
+              <button type="button" onClick={addNode} disabled={!graph || isReviewedGraph}>Add Node</button>
+              <button type="button" onClick={addEdge} disabled={!graph || isReviewedGraph || graph.candidate_nodes.length < 2}>Add Edge</button>
+              <button type="button" onClick={deleteSelection} disabled={!selection || isReviewedGraph}>Delete</button>
+              <button type="button" onClick={handleSave} disabled={!graph || isReviewedGraph || busy !== null}>Save</button>
+              <button type="button" onClick={openConfirmDialog} disabled={!graph || isReviewedGraph || busy !== null}>Confirm</button>
             </div>
           </div>
           {graph ? (
@@ -388,28 +501,34 @@ export function CandidateGraphWorkbench() {
               nodePositionOverrides={nodePositions}
               onViewportCenterChange={setViewportCenter}
               layoutVersion={layoutVersion}
+              ariaLabel={isReviewedGraph ? "Reviewed knowledge graph preview" : undefined}
             />
           ) : (
-            <div className="empty-graph">Upload or select a source material, then generate a candidate graph.</div>
+            <div className="empty-graph">Generate a candidate graph or load a reviewed graph.</div>
           )}
         </section>
 
         <aside className="right-panel">
           <h2>Inspector</h2>
           {selectedNode && (
-            <NodeInspector node={selectedNode} onChange={(patch) => updateNode(selectedNode.id, patch)} />
+            <NodeInspector
+              node={selectedNode}
+              readOnly={isReviewedGraph}
+              onChange={(patch) => updateNode(selectedNode.id, patch)}
+            />
           )}
           {selectedEdge && graph && (
             <EdgeInspector
               edge={selectedEdge}
               nodeIds={graph.candidate_nodes.map((node) => node.id)}
+              readOnly={isReviewedGraph}
               onChange={(patch) => updateEdge(selectedEdge.id, patch)}
             />
           )}
           {!selectedNode && !selectedEdge && <p className="empty">Select a node or edge.</p>}
         </aside>
       </section>
-      {confirmDialogOpen && graph && (
+      {confirmDialogOpen && graph && !isReviewedGraph && (
         <div className="dialog-backdrop">
           <form className="dialog" onSubmit={handleConfirm}>
             <h2>Confirm Reviewed Graph</h2>
@@ -445,31 +564,34 @@ export function CandidateGraphWorkbench() {
 
 function NodeInspector({
   node,
+  readOnly,
   onChange
 }: {
   node: KnowledgeNode;
+  readOnly: boolean;
   onChange: (patch: Partial<KnowledgeNode>) => void;
 }) {
   return (
     <div className="inspector-form">
-      <label>ID<input value={node.id} onChange={(event) => onChange({ id: event.target.value })} /></label>
-      <label>Name<input value={node.name} onChange={(event) => onChange({ name: event.target.value })} /></label>
-      <label>Type<input value={node.type} onChange={(event) => onChange({ type: event.target.value })} /></label>
-      <label>Definition<textarea value={node.definition ?? ""} onChange={(event) => onChange({ definition: event.target.value })} /></label>
-      <label>Diagnostic Goal<textarea value={node.diagnostic_goal ?? ""} onChange={(event) => onChange({ diagnostic_goal: event.target.value })} /></label>
+      <label>ID<input readOnly={readOnly} value={node.id} onChange={(event) => onChange({ id: event.target.value })} /></label>
+      <label>Name<input readOnly={readOnly} value={node.name} onChange={(event) => onChange({ name: event.target.value })} /></label>
+      <label>Type<input readOnly={readOnly} value={node.type} onChange={(event) => onChange({ type: event.target.value })} /></label>
+      <label>Definition<textarea readOnly={readOnly} value={node.definition ?? ""} onChange={(event) => onChange({ definition: event.target.value })} /></label>
+      <label>Diagnostic Goal<textarea readOnly={readOnly} value={node.diagnostic_goal ?? ""} onChange={(event) => onChange({ diagnostic_goal: event.target.value })} /></label>
       {LEVEL_KEYS.map((level) => (
-        <label key={level}>{level}<textarea value={node.levels[level] ?? ""} onChange={(event) => onChange({ levels: { ...node.levels, [level]: event.target.value } })} /></label>
+        <label key={level}>{level}<textarea readOnly={readOnly} value={node.levels[level] ?? ""} onChange={(event) => onChange({ levels: { ...node.levels, [level]: event.target.value } })} /></label>
       ))}
       <label>
         Diagnostic Signals
         <textarea
+          readOnly={readOnly}
           value={node.diagnostic_signals.join("\n")}
           onChange={(event) => onChange({ diagnostic_signals: lines(event.target.value) })}
         />
       </label>
       <label>
         Simulator Behavior
-        <textarea value={node.simulator_behavior ?? ""} onChange={(event) => onChange({ simulator_behavior: event.target.value })} />
+        <textarea readOnly={readOnly} value={node.simulator_behavior ?? ""} onChange={(event) => onChange({ simulator_behavior: event.target.value })} />
       </label>
     </div>
   );
@@ -478,39 +600,41 @@ function NodeInspector({
 function EdgeInspector({
   edge,
   nodeIds,
+  readOnly,
   onChange
 }: {
   edge: KnowledgeEdge;
   nodeIds: string[];
+  readOnly: boolean;
   onChange: (patch: Partial<KnowledgeEdge>) => void;
 }) {
   return (
     <div className="inspector-form">
-      <label>ID<input value={edge.id} onChange={(event) => onChange({ id: event.target.value })} /></label>
+      <label>ID<input readOnly={readOnly} value={edge.id} onChange={(event) => onChange({ id: event.target.value })} /></label>
       <label>
         Source
-        <select value={edge.source} onChange={(event) => onChange({ source: event.target.value })}>
+        <select disabled={readOnly} value={edge.source} onChange={(event) => onChange({ source: event.target.value })}>
           {nodeIds.map((id) => <option key={id} value={id}>{id}</option>)}
         </select>
       </label>
       <label>
         Target
-        <select value={edge.target} onChange={(event) => onChange({ target: event.target.value })}>
+        <select disabled={readOnly} value={edge.target} onChange={(event) => onChange({ target: event.target.value })}>
           {nodeIds.map((id) => <option key={id} value={id}>{id}</option>)}
         </select>
       </label>
       <label>
         Type
-        <select value={edge.type} onChange={(event) => onChange({ type: event.target.value as KnowledgeEdge["type"] })}>
+        <select disabled={readOnly} value={edge.type} onChange={(event) => onChange({ type: event.target.value as KnowledgeEdge["type"] })}>
           <option value="part_of">part_of</option>
           <option value="prerequisite_for">prerequisite_for</option>
           <option value="supports">supports</option>
           <option value="contrasts_with">contrasts_with</option>
         </select>
       </label>
-      <label>Rationale<textarea value={edge.rationale} onChange={(event) => onChange({ rationale: event.target.value })} /></label>
-      <label>Weight<input type="number" min="0" max="1" step="0.05" value={edge.weight} onChange={(event) => onChange({ weight: Number(event.target.value) })} /></label>
-      <label>Curation Confidence<input type="number" min="0" max="1" step="0.05" value={edge.curation_confidence} onChange={(event) => onChange({ curation_confidence: Number(event.target.value) })} /></label>
+      <label>Rationale<textarea readOnly={readOnly} value={edge.rationale} onChange={(event) => onChange({ rationale: event.target.value })} /></label>
+      <label>Weight<input readOnly={readOnly} type="number" min="0" max="1" step="0.05" value={edge.weight} onChange={(event) => onChange({ weight: Number(event.target.value) })} /></label>
+      <label>Curation Confidence<input readOnly={readOnly} type="number" min="0" max="1" step="0.05" value={edge.curation_confidence} onChange={(event) => onChange({ curation_confidence: Number(event.target.value) })} /></label>
     </div>
   );
 }

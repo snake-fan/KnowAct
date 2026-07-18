@@ -451,6 +451,11 @@ label {
   margin-top: 14px;
 }
 
+.reviewed-graph-notice {
+  color: #1f6f66;
+  font-weight: 700;
+}
+
 .dialog-backdrop {
   position: fixed;
   inset: 0;
