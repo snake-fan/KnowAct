@@ -3,18 +3,15 @@ import {
   ApiRequestError,
   CandidateGraphPayload,
   CandidateGraphPromotionResponse,
-  CandidateGraphRunSummary,
   KnowledgeEdge,
   KnowledgeNode,
   ReviewedGraphVersionSummary,
   SourceMaterialRecord,
   generateCandidateGraph,
   listBenchmarkDomains,
-  listCandidateGraphRuns,
   listReviewedGraphs,
   listSourceMaterials,
   promoteCandidateGraph,
-  readCandidateGraph,
   readReviewedGraph,
   saveCandidateGraph,
   uploadSourceMaterial
@@ -35,7 +32,6 @@ export function CandidateGraphWorkbench() {
   const [selectedSourceId, setSelectedSourceId] = useState("");
   const [benchmarkDomain, setBenchmarkDomain] = useState("");
   const [runId, setRunId] = useState("");
-  const [runs, setRuns] = useState<CandidateGraphRunSummary[]>([]);
   const [clientProvider, setClientProvider] = useState<"openai" | "deepseek">("openai");
   const [graph, setGraph] = useState<CandidateGraphPayload | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
@@ -97,14 +93,6 @@ export function CandidateGraphWorkbench() {
       if (!selectedSourceId && nextMaterials.length > 0) {
         setSelectedSourceId(nextMaterials[0].source_id);
       }
-    });
-  }
-
-  async function refreshRuns() {
-    if (!benchmarkDomain.trim()) return;
-    await runTask("runs", async () => {
-      const response = await listCandidateGraphRuns(benchmarkDomain);
-      setRuns(response.runs);
     });
   }
 
@@ -199,22 +187,6 @@ export function CandidateGraphWorkbench() {
       setSelection(nextGraph.candidate_nodes[0] ? { kind: "node", id: nextGraph.candidate_nodes[0].id } : null);
       setLayoutVersion((version) => version + 1);
       setNotice(`Generated ${nextGraph.candidate_nodes.length} nodes and ${nextGraph.candidate_edges.length} edges.`);
-    });
-  }
-
-  async function handleLoadRun() {
-    if (!benchmarkDomain.trim() || !runId.trim()) {
-      setError("Benchmark domain and run id are required.");
-      return;
-    }
-    await runTask("load", async () => {
-      const nextGraph = await readCandidateGraph(benchmarkDomain, runId);
-      setGraph(nextGraph);
-      setGraphMode("candidate");
-      setNodePositions({});
-      setSelection(nextGraph.candidate_nodes[0] ? { kind: "node", id: nextGraph.candidate_nodes[0].id } : null);
-      setLayoutVersion((version) => version + 1);
-      setNotice(`Loaded ${nextGraph.run_id}`);
     });
   }
 
@@ -426,15 +398,12 @@ export function CandidateGraphWorkbench() {
             </label>
             <label>
               Run ID
-              <div className="select-with-action">
-                <select value={runId} onChange={(event) => setRunId(event.target.value)}>
-                  <option value="">-- New run --</option>
-                  {runs.map((run) => (
-                    <option key={run.run_id} value={run.run_id}>{run.run_id}</option>
-                  ))}
-                </select>
-                <button type="button" onClick={refreshRuns} disabled={busy !== null} title="Refresh runs">&#x21bb;</button>
-              </div>
+              <input
+                value={runId}
+                onChange={(event) => setRunId(event.target.value)}
+                placeholder="Optional; generated automatically when empty"
+                disabled={busy !== null}
+              />
             </label>
             <label>
               Provider
@@ -443,10 +412,7 @@ export function CandidateGraphWorkbench() {
                 <option value="deepseek">deepseek</option>
               </select>
             </label>
-            <div className="button-row">
-              <button type="submit" disabled={busy !== null || !selectedSourceId || !benchmarkDomain.trim()}>Generate</button>
-              <button type="button" onClick={handleLoadRun} disabled={busy !== null || !runId}>Load</button>
-            </div>
+            <button type="submit" disabled={busy !== null || !selectedSourceId || !benchmarkDomain.trim()}>Generate</button>
           </form>
 
           <div className="panel-block material-list">
