@@ -1,0 +1,16 @@
+\section{Simulator and Agent Interface Details}
+\label{app:interfaces}
+
+\subsection{Simulator Stage Contracts}
+
+The question grounder receives the public graph, the current question, and limited visible history. It returns grounded node identifiers or a structured rejection reason.
+
+The answer policy receives only the grounded hidden context. It returns a de-identified blueprint that constrains claims, uncertainty, misconceptions, cues, and prohibited overstatements.
+
+The generator receives the blueprint and surface-style context. It produces the user-visible answer without access to raw mastery labels, map identifiers, evidence identifiers, or scoring fields.
+
+\subsection{Tested-Agent Actions}
+
+The tested agent can read the public graph and its working map, update a node with visible support, ask one grounded question, or finalize.
+
+Each mutation and question is recorded in the episode trace. Exact prompt templates, structured schemas, and provider-specific settings should accompany the released benchmark artifact.

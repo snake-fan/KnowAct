@@ -1,0 +1,42 @@
+\section{Implementation-Oriented Artifact Schemas}
+\label{app:schemas}
+
+The abbreviated schemas below summarize the benchmark contracts. Field names may evolve, but the separation among public graph, hidden map, visible observations, and final reconstruction should remain stable.
+
+\subsection{Knowledge Node}
+\begin{verbatim}
+{
+  "id": "active_learning",
+  "name": "Active Learning",
+  "type": "concept",
+  "definition": "...",
+  "source_locators": [...],
+  "diagnostic_goal": "...",
+  "levels": {"L0": "...", ..., "L5": "..."},
+  "diagnostic_signals": [...],
+  "simulator_behavior": "..."
+}
+\end{verbatim}
+
+\subsection{Hidden User State}
+\begin{verbatim}
+{
+  "node_id": "active_learning",
+  "mastery_level": "L2",
+  "evidence_refs": ["ev_104"],
+  "misconceptions": [...],
+  "unknowns": [...]
+}
+\end{verbatim}
+
+\subsection{Agent Working Assessment}
+\begin{verbatim}
+{
+  "node_id": "active_learning",
+  "assessed_mastery_level": "L2",
+  "diagnostic_confidence": "medium",
+  "assessment_note": "Understands the motivation but not
+                      query-strategy trade-offs.",
+  "supporting_turn_ids": ["turn_03"]
+}
+\end{verbatim}

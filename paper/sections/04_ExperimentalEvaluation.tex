@@ -1,0 +1,63 @@
+\section{Experimental Evaluation}
+\label{sec:experiments}
+
+The empirical evaluation is organized around the benchmark's central claim: adaptive evidence acquisition should improve hidden-map reconstruction under a fixed interaction budget.
+
+\subsection{Research Questions}
+
+We ask four questions:
+\begin{enumerate}[leftmargin=1.7em]
+    \item Do adaptive agents outperform fixed and random diagnostic policies under equal turn budgets?
+    \item Do explicit working maps and graph relations improve reconstruction and question efficiency?
+    \item Are agent rankings robust to simulator model, answer policy, grounding, and profile style?
+    \item Do simulator answers and agent rankings agree with matched human-user episodes?
+\end{enumerate}
+
+These questions separate endpoint reconstruction, state-conditioned action, simulator dependence, and transfer to human interaction.
+
+\subsection{Benchmark Instances and Experimental Setup}
+
+The initial study uses reviewed statistical-learning graphs grounded in the ISLP source, reviewed hidden maps, and immutable episode manifests.
+
+Each reported run must identify the graph and map versions, turn budget, interaction rule, scoring profile, simulator configuration, tested-agent model, and provider settings.
+
+All compared agents receive identical public graphs and episode constraints. Hidden maps, simulator evidence, policy traces, and scoring internals remain outside the tested-agent context.
+
+% TODO: Report graph size, hidden-map count, mastery distribution,
+% human-review statistics, model versions, inference settings, and run counts.
+
+\subsection{Baselines}
+
+The initial evaluation compares three baseline families:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Fixed-question agent:} follows a predefined diagnostic order and does not adapt to answers.
+    \item \textbf{Random-question agent:} samples valid diagnostic targets under the episode constraints.
+    \item \textbf{Simple LLM agent:} chooses questions and updates its map directly through the semantic interface.
+\end{itemize}
+
+These controls distinguish the value of interaction from the value of adaptive user modeling. Structured agents can add uncertainty estimates, graph-aware planning, or explicit information-gain objectives.
+
+\subsection{Main Reconstruction Results}
+
+The main comparison reports mastery distance, exact match, missing predictions, and unsupported inference for every agent under matched budgets.
+
+Results should include confidence intervals across episode instances and repeated stochastic runs. Per-node errors should accompany aggregate scores to expose systematic over- or under-estimation.
+
+% TODO: Insert the main results table and statistical comparisons.
+
+\subsection{Efficiency, Ablations, and Robustness}
+
+Turn-efficiency curves measure reconstruction quality after each interaction. They test whether adaptive policies gain information earlier rather than only matching non-adaptive agents at the final turn.
+
+Ablations remove the explicit working map, graph relations, or evidence requirements. Robustness checks vary simulator models, grounding policies, answer policies, and profile styles.
+
+% TODO: Insert turn-budget curves, component ablations, and sensitivity results.
+
+\subsection{Simulator Validation and Error Analysis}
+
+Simulator validation compares generated answers with matched human responses on state fidelity, diagnostic usefulness, naturalness, and leakage.
+
+Agent error analysis groups failures into poor grounding, missed evidence, unsupported graph propagation, stale working-map state, redundant probes, and premature finalization.
+
+% TODO: Report human-study protocol, agreement, simulator fidelity,
+% agent-ranking transfer, and representative failure cases.

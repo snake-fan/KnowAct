@@ -1,0 +1,178 @@
+\section{The \knowact Benchmark}
+\label{sec:benchmark}
+
+\knowact evaluates whether an agent can infer, maintain, and use a structured model of a user's knowledge. This section defines the target state, benchmark artifacts, interaction boundary, agent protocol, and scoring rule.
+
+\subsection{Active Knowledge-State Diagnosis}
+\label{sec:formulation}
+
+We operationalize functional ToM as three observable abilities: infer a user state from interaction evidence, revise that state over time, and use the current estimate to select the next action.
+
+The benchmark does not assume a particular cognitive architecture. It tests these abilities through bounded, auditable behavior in a controlled environment.
+
+\paragraph{Domain knowledge graph.}
+A benchmark domain is represented by an authored knowledge graph
+\begin{equation}
+    \KG = (\Vnodes, \Eedges),
+\end{equation}
+where each node $v_i \in \Vnodes$ is a diagnosable knowledge unit and each edge $e_{ij} \in \Eedges$ is a reviewed domain relation.
+
+Nodes contain definitions, source locators, diagnostic goals, mastery rubrics, diagnostic signals, and simulator guidance. Edges organize the domain but do not encode user state.
+
+\paragraph{Hidden user knowledge map.}
+For a graph with $N = |\Vnodes|$ nodes, the hidden map is
+\begin{equation}
+    \Mtrue = \{s_i^{\star}\}_{i=1}^{N}.
+\end{equation}
+Each state includes mastery $m_i^{\star} \in \{0,1,\ldots,5\}$, evidence references, misconceptions, and unknowns. Levels are node-specific rubric positions, not a universal psychometric scale.
+
+Optional profile context can control conversational style. It is not part of the primary mastery target and cannot override the reviewed node states.
+
+\paragraph{Bounded diagnostic episode.}
+An episode is specified by
+\begin{equation}
+    \mathcal{E}p = (\KG, \Mtrue, \mathcal{Z}, T, \rho, \sigma),
+\end{equation}
+where $\mathcal{Z}$ is simulator-only evidence, $T$ is the turn budget, $\rho$ is the interaction rule, and $\sigma$ is the scoring profile.
+
+At turn $t$, the agent observes the public graph, visible history $\history_{t-1}$, and its working map $\Mhat_{t-1}$. It chooses one diagnostic question
+\begin{equation}
+    q_t \sim \pi_{\theta}(\KG,\history_{t-1},\Mhat_{t-1}),
+\end{equation}
+receives answer $a_t$, and updates its estimate
+\begin{equation}
+    \Mhat_t = U_{\theta}(\Mhat_{t-1}, q_t, a_t).
+\end{equation}
+
+After at most $T$ turns, the agent submits a full-graph reconstruction $\Mhat_T$. The hidden map, evidence, simulator traces, and scoring internals remain inaccessible throughout the episode.
+
+\subsection{Benchmark Construction}
+
+\begin{figure}[t]
+\centering
+\fbox{\begin{minipage}{0.94\linewidth}
+\centering
+\textbf{Authoritative source} $\rightarrow$ \textbf{Reviewed knowledge graph}\\
+$\downarrow$\\[-0.2em]
+\textbf{Reviewed hidden knowledge map + evidence}\\
+$\downarrow$\\[-0.2em]
+\textbf{Simulator} $\leftrightarrow$ \textbf{Tested diagnostic agent}\\
+$\downarrow$\\[-0.2em]
+\textbf{Final reconstructed map} $\rightarrow$ \textbf{Deterministic scoring}
+\end{minipage}}
+\caption{The \knowact pipeline. Authoring produces reviewed hidden artifacts; the tested agent interacts only through the visible episode interface.}
+\label{fig:pipeline}
+\end{figure}
+
+\paragraph{Source-grounded graph authoring.}
+The initial domain is statistical learning, grounded in \emph{An Introduction to Statistical Learning with Applications in Python} \citep{james2023islp}.
+
+Parsed source segments support node extraction, cross-segment reconciliation, diagnostic enrichment, and edge proposal. Models propose artifacts, while human review determines which versions are promoted.
+
+Source locators preserve provenance and enable audits of definitions and rubrics. Promoted graph snapshots are immutable, preventing later authoring changes from silently altering an episode.
+
+\paragraph{Knowledge-map authoring.}
+A hidden map assigns a reviewed state to every graph node. Evidence records specify what the user can explain, where an explanation fails, and which misconceptions or uncertainties may surface.
+
+Authoring separates three artifacts:
+\begin{itemize}[leftmargin=1.5em]
+    \item the static node-level state used as scoring ground truth;
+    \item simulator-only evidence that supports natural answers;
+    \item optional profile context that controls style without changing knowledge.
+\end{itemize}
+
+Candidate maps undergo human checks for graph coverage, internal consistency, plausibility, and evaluability before they become eligible for episodes.
+
+\paragraph{Episode manifests.}
+An immutable manifest binds the graph version, hidden map, turn budget, interaction rule, scoring profile, and pinned provider configuration.
+
+This binding makes repeated runs comparable and prevents accidental changes in benchmark artifacts or runtime settings. Appendix~\ref{app:construction} provides the detailed authoring workflow.
+
+\subsection{User Simulation and Visibility Boundary}
+\label{sec:simulator}
+
+The simulator must produce natural answers while remaining faithful to the hidden map. \knowact therefore treats simulation as a staged information boundary rather than an unconstrained role-playing prompt.
+
+\paragraph{Question grounding.}
+A grounder maps the current question to a directly targeted node set $S_t \subseteq \Vnodes$. It also detects ungrounded requests, hidden-label requests, and multiple independent questions.
+
+Grounding sees the public graph and limited visible dialogue, but no hidden state. A probe may cover multiple nodes only when they form one integrated diagnostic question, such as a comparison.
+
+\paragraph{Hidden-context selection and answer policy.}
+After grounding, the context builder retrieves state and evidence only for nodes in $S_t$. Connected neighbors are not included merely because a graph edge exists.
+
+An answer policy converts the selected context into a de-identified blueprint containing expressible claims, uncertainty boundaries, misconceptions, evidence-supported cues, and prohibited overstatements.
+
+The blueprint excludes mastery labels, node and evidence identifiers, map identifiers, user identifiers, and scoring fields. It is the sole content interface to natural-language generation.
+
+\paragraph{Generation and leakage control.}
+The generator receives the blueprint, visible dialogue required for continuity, and an optional style hint. It never receives the raw hidden map.
+
+Generation preserves partial knowledge and misconceptions rather than reducing all states to know/do-not-know answers. Bounded retries and safe fallbacks handle malformed outputs.
+
+The runtime separates tested-agent, simulator, and evaluation contexts. Hidden policy traces remain available to benchmark authors for audit but never enter the visible transcript.
+
+\subsection{Active Diagnosis Agent Protocol}
+\label{sec:agent}
+
+\paragraph{Full-graph working map.}
+The tested agent maintains an assessment for every node:
+\begin{equation}
+    \hat{s}_{i,t} = (\hat{m}_{i,t}, c_{i,t}, n_{i,t}, R_{i,t}),
+\end{equation}
+where $\hat{m}_{i,t} \in \{\unknown,0,\ldots,5\}$ is assessed mastery, $c_{i,t}$ is confidence, $n_{i,t}$ is an optional note, and $R_{i,t}$ contains supporting visible turns.
+
+All nodes begin as \unknown. A non-unknown assessment should cite visible evidence; unsupported estimates may be submitted but are reported separately.
+
+The full map exposes uncertainty and gives the policy a domain-wide basis for comparing mastery, confidence, graph position, and evidence coverage.
+
+\paragraph{Semantic action interface.}
+The runtime exposes only benchmark-relevant operations:
+\begin{itemize}[leftmargin=1.5em]
+    \item read the authored episode graph or current working map;
+    \item update one node assessment with visible support;
+    \item ask one diagnostic question;
+    \item finalize the reconstructed map.
+\end{itemize}
+
+These actions make state updates and probe choices observable. They also prevent policies from bypassing the intended loop through generic access to hidden artifacts.
+
+\paragraph{Diagnostic loop.}
+A tested agent repeatedly:
+\begin{enumerate}[leftmargin=1.7em]
+    \item interprets the latest answer as evidence about visible concepts;
+    \item revises mastery, confidence, notes, and supporting turns;
+    \item selects a probe expected to reduce decision-relevant uncertainty;
+    \item asks one question or finalizes when the budget is exhausted.
+\end{enumerate}
+
+\knowact does not prescribe how information value is computed. Agents may use direct prompting, graph-aware coverage, Bayesian updates, planning, or learned policies under the same interface.
+
+\subsection{Evaluation Metrics}
+\label{sec:evaluation}
+
+\paragraph{Primary reconstruction metric.}
+Let the final predicted mastery for node $i$ be $\hat{m}_i$. For submitted levels $0$ through $5$, the node loss is squared ordinal distance:
+\begin{equation}
+    d(\hat{m}_i,m_i^{\star}) = (\hat{m}_i-m_i^{\star})^2.
+\end{equation}
+
+An \unknown prediction receives the fixed maximum penalty of $36$. The episode score is
+\begin{equation}
+    D_{\mathrm{mastery}} = \frac{1}{N}\sum_{i=1}^{N} d(\hat{m}_i,m_i^{\star}),
+\end{equation}
+where lower is better. The score is deterministic and requires no evaluator model.
+
+Ordinal distance rewards near misses and penalizes severe errors more strongly than exact match. Scores must still be interpreted against node-specific rubrics rather than as universal psychometric distances.
+
+\paragraph{Supporting metrics.}
+Secondary metrics characterize both endpoint quality and diagnostic behavior:
+\begin{itemize}[leftmargin=1.5em]
+    \item exact mastery match, signed error, and missing-prediction rate;
+    \item unsupported inference rate based on absent visible support;
+    \item graph coverage and reconstruction quality by turn count;
+    \item redundant or ungrounded question rate;
+    \item information gain per turn for agents that expose calibrated beliefs.
+\end{itemize}
+
+Misconceptions and free-text unknowns support qualitative analysis but are excluded from the initial automatic score, avoiding an additional subjective judge.

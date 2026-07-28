@@ -1,0 +1,31 @@
+\section{Benchmark Construction Details}
+\label{app:construction}
+
+\subsection{Graph-Authoring Workflow}
+
+The graph-authoring workflow has four reviewed stages:
+\begin{enumerate}[leftmargin=1.7em]
+    \item \textbf{Node extraction.} Segment-level calls propose diagnosable units with source locators and grounding notes.
+    \item \textbf{Reconciliation.} Candidate nodes are merged, split, and deduplicated while preserving provenance.
+    \item \textbf{Diagnostic enrichment.} Each node receives a definition, diagnostic goal, rubric, diagnostic signals, and simulator guidance.
+    \item \textbf{Edge proposal and review.} Relations are proposed from the complete node set and manually reviewed before promotion.
+\end{enumerate}
+
+The relation vocabulary includes \texttt{part\_of}, \texttt{prerequisite\_for}, \texttt{supports}, and \texttt{contrasts\_with}. Candidate confidence does not replace human review.
+
+\subsection{Knowledge-Map Review}
+
+Reviewers verify that each candidate map covers every node and that each state is supported by behaviorally realizable evidence.
+
+They also check consistency among mastery, misconceptions, unknowns, profile context, and graph structure. Promotion creates an immutable reviewed snapshot.
+
+\subsection{Manifest-Bound Runtime Contexts}
+
+The runtime maintains three contexts:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Tested-agent context:} public graph, interaction rules, visible transcript, and working map.
+    \item \textbf{Simulator context:} grounded hidden states, evidence, limited visible dialogue, and optional style context.
+    \item \textbf{Evaluation context:} hidden map, final reconstruction, and deterministic scoring configuration.
+\end{itemize}
+
+An episode manifest fixes the artifact versions and execution settings shared by these contexts. Debug traces and hidden policy outputs never enter the tested-agent context.

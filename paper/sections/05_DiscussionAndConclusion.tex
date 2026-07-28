@@ -1,0 +1,50 @@
+\section{Discussion and Conclusion}
+\label{sec:discussion}
+
+\subsection{What \knowact Measures}
+
+Low reconstruction error is not evidence of functional ToM when it can be obtained through leakage or a fixed prior. \knowact therefore pairs endpoint accuracy with an observable diagnostic process.
+
+The visibility boundary limits available evidence, questions consume a fixed budget, map updates cite visible turns, and non-adaptive agents provide controls. Together, these constraints distinguish:
+\begin{enumerate}[leftmargin=1.7em]
+    \item \emph{state inference}: interpreting what an answer implies;
+    \item \emph{state maintenance}: integrating evidence over time;
+    \item \emph{state-conditioned action}: using the current map to select a probe.
+\end{enumerate}
+
+The interaction is a form of active information acquisition over a structured latent state. Unlike pool-based active learning, actions are open-ended questions interpreted by a conversational simulator.
+
+Unlike conventional adaptive testing, the probe set need not be fixed or calibrated in advance. This flexibility motivates the benchmark while making grounding, evidence audit, and simulator validation essential.
+
+The benchmark is diagnostic rather than task-complete. It does not yet test whether a reconstructed map improves teaching, recommendation, or collaboration.
+
+\subsection{Limitations and Threats to Validity}
+
+\paragraph{Simulator fidelity.}
+A simulator can be consistent with a reviewed map without matching how people express partial knowledge. Human studies must test response similarity, diagnostic value, and transfer of agent rankings.
+
+\paragraph{Construction circularity.}
+Related model families may author artifacts, simulate users, and serve as tested agents. Correlated biases could make episodes easier or distort rankings.
+
+Source grounding, human review, model-family diversity, rule-based fixtures, and matched human validation reduce this risk but cannot eliminate it.
+
+\paragraph{Simplified knowledge state.}
+A static L0--L5 state cannot capture context dependence, procedural fluency, forgetting, confidence, or learning during interaction.
+
+The initial benchmark freezes the hidden state to make reconstruction identifiable. Dynamic learning and state transition are important extensions.
+
+\paragraph{Initial domain scope.}
+The first release focuses on statistical learning. Evaluation across domains is required to test transfer across graph topologies, source styles, and concept distributions.
+
+\paragraph{Operational claims.}
+Success demonstrates behavior compatible with structured user modeling under benchmark constraints. It does not establish human-like beliefs, consciousness, or a psychologically faithful ToM mechanism.
+
+\subsection{Conclusion and Outlook}
+
+We introduced \knowact, a benchmark for evaluating functional ToM through active knowledge-state diagnosis.
+
+A tested agent sees a reviewed domain graph but not the user-specific map. Under a fixed budget, it must ask diagnostic questions, maintain an evidence-backed working map, and reconstruct the hidden state.
+
+A visibility-separated simulator and deterministic scoring protocol make the process auditable. The design isolates active user-state acquisition from broader social or task success.
+
+The next step is empirical validation across adaptive and non-adaptive agents, simulator designs, matched human episodes, and additional knowledge domains.
