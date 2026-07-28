@@ -1,0 +1,365 @@
+\documentclass{article} % For LaTeX2e
+\usepackage{iclr2026_conference,times}
+
+% Optional math commands from https://github.com/goodfeli/dlbook_notation.
+\input{math_commands.tex}
+
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{xspace}
+\usepackage{microtype}
+\usepackage{enumitem}
+
+\title{KnowAct: Evaluating Functional Theory of Mind through\\Active Knowledge-State Diagnosis}
+
+% Authors must not appear in the submitted version. They should be hidden
+% as long as the \iclrfinalcopy macro remains commented out below.
+\author{Anonymous Authors}
+
+\newcommand{\knowact}{\textsc{KnowAct}\xspace}
+\newcommand{\KG}{\mathcal{G}}
+\newcommand{\Vnodes}{\mathcal{V}}
+\newcommand{\Eedges}{\mathcal{E}}
+\newcommand{\Mtrue}{\mathcal{M}^{\star}}
+\newcommand{\Mhat}{\widehat{\mathcal{M}}}
+\newcommand{\history}{\mathcal{H}}
+\newcommand{\unknown}{\textsc{unknown}}
+
+% \iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
+\begin{document}
+
+\maketitle
+
+\input{sections/00_Abstract}
+\input{sections/01_Introduction}
+\input{sections/02_RelatedWork}
+
+\section{Problem Formulation}
+\label{sec:formulation}
+
+\subsection{Domain Knowledge Graph}
+
+A benchmark domain is represented by an authored knowledge graph
+\begin{equation}
+    \KG = (\Vnodes, \Eedges),
+\end{equation}
+where each node $v_i \in \Vnodes$ is a diagnosable knowledge unit and each edge $e_{ij} \in \Eedges$ records a reviewed domain relation. The current relation vocabulary includes \texttt{part\_of}, \texttt{prerequisite\_for}, \texttt{supports}, and \texttt{contrasts\_with}. Each node contains a definition, source locators, a diagnostic goal, mastery-level rubrics, diagnostic signals, and simulator guidance. Edges organize the domain and may guide exploration, but they do not themselves encode user state.
+
+\subsection{Hidden User Knowledge Map}
+
+For a graph with $N = |\Vnodes|$ nodes, a hidden user knowledge map is
+\begin{equation}
+    \Mtrue = \{s_i^{\star}\}_{i=1}^{N},
+\end{equation}
+where each state $s_i^{\star}$ includes a discrete mastery level $m_i^{\star} \in \{0,1,\ldots,5\}$, evidence references, misconceptions, and unknowns. The six mastery levels are node-specific and are grounded in authored rubrics rather than interpreted as a universal psychometric scale. A map can additionally be paired with a profile context that affects conversational style, but profile information is not itself part of the primary mastery score.
+
+\subsection{Bounded Diagnostic Episode}
+
+An evaluation episode is specified by
+\begin{equation}
+    \mathcal{E}p = (\KG, \Mtrue, \mathcal{Z}, T, \rho, \sigma),
+\end{equation}
+where $\mathcal{Z}$ is simulator-only evidence, $T$ is the maximum number of interaction turns, $\rho$ is the interaction rule, and $\sigma$ is the scoring profile. The initial interaction rule permits one primary diagnostic question per turn. At turn $t$, the tested agent observes the public graph, the visible dialogue history $\history_{t-1}$, and its own working map $\Mhat_{t-1}$. It selects a diagnostic question
+\begin{equation}
+    q_t \sim \pi_{\theta}(\KG,\history_{t-1},\Mhat_{t-1}),
+\end{equation}
+receives a simulator answer $a_t$, and updates its estimate
+\begin{equation}
+    \Mhat_t = U_{\theta}(\Mhat_{t-1}, q_t, a_t).
+\end{equation}
+After at most $T$ turns, the agent submits a full-graph reconstruction $\Mhat_T$. The hidden map, evidence, simulator traces, and scoring internals are never visible to the tested agent.
+
+\paragraph{Functional ToM in \knowact.}
+We define functional ToM operationally as the ability to (i) infer a structured user state from interaction evidence, (ii) maintain and revise that state over time, and (iii) select subsequent actions using the maintained state. The benchmark does not require a particular internal cognitive architecture; it evaluates externally observable behavior under a controlled interface.
+
+\section{The \knowact Benchmark}
+\label{sec:benchmark}
+
+\begin{figure}[t]
+\centering
+\fbox{\begin{minipage}{0.94\linewidth}
+\centering
+\textbf{Authoritative source} $\rightarrow$ \textbf{Reviewed knowledge graph}\\
+$\downarrow$\\[-0.2em]
+\textbf{Reviewed hidden knowledge map + evidence}\\
+$\downarrow$\\[-0.2em]
+\textbf{Simulator} $\leftrightarrow$ \textbf{Tested diagnostic agent}\\
+$\downarrow$\\[-0.2em]
+\textbf{Final reconstructed map} $\rightarrow$ \textbf{Deterministic scoring}
+\end{minipage}}
+\caption{High-level \knowact pipeline. Benchmark authoring constructs reviewed hidden artifacts; the tested agent interacts only through the visible episode interface.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Source-Grounded Graph Authoring}
+
+The benchmark begins with an authoritative domain source. In the initial version, the domain is statistical learning and the selected source is \emph{An Introduction to Statistical Learning with Applications in Python} \citep{james2023islp}. Source material is parsed into ordered segments. A graph-authoring workflow then performs four stages:
+
+\begin{enumerate}[leftmargin=1.7em]
+    \item \textbf{Node extraction.} Segment-level model calls propose diagnosable knowledge units and attach source locators and grounding notes.
+    \item \textbf{Reconciliation.} Candidate nodes are merged, split, and deduplicated across segments while preserving provenance.
+    \item \textbf{Diagnostic enrichment.} Each node receives a definition, diagnostic goal, six-level rubric, diagnostic signals, and simulator behavior guidance.
+    \item \textbf{Edge proposal and review.} Candidate relations are proposed using the complete node set and then manually reviewed before promotion.
+\end{enumerate}
+
+The authoring model is therefore a proposal mechanism rather than the source of truth. Candidate artifacts are reviewed and promoted into immutable authored graph files. Requiring source locators reduces unconstrained ontology generation from model memory and supports later audit of node definitions and rubrics.
+
+\subsection{Knowledge-Map Authoring}
+
+A hidden map assigns one reviewed state to every node in the authored graph. Profile context, background, preferences, and learning goals can be used to generate a coherent candidate user, but the scored target remains the node-level knowledge map. Evidence records make each state behaviorally realizable: they may specify what the user can explain, where an explanation breaks down, which confusion is likely to appear, or what example the user can and cannot produce.
+
+The map-authoring process separates three artifacts:
+\begin{itemize}[leftmargin=1.5em]
+    \item the \emph{static state} used as ground truth for scoring;
+    \item simulator-only \emph{evidence} that supports natural answers;
+    \item optional \emph{profile context} that controls wording style but cannot override the state or add unsupported personal facts.
+\end{itemize}
+Candidate maps undergo human verification for internal consistency, plausibility, graph coverage, and evaluability before they are eligible for episodes.
+
+\subsection{Immutable Episode Manifests}
+
+An episode manifest binds the benchmark domain, graph version, hidden map identifier, maximum turns, interaction rule, scoring profile, and pinned model/provider configuration. This prevents accidental changes in graph, map, model, or scoring settings across repeated runs. The runtime maintains separate contexts:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Tested-agent context:} authored graph, interaction rules, visible transcript, and the agent's own working map.
+    \item \textbf{Simulator context:} the current grounded nodes, their hidden states and evidence, visible dialogue needed for continuity, and optional style context.
+    \item \textbf{Evaluation context:} hidden map, final reconstruction, and deterministic scoring configuration.
+\end{itemize}
+
+This separation is central to the benchmark: it makes the tested agent's information boundary explicit and reduces hidden-state leakage through shared prompts or debug traces.
+
+\section{User Simulator}
+\label{sec:simulator}
+
+The simulator must satisfy two competing requirements: answers should be natural enough to support open-ended diagnosis, yet constrained enough to remain faithful to the hidden map. \knowact implements the simulator as a staged information boundary rather than a single unconstrained role-playing prompt.
+
+\subsection{Question Grounding}
+
+Given the current question, visible graph, and limited visible dialogue, a grounder identifies the directly targeted node set $S_t \subseteq \Vnodes$. It also detects whether the turn contains multiple independent questions, requests hidden benchmark labels, or cannot be grounded. Crucially, grounding has no access to the hidden map or hidden evidence. This prevents the simulator from interpreting a vague question in whichever way would most conveniently reveal hidden state.
+
+A question may target multiple nodes only when it forms one integrated diagnostic probe, such as asking for a comparison between two methods. Multiple independent questions are rejected or clarified because they would violate the one-question-per-turn budget.
+
+\subsection{Hidden Context Selection and Answer Policy}
+
+Only after grounding does the context builder retrieve hidden state and evidence, and only for nodes in $S_t$. Neighboring nodes are not exposed merely because they are connected in the graph. An answer policy then maps the selected hidden information to a structured \emph{simulator answer blueprint}. The blueprint records a response mode, primary stance, answer shape, and de-identified content units such as:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item a claim the user can express;
+    \item a boundary of partial or fragile understanding;
+    \item a misconception or uncertainty that should surface;
+    \item evidence-supported cues that may be used;
+    \item claims that would overstate the user's ability.
+\end{itemize}
+
+The blueprint intentionally excludes mastery labels, node identifiers, evidence identifiers, map identifiers, user identifiers, and scoring fields. It is the sole content interface to natural-language generation.
+
+\subsection{Answer Generation and Leakage Control}
+
+The answer generator receives the blueprint, visible dialogue required for continuity, and an optional style hint. It never receives the raw hidden map. Generation is instructed to speak in the first person, avoid benchmark schema language, and preserve uncertainty or misconceptions rather than converting all states into binary know/do-not-know answers. Failed or malformed generations use bounded retries and safe non-leaking fallbacks.
+
+This design does not guarantee that an LLM simulator perfectly matches human behavior. It instead provides a traceable contract: grounding determines which state may be read, policy determines what content may be expressed, and generation controls only surface realization. Hidden policy traces remain available to benchmark authors for audit but are not part of the visible transcript.
+
+\section{Tested-Agent Protocol}
+\label{sec:agent}
+
+\subsection{Full-Graph Working Map}
+
+The tested agent maintains a working assessment for every graph node. Each node record contains:
+\begin{equation}
+    \hat{s}_{i,t} = (\hat{m}_{i,t}, c_{i,t}, n_{i,t}, R_{i,t}),
+\end{equation}
+where $\hat{m}_{i,t} \in \{\unknown,0,\ldots,5\}$ is assessed mastery, $c_{i,t}$ is diagnostic confidence, $n_{i,t}$ is an optional assessment note, and $R_{i,t}$ is the set of visible turn identifiers supporting the assessment. All nodes begin as \unknown. A non-unknown assessment should cite at least one visible observation; unsupported estimates can still be submitted but are reported separately.
+
+A full-graph map serves two purposes. First, it forces the agent to represent uncertainty explicitly instead of silently omitting unvisited concepts. Second, it supports action selection over the entire domain: the agent can compare assessed mastery, confidence, graph position, and evidence coverage when deciding where to probe next.
+
+\subsection{Semantic Action Interface}
+
+Rather than granting arbitrary state mutation, the runtime exposes a small set of semantic actions:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item read the authored episode graph;
+    \item read the current working map;
+    \item update one node assessment with visible support;
+    \item ask one diagnostic question;
+    \item finalize the reconstructed map.
+\end{itemize}
+
+The interface makes benchmark-relevant behavior observable. A run trace records which nodes were updated, which observations supported those updates, how questions changed over time, and when the agent finalized. It also prevents the evaluated policy from bypassing the intended loop through generic access to hidden artifacts or unrestricted storage.
+
+\subsection{Diagnostic Loop}
+
+A generic tested agent follows four recurring steps:
+
+\begin{enumerate}[leftmargin=1.7em]
+    \item \textbf{Interpret evidence:} map the latest answer to one or more visible graph concepts.
+    \item \textbf{Update beliefs:} revise mastery, confidence, notes, and supporting observations.
+    \item \textbf{Select a probe:} choose a node or relation whose answer is expected to reduce decision-relevant uncertainty.
+    \item \textbf{Ask or finalize:} generate one grounded diagnostic question or submit the final map when the budget is exhausted.
+\end{enumerate}
+
+\knowact does not prescribe how uncertainty or information value must be computed. A baseline may use a single LLM prompt, while more structured agents may use entropy estimates, graph-aware coverage, Bayesian updates, planning, or learned policies. The shared working-map and action protocol makes these designs comparable.
+
+\section{Evaluation}
+\label{sec:evaluation}
+
+\subsection{Primary Reconstruction Metric}
+
+The primary metric is episode mastery distance. Let the final predicted mastery for node $i$ be $\hat{m}_i$. For submitted levels $0$ through $5$, the node loss is squared ordinal distance:
+\begin{equation}
+    d(\hat{m}_i,m_i^{\star}) = (\hat{m}_i-m_i^{\star})^2.
+\end{equation}
+An \unknown prediction receives the maximum fixed penalty of $36$, corresponding to a distance larger than any error between two valid levels. The episode score is
+\begin{equation}
+    D_{\mathrm{mastery}} = \frac{1}{N}\sum_{i=1}^{N} d(\hat{m}_i,m_i^{\star}),
+\end{equation}
+where lower is better. The score is deterministic and requires no evaluator model.
+
+The ordinal loss rewards near misses and penalizes severe over- or under-estimation more strongly than exact-match accuracy alone. It should nevertheless be interpreted relative to each node's authored rubric; the numeric levels are a benchmark encoding, not an assumption that all conceptual differences are psychometrically equal.
+
+\subsection{Supporting Metrics}
+
+The benchmark can report the following secondary metrics without changing the primary objective:
+\begin{itemize}[leftmargin=1.5em]
+    \item exact mastery match rate and per-node signed error;
+    \item missing prediction rate;
+    \item unsupported inference rate, based on absent visible evidence references;
+    \item graph and rubric coverage under a fixed turn budget;
+    \item reconstruction quality as a function of turn count;
+    \item redundant or ungrounded question rate;
+    \item information gain per turn for agents that expose calibrated beliefs.
+\end{itemize}
+Misconception and free-text unknown fields are retained for qualitative analysis but are not included in the initial automatic score, avoiding an additional subjective judge.
+
+\subsection{Baseline Families}
+
+The initial benchmark supports three baseline families:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Fixed-question agent:} follows a predefined diagnostic order and never adapts question choice to answers.
+    \item \textbf{Random-question agent:} samples valid diagnostic targets or questions under episode constraints.
+    \item \textbf{Simple LLM agent:} observes the graph, working map, and visible dialogue, then directly chooses the next question and updates the map through the semantic interface.
+\end{itemize}
+These baselines separate the value of interaction from the value of adaptive user modeling. Future methods can add explicit uncertainty estimation, graph-aware planning, information-gain objectives, specialized user-state modules, or multi-agent decomposition while using the same simulator and scoring protocol.
+
+\section{Experiments}
+\label{sec:experiments}
+% Intentionally left blank in Draft v1.
+% Planned subsections:
+% - Research questions
+% - Benchmark instances and human review statistics
+% - Models and agent baselines
+% - Main reconstruction results
+% - Turn-efficiency analysis
+% - Ablations of working-map structure, graph information, and simulator boundaries
+% - Simulator fidelity study with human participants
+% - Error analysis
+
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{What the Benchmark Measures}
+
+A low reconstruction error alone is not sufficient evidence of functional ToM if it is achieved through leakage or a fixed prior. \knowact therefore couples endpoint accuracy with process observability. The tested agent must operate under a strict visibility boundary, questions consume a finite budget, map updates cite visible turns, and fixed or random policies provide non-adaptive controls. Together, these constraints aim to distinguish three abilities that are often conflated:
+
+\begin{enumerate}[leftmargin=1.7em]
+    \item \emph{state inference}: interpreting what an answer implies about the user;
+    \item \emph{state maintenance}: integrating evidence into a coherent map over time;
+    \item \emph{state-conditioned action}: using the current map to select the next probe.
+\end{enumerate}
+
+The benchmark is deliberately diagnostic rather than task-complete. It does not yet test whether the recovered map improves teaching, recommendation, or collaborative problem solving. Those downstream tasks can be layered on top once the state-reconstruction loop is validated.
+
+\subsection{Relation to Active Learning and Assessment}
+
+The interaction can be viewed as active information acquisition over a structured latent state. Unlike pool-based active learning, however, the action is a natural-language question whose interpretation and answer are mediated by a conversational simulator. Unlike computerized adaptive testing, the item set is not necessarily fixed and calibrated in advance; agents may generate integrated conceptual probes. This flexibility motivates the benchmark but also increases variance, making grounding, evidence audit, and simulator validation important.
+
+\subsection{Limitations}
+
+\paragraph{Simulator fidelity.}
+A simulator conditioned on a reviewed map can be internally consistent without matching how real users express partial knowledge. Human studies are required to measure response similarity, diagnostic usefulness, and whether agent rankings transfer from simulated to human interaction.
+
+\paragraph{Construction circularity.}
+If related model families author the graph, generate the hidden map, simulate the user, and act as the tested agent, correlated biases may make the benchmark easier or distort rankings. Source grounding, human promotion, model-family diversity, rule-based fixtures, and human validation can reduce but not eliminate this risk.
+
+\paragraph{Simplified knowledge state.}
+A static L0--L5 state per node cannot capture all aspects of human knowledge, including context-dependent performance, confidence, procedural fluency, forgetting, and learning during interaction. The initial benchmark freezes the hidden state during an episode to make reconstruction identifiable. Dynamic learning is an important extension.
+
+\paragraph{Single-domain initial scope.}
+The first release focuses on statistical learning. Cross-domain evaluation is needed to determine whether agent policies transfer beyond one graph topology, source style, and concept distribution.
+
+\paragraph{Operational rather than cognitive claims.}
+Success on \knowact demonstrates behavior compatible with structured user modeling under benchmark constraints. It does not establish that a model possesses human-like beliefs, consciousness, or a psychologically faithful ToM mechanism.
+
+\section{Ethical Considerations}
+
+User modeling can improve accessibility, tutoring, and collaborative assistance, but it can also enable manipulation, surveillance, or unjustified inference about individuals. \knowact uses synthetic or explicitly reviewed benchmark profiles and should not be interpreted as permission to infer sensitive attributes from real users without consent. Systems derived from this work should minimize retained personal data, expose uncertainty, allow users to inspect or correct inferred states, and avoid using knowledge-state estimates for high-stakes decisions without appropriate human oversight. Benchmark releases should also document the provenance and licenses of source material and avoid embedding identifiable information in profile contexts or evidence records.
+
+\section{Conclusion}
+
+We presented \knowact, a benchmark framework for evaluating functional Theory of Mind through active knowledge-state diagnosis. The framework gives a tested agent a reviewed domain graph but hides a user-specific knowledge map. Under a bounded interaction budget, the agent must ask diagnostic questions, update an evidence-backed working map, and reconstruct the hidden state. A visibility-separated simulator and deterministic scoring protocol make the process auditable and reproducible. By isolating active user-state acquisition from broader social or task success, \knowact provides a controlled foundation for comparing agent architectures that infer, maintain, and act on models of users. The next step is empirical validation across agent baselines, simulator designs, human participants, and additional knowledge domains.
+
+\bibliography{references}
+\bibliographystyle{iclr2026_conference}
+
+\appendix
+
+\section{Implementation-Oriented Artifact Schemas}
+\label{app:schemas}
+
+The following abbreviated schemas summarize the current benchmark contracts. Exact field names may evolve during implementation, but the separation between public graph, hidden map, visible observations, and final reconstruction should remain stable.
+
+\subsection{Knowledge Node}
+\begin{verbatim}
+{
+  "id": "active_learning",
+  "name": "Active Learning",
+  "type": "concept",
+  "definition": "...",
+  "source_locators": [...],
+  "diagnostic_goal": "...",
+  "levels": {"L0": "...", ..., "L5": "..."},
+  "diagnostic_signals": [...],
+  "simulator_behavior": "..."
+}
+\end{verbatim}
+
+\subsection{Hidden User State}
+\begin{verbatim}
+{
+  "node_id": "active_learning",
+  "mastery_level": "L2",
+  "evidence_refs": ["ev_104"],
+  "misconceptions": [...],
+  "unknowns": [...]
+}
+\end{verbatim}
+
+\subsection{Agent Working Assessment}
+\begin{verbatim}
+{
+  "node_id": "active_learning",
+  "assessed_mastery_level": "L2",
+  "diagnostic_confidence": "medium",
+  "assessment_note": "Understands the motivation but not
+                      query-strategy trade-offs.",
+  "supporting_turn_ids": ["turn_03"]
+}
+\end{verbatim}
+
+\section{Planned Empirical Questions}
+\label{app:planned}
+
+The empirical study should be designed around questions that directly test the benchmark claim rather than only comparing foundation-model capability:
+
+\begin{enumerate}[leftmargin=1.7em]
+    \item Do adaptive agents reconstruct hidden maps more accurately than fixed and random diagnostic policies under equal turn budgets?
+    \item Does an explicit working map improve reconstruction and question efficiency relative to transcript-only prompting?
+    \item Do graph relations improve target selection, or do they induce unsupported propagation between neighboring nodes?
+    \item How sensitive are rankings to simulator model, answer-policy implementation, question grounding, and profile style?
+    \item How well do simulator answers and agent rankings agree with matched human-user episodes?
+\end{enumerate}
+
+\end{document}

@@ -1,0 +1,44 @@
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Machine Theory-of-Mind Evaluation}
+
+Early and contemporary machine-ToM benchmarks commonly frame mental-state reasoning as question answering over stories or conversations. ToMi revisited false-belief evaluation and showed that dataset regularities can inflate apparent ToM performance \citep{le2019revisiting}. BigToM introduced causally structured social scenarios and diverse questions about beliefs, desires, and actions \citep{gandhi2023bigtom}. FANToM stresses information-asymmetric multi-party conversations and evaluates consistency across multiple question types \citep{kim2023fantom}. Hi-ToM extends evaluation to higher-order belief reasoning \citep{wu2023hitom}, while OpenToM broadens narratives, personality information, and psychological mental-state questions \citep{xu2024opentom}. ToMBench systematizes a wide range of social-cognitive abilities with controlled multiple-choice evaluation \citep{chen2024tombench}.
+
+These benchmarks are essential for evaluating whether models can infer latent mental states from supplied evidence. However, they generally do not evaluate the acquisition policy itself: the model receives a fixed context instead of choosing which evidence to request. SimpleToM further exposes an inference--application gap, showing that models that answer explicit mental-state questions correctly may still fail to predict or judge behavior using the inferred state \citep{gu2024simpletom}. \knowact builds on this observation but shifts the application target from behavior prediction to sequential diagnostic action. The agent's user model matters because it determines which question is asked next and which parts of the hidden knowledge map can be recovered within a turn budget.
+
+\subsection{Interactive Social Agents and Applied ToM}
+
+SOTOPIA evaluates language agents in open-ended social scenarios involving cooperation, competition, negotiation, and relationship management \citep{zhou2024sotopia}. AgentSense expands scenario diversity and evaluates social goal completion and implicit reasoning in interactive settings \citep{mou2025agentsense}. Applied-ToM methods explicitly insert mental-state reasoning into an agent loop. ToMAgent generates mental-state hypotheses between dialogue turns and learns representations useful for long-horizon social goals \citep{hwang2026infusing}. ToMELP evaluates an infer--apply loop in route-controlled persuasion \citep{wang2026tomelp}. ToM-SWE models user goals, preferences, and constraints to improve software-engineering agents under ambiguous and stateful instructions \citep{zhou2026tomswe}.
+
+This line of work establishes that explicit user modeling can improve interaction. Its evaluation target, however, is usually an external outcome such as social goal completion, persuasive effectiveness, or software task success. Such outcomes intentionally combine many capabilities, including planning, generation quality, domain competence, and strategic communication. \knowact instead isolates the user-modeling loop: the hidden state has an explicit structure, the agent actively probes it, and the final model can be compared node-by-node against ground truth. The two paradigms are complementary. Applied-agent benchmarks ask whether ToM improves task behavior; \knowact asks whether the agent can construct the user model that such behavior would depend on.
+
+\subsection{Personalization, User Profiling, and Knowledge Tracing}
+
+Personalization benchmarks evaluate whether language models use user histories or profiles to produce aligned outputs. LaMP provides diverse personalized classification and generation tasks grounded in user-specific records \citep{salemi2024lamp}. PERSONAMEM evaluates dynamic profiling over long multi-session histories and whether models apply the inferred profile to later responses \citep{jiang2025personamem}. These benchmarks focus primarily on preferences, traits, and evolving personal context observed passively from prior interactions. In contrast, \knowact gives the tested agent control over evidence acquisition and focuses on a domain-specific epistemic state.
+
+Educational modeling offers a second close connection. Bayesian Knowledge Tracing models latent learner mastery from sequences of item responses \citep{corbett1994knowledgetracing}; neural approaches such as Deep Knowledge Tracing and Attentive Knowledge Tracing improve predictive flexibility over long response histories \citep{piech2015dkt,ghosh2020akt}. LongTutor evaluates long-term evidence acquisition, knowledge diagnosis, and adaptive teaching from expert-annotated learning logs \citep{li2026longtutor}. These methods infer learner state from an existing sequence or curriculum. \knowact instead treats question selection as part of the tested capability: agents ask open-ended natural-language questions, gather qualitative evidence, and reconstruct a full graph state under a shared episode protocol. Thus, \knowact is closer to active diagnosis than conventional next-response prediction.
+
+\subsection{LLM-Based User Simulation}
+
+User simulators make interactive evaluation scalable and reproducible, but they can introduce inconsistency, leakage, and simulator-specific artifacts. DuetSim uses separate generation and verification models to improve task-oriented user simulation \citep{luo2024duetsim}. SimulatorArena directly studies whether LLM simulators are reliable proxies for humans and shows that profile conditioning can improve alignment, while also underscoring the need for explicit simulator validation \citep{dou2025simulatorarena}. More broadly, simulator design research emphasizes that a useful simulator must model task-relevant user behavior rather than merely generate fluent turns \citep{shi2019usersimulators}.
+
+\knowact adopts an LLM-based simulator but narrows and structures its authority. The simulator does not freely invent a user. It is conditioned on a reviewed hidden map and grounded evidence, and hidden information is transformed into a de-identified answer blueprint before natural-language generation. Primary scoring compares the tested agent's final structured map against the hidden map and does not rely on a simulator or evaluator model to judge success. Human validation of simulator fidelity remains necessary and is treated as an explicit limitation and planned evaluation component.
+
+\begin{table}[t]
+\caption{Positioning of \knowact relative to adjacent evaluation paradigms. ``Active probes'' means the tested model chooses what evidence to request.}
+\label{tab:positioning}
+\centering
+\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{1.35in}cccc}
+\toprule
+\textbf{Paradigm} & \textbf{Interactive} & \textbf{Explicit latent user state} & \textbf{Active probes} & \textbf{Direct state score} \\
+\midrule
+Narrative / conversational ToM & Limited & Partial & No & Usually QA \\
+Social-agent arenas & Yes & Usually no & Yes & No \\
+Personalization from histories & Usually no & Profile / preference & No & Sometimes \\
+Knowledge tracing & Sequential & Mastery & Usually no & Prediction-based \\
+\textbf{\knowact} & \textbf{Yes} & \textbf{Knowledge map} & \textbf{Yes} & \textbf{Yes} \\
+\bottomrule
+\end{tabularx}
+\end{table}

@@ -1,0 +1,26 @@
+\section{Introduction}
+
+Language-model agents are moving from single-turn question answering toward long-horizon collaboration. In such settings, the external task state is only part of the problem. An effective agent must also reason about the user: which concepts are already understood, which distinctions are fragile, which misconceptions are present, and what interaction would be most informative or helpful next. This requirement is closely related to Theory of Mind (ToM), broadly understood as reasoning about the mental states of others.
+
+Most machine-ToM evaluations, however, are endpoint prediction tasks. A model reads a narrative or dialogue and answers a question about a character's belief, intention, emotion, or likely behavior \citep{le2019revisiting,gandhi2023bigtom,kim2023fantom,xu2024opentom,chen2024tombench}. These benchmarks have substantially improved the rigor and breadth of ToM evaluation, but they usually hold the evidence-gathering process fixed: the model cannot choose what to ask, decide which uncertainty to resolve, or update an explicit user model over multiple turns. Moreover, recent results suggest a gap between explicitly inferring a mental state and applying that inference to downstream behavior or judgment \citep{gu2024simpletom}.
+
+Interactive social-agent environments and applied-ToM methods begin to address this gap. They evaluate goal-oriented dialogue, strategic behavior, persuasion, and user alignment \citep{zhou2024sotopia,mou2025agentsense,hwang2026infusing,wang2026tomelp,zhou2026tomswe}. Yet these settings typically optimize holistic task outcomes or social goals rather than the accurate recovery of a controlled latent user state. Consequently, a successful interaction may not reveal whether the agent formed an accurate user model, used a shortcut, or merely produced a generally effective response.
+
+We study a narrower but measurable question:
+
+\begin{quote}
+\emph{Can an agent actively infer a user's hidden knowledge state through limited natural-language interaction, and use that evolving estimate to choose subsequent diagnostic actions?}
+\end{quote}
+
+We call this capability \emph{functional ToM for knowledge-grounded interaction}. The term \emph{functional} emphasizes that user modeling is evaluated as part of a closed loop: the agent must infer, update, and act, rather than only verbalize a mental-state description. The term \emph{knowledge-grounded} restricts the hidden state to a reviewed domain representation with diagnosable concepts, making the target explicit enough for controlled evaluation.
+
+To operationalize this question, we introduce \knowact. Each episode binds four artifacts: (1) an authored domain knowledge graph, (2) a hidden user-specific knowledge map over that graph, (3) grounded evidence used only by the simulator, and (4) an immutable episode configuration including a turn budget and scoring profile. The tested agent sees the public graph and visible dialogue, but not the hidden map or simulator evidence. At each turn it asks one diagnostic question, observes the simulated user's answer, updates a full-graph working map, and selects the next question. At the end of the episode, it submits one mastery prediction for every graph node. This design converts functional user modeling into a partially observed sequential diagnosis problem with a deterministic endpoint target.
+
+Our contributions are:
+\begin{itemize}[leftmargin=1.5em]
+    \item We formulate \emph{active knowledge-state diagnosis} as a controlled evaluation setting for functional ToM, separating mental-state reconstruction from downstream social or task success.
+    \item We introduce a semi-synthetic benchmark construction pipeline that combines source-grounded knowledge graphs, reviewed hidden user maps, evidence-backed simulation, and strict visibility boundaries.
+    \item We define an agent protocol with an explicit full-graph working map and bounded semantic actions, together with deterministic, evidence-auditable reconstruction metrics that avoid an LLM judge in the primary score.
+\end{itemize}
+
+\knowact does not claim to establish human-like ToM in language models. It operationalizes one practically important behavior: whether an agent can build and use a structured model of a user's knowledge under controlled interaction.
