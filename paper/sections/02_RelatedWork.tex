@@ -19,6 +19,28 @@ Personalization benchmarks evaluate whether language models use user histories o
 
 Educational modeling offers a second close connection. Bayesian Knowledge Tracing models latent learner mastery from sequences of item responses \citep{corbett1994knowledgetracing}; neural approaches such as Deep Knowledge Tracing and Attentive Knowledge Tracing improve predictive flexibility over long response histories \citep{piech2015dkt,ghosh2020akt}. LongTutor evaluates long-term evidence acquisition, knowledge diagnosis, and adaptive teaching from expert-annotated learning logs \citep{li2026longtutor}. These methods infer learner state from an existing sequence or curriculum. \knowact instead treats question selection as part of the tested capability: agents ask open-ended natural-language questions, gather qualitative evidence, and reconstruct a full graph state under a shared episode protocol. Thus, \knowact is closer to active diagnosis than conventional next-response prediction.
 
+\subsection{LLM-Assisted Knowledge-Graph Construction}
+
+Recent LLM-based methods decompose open-world construction into extraction, schema induction, and canonicalization.
+
+EDC follows this pattern explicitly. KGGen separates entity and relation extraction and iteratively clusters both \citep{zhang2024edc,mo2025kggen}.
+
+Reliability-oriented systems add a distinct checking stage. PiVe iteratively verifies and repairs omitted triples, while SAC-KG uses generator, verifier, and pruner roles \citep{han2024pive,chen2024sackg}.
+
+GraphJudge studies triple filtering. GraphRefine instead chooses typed repair actions \citep{huang2025graphjudge,kim2026graphrefine}.
+
+These results motivate staged generation and independent verification, but do not establish that more agents are intrinsically better.
+
+They also target factual entity--relation triples, whereas \knowact requires pedagogically coherent, diagnosable concepts and mastery rubrics.
+
+We therefore treat graph construction as a hybrid of ontology engineering and assessment design. Competency questions constrain graph scope \citep{gruninger1995competency}.
+
+Evidence-centered design separates domain claims from the evidence and tasks needed to diagnose them \citep{mislevy2003ecd}.
+
+Educational-KG work shows the value of expert review for prerequisite relations \citep{aytekin2024ace}.
+
+In \knowact, LLMs propose traceable candidates. Source checks, graph constraints, and blinded domain-expert adjudication determine promotion.
+
 \subsection{LLM-Based User Simulation}
 
 User simulators make interactive evaluation scalable and reproducible, but they can introduce inconsistency, leakage, and simulator-specific artifacts. DuetSim uses separate generation and verification models to improve task-oriented user simulation \citep{luo2024duetsim}. SimulatorArena directly studies whether LLM simulators are reliable proxies for humans and shows that profile conditioning can improve alignment, while also underscoring the need for explicit simulator validation \citep{dou2025simulatorarena}. More broadly, simulator design research emphasizes that a useful simulator must model task-relevant user behavior rather than merely generate fluent turns \citep{shi2019usersimulators}.

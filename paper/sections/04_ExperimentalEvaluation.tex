@@ -5,21 +5,24 @@ The empirical evaluation is organized around the benchmark's central claim: adap
 
 \subsection{Research Questions}
 
-We ask four questions:
+We ask five questions:
 \begin{enumerate}[leftmargin=1.7em]
     \item Do adaptive agents outperform fixed and random diagnostic policies under equal turn budgets?
     \item Do explicit working maps and graph relations improve reconstruction and question efficiency?
     \item Are agent rankings robust to simulator model, answer policy, grounding, and profile style?
     \item Do simulator answers and agent rankings agree with matched human-user episodes?
+    \item Does verified graph authoring improve intrinsic graph quality and reduce expert-review effort relative to simpler construction workflows?
 \end{enumerate}
 
-These questions separate endpoint reconstruction, state-conditioned action, simulator dependence, and transfer to human interaction.
+These questions separate construction validity, endpoint reconstruction, state-conditioned action, simulator dependence, and transfer to human interaction.
 
 \subsection{Benchmark Instances and Experimental Setup}
 
 The initial study uses reviewed statistical-learning graphs grounded in the ISLP source, reviewed hidden maps, and immutable episode manifests.
 
 Each reported run must identify the graph and map versions, turn budget, interaction rule, scoring profile, simulator configuration, tested-agent model, and provider settings.
+
+Reported graph versions must link to complete source, extraction, verification, repair, and human-review traces. Graphs without this chain are development artifacts and are excluded from benchmark claims.
 
 All compared agents receive identical public graphs and episode constraints. Hidden maps, simulator evidence, policy traces, and scoring internals remain outside the tested-agent context.
 
@@ -36,6 +39,34 @@ The initial evaluation compares three baseline families:
 \end{itemize}
 
 These controls distinguish the value of interaction from the value of adaptive user modeling. Structured agents can add uncertainty estimates, graph-aware planning, or explicit information-gain objectives.
+
+\subsection{Knowledge-Graph Construction Validation}
+
+The construction study uses a textbook-specific reference graph created independently by two domain experts and adjudicated by a third.
+
+Experts annotate source spans before seeing system candidates, avoiding candidate-induced recall inflation.
+
+Node matching distinguishes equivalent, broader, narrower, related, and unmatched concepts. Only equivalent nodes count as true positives.
+
+We report node precision, recall, and F1, duplication, unsupported-node rate, granularity errors, and source coverage.
+
+Edges require aligned endpoints, relation type, and direction. We report end-to-end and oracle-node edge F1 by relation type.
+
+We also report self-loops, cycles, relation conflicts, and evidence support. We do not credit unstated transitive closure.
+
+Rubrics are evaluated for fidelity, diagnostic relevance, ordinal monotonicity, adjacent-level distinguishability, observable signals, and plausible misconceptions.
+
+Agreement is reported rather than replacing expert judgments with an LLM judge.
+
+Baselines include human-only authoring, one-shot LLM generation, segment extraction with deterministic deduplication, and a staged LLM workflow without independent verification. All model comparisons are budget-matched.
+
+Ablations remove overlap, evidence spans, canonicalization, rubric validation, edge verification, abstention, and bounded repair.
+
+We also inject timeouts, malformed outputs, invalid locators, unsupported claims, ambiguous merges, dangling edges, and context overflow.
+
+We report schema validity, grounding precision and recall, calibration, silent corruption, recovery, latency, tokens, expert editing time, and acceptance without edits.
+
+Chapter-stratified paired bootstrap intervals account for clustered items.
 
 \subsection{Main Reconstruction Results}
 

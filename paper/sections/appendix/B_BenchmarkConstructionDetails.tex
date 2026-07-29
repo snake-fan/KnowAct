@@ -3,15 +3,60 @@
 
 \subsection{Graph-Authoring Workflow}
 
-The graph-authoring workflow has four reviewed stages:
+The graph-authoring workflow is evidence-first and fail-closed:
 \begin{enumerate}[leftmargin=1.7em]
-    \item \textbf{Node extraction.} Segment-level calls propose diagnosable units with source locators and grounding notes.
-    \item \textbf{Reconciliation.} Candidate nodes are merged, split, and deduplicated while preserving provenance.
-    \item \textbf{Diagnostic enrichment.} Each node receives a definition, diagnostic goal, rubric, diagnostic signals, and simulator guidance.
-    \item \textbf{Edge proposal and review.} Relations are proposed from the complete node set and manually reviewed before promotion.
+    \item \textbf{Specification.} Authors freeze source scope, competency questions, node eligibility, granularity rules, relation semantics, and negative examples.
+    \item \textbf{Source integrity.} The pipeline records file hashes, parser versions, page coverage, heading structure, and OCR warnings before extraction.
+    \item \textbf{Local extraction.} Overlapping, structure-aware segments produce high-recall concept candidates with exact evidence spans and aliases.
+    \item \textbf{Grounding verification.} A fresh verifier labels support, eligibility, diagnostic value, and granularity while viewing the original span.
+    \item \textbf{Canonicalization.} Retrieval proposes likely duplicates; a separate adjudicator applies explicit keep, merge, split, and alias decisions.
+    \item \textbf{Diagnostic enrichment.} Nodes receive goals, mastery rubrics, signals, misconceptions, and simulator guidance under evidence-centered-design constraints.
+    \item \textbf{Relation authoring.} Local retrieval proposes candidate pairs, followed by type-specific classification and evidence-aware verification.
+    \item \textbf{Graph audit.} Deterministic checks detect invalid endpoints, self-loops, duplicates, relation conflicts, source mismatches, and structural cycles.
+    \item \textbf{Expert promotion.} Independent reviewers inspect risk-ranked candidates and an adjudicator resolves disagreements before versioned promotion.
 \end{enumerate}
 
-The relation vocabulary includes \texttt{part\_of}, \texttt{prerequisite\_for}, \texttt{supports}, and \texttt{contrasts\_with}. Candidate confidence does not replace human review.
+The relation vocabulary includes \texttt{part\_of}, \texttt{prerequisite\_for}, \texttt{supports}, and \texttt{contrasts\_with}. Each label has tests, examples, direction rules, and allowed evidence.
+
+\texttt{prerequisite\_for} denotes a direct dependency: lacking the source concept should normally block stable performance at higher rubric levels of the target. Transitive implications are not emitted as additional edges.
+
+\texttt{part\_of} denotes structural composition. \texttt{supports} denotes a useful but nonessential explanatory or transfer relation. \texttt{contrasts\_with} is stored in a canonical symmetric form.
+
+Every claim is labeled \texttt{source\_explicit}, \texttt{source\_entailed}, or \texttt{expert\_pedagogical\_extension}.
+
+Rubrics and instructional prerequisite judgments are not presented as textbook facts when they are expert operationalizations.
+
+\subsection{Agent Roles and Decision Independence}
+
+A deterministic orchestrator invokes bounded roles: local extractor, grounding verifier, canonicalizer, rubric author, rubric validator, relation proposer, relation verifier, and graph auditor.
+
+Roles are logical separation, not a claim that more agents improve quality. Independent prompts and fresh contexts prevent a proposer from validating its own rationale; a different model can be used when resources permit.
+
+Embedding or lexical retrieval is used only to obtain high-recall merge and edge candidates. It does not make final semantic decisions. Global operations are hierarchical and batched to avoid a single context-window bottleneck.
+
+\subsection{Bounded Error Recovery}
+
+Provider timeouts and rate limits use idempotent requests, exponential backoff with jitter, and stage-level checkpoints. A resumed run never silently replaces a completed artifact.
+
+Malformed output receives deterministic safe parsing followed by exact schema feedback for at most two retries. Exhausted retries fail the batch and preserve the invalid output for audit.
+
+Unsupported or semantically inconsistent items return to the original source span. The repair vocabulary is \textsc{keep}, \textsc{fix}, \textsc{rewrite}, \textsc{delete}, or \textsc{quarantine}; a verifier cannot approve its own rewrite.
+
+A second coverage pass searches headings and salient terms for omissions. Ambiguous merges, edge direction disagreements, and pedagogical extensions are quarantined instead of guessed.
+
+Cycle detection opens a review task around the weakest-supported edge and relevant node granularity. It does not automatically delete an edge, since a cycle can expose either a relation error or a modeling error.
+
+All retries, diffs, confidence values, source versions, prompt hashes, model settings, and human decisions remain linked to the final artifact.
+
+\subsection{Expert Review Protocol}
+
+Two domain experts first annotate and review independently in randomized order. A third expert adjudicates disagreements; an optional knowledge-engineering reviewer audits schema and relation consistency.
+
+Reviewers are recruited from instructors, experienced teaching assistants, and researchers in the target subject. Teaching history and a held-out calibration task establish eligibility.
+
+Review captures item-level accept, edit, reject, split, merge, and abstain decisions with rationales. We record qualifications, review time, and agreement for nodes, relations, rubrics, and provenance labels.
+
+Candidate confidence prioritizes review but never replaces it. Promotion requires complete provenance, zero unresolved structural errors, and explicit reviewer confirmation.
 
 \subsection{Knowledge-Map Review}
 

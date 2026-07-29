@@ -67,9 +67,15 @@ $\downarrow$\\[-0.2em]
 \paragraph{Source-grounded graph authoring.}
 The initial domain is statistical learning, grounded in \emph{An Introduction to Statistical Learning with Applications in Python} \citep{james2023islp}.
 
-Parsed source segments support node extraction, cross-segment reconciliation, diagnostic enrichment, and edge proposal. Models propose artifacts, while human review determines which versions are promoted.
+Before extraction, authors freeze the source scope, node eligibility rules, relation definitions, and competency questions. A node must be source-grounded, conceptually stable, and diagnosable through a small number of targeted questions.
 
-Source locators preserve provenance and enable audits of definitions and rubrics. Promoted graph snapshots are immutable, preventing later authoring changes from silently altering an episode.
+The workflow then performs local extraction, evidence verification, global canonicalization, diagnostic enrichment, relation proposal, and graph-level auditing.
+
+Separate proposer and verifier contexts reduce self-approval. Uncertain items are quarantined for review rather than silently discarded.
+
+Definitions and relations retain exact source evidence. Diagnostic rubrics are marked as expert pedagogical extensions because they operationalize assessment and need not be stated verbatim by the source.
+
+Human adjudication determines which candidates are promoted. Source checksums, prompt and model configurations, item-level decisions, and immutable graph snapshots make the construction process reproducible and auditable.
 
 \paragraph{Knowledge-map authoring.}
 A hidden map assigns a reviewed state to every graph node. Evidence records specify what the user can explain, where an explanation fails, and which misconceptions or uncertainties may surface.

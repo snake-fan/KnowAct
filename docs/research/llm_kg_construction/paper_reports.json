@@ -1,0 +1,240 @@
+{
+  "field": "Reliable LLM-assisted diagnostic knowledge graph authoring",
+  "updated": "2026-07-29",
+  "reports": [
+    {
+      "id": "P001",
+      "title": "Extract, Define, Canonicalize: An LLM-based Framework for Knowledge Graph Construction",
+      "authors": "Bowen Zhang; Harold Soh",
+      "year": 2024,
+      "venue": "EMNLP",
+      "phase": "Extraction / schema / fusion",
+      "url": "https://aclanthology.org/2024.emnlp-main.548/",
+      "sections": {
+        "problem": "Large or unavailable schemas make direct schema-conditioned extraction difficult.",
+        "gap": "Prior prompting approaches do not scale cleanly to large schemas.",
+        "coreIdea": "Extract openly, define relation semantics, then canonicalize to a schema.",
+        "method": "Three phases plus retrieval of schema elements relevant to the current text.",
+        "evidence": "Evaluation on three KGC benchmarks reports high-quality triples with larger schemas.",
+        "limitation": "Targets factual triples rather than diagnostic educational constructs.",
+        "inspiration": "Perform local concept discovery before explicit global canonicalization."
+      }
+    },
+    {
+      "id": "P002",
+      "title": "SPIRES: Structured Prompt Interrogation and Recursive Extraction of Semantics",
+      "authors": "J. Harry Caufield; Harshad Hegde; Vincent Emonet; Nomi L. Harris; Marcin P. Joachimiak; Nicolas Matentzoglu; HyeongSik Kim; Sierra A. T. Moxon; Justin T. Reese; Melissa A. Haendel; Peter N. Robinson; Christopher J. Mungall",
+      "year": 2024,
+      "venue": "Bioinformatics",
+      "phase": "Schema / extraction",
+      "url": "https://doi.org/10.1093/bioinformatics/btae104",
+      "sections": {
+        "problem": "Free-form output is difficult to validate and align with ontologies.",
+        "gap": "Prompt-only extraction lacks typed domain contracts.",
+        "coreIdea": "Use LinkML schemas to drive recursive extraction and ontology grounding.",
+        "method": "Schema-guided structured prompting followed by term grounding.",
+        "evidence": "Demonstrates reusable schema-conformant biomedical extraction workflows.",
+        "limitation": "Schema compliance does not establish pedagogical or source validity.",
+        "inspiration": "Require typed stage outputs and distinguish structural from semantic validation."
+      }
+    },
+    {
+      "id": "P003",
+      "title": "PiVe: Prompting with Iterative Verification Improving Graph-based Generative Capability of LLMs",
+      "authors": "Jiuzhou Han; Nigel Collier; Wray Buntine; Ehsan Shareghi",
+      "year": 2024,
+      "venue": "Findings of ACL",
+      "phase": "Verification",
+      "url": "https://aclanthology.org/2024.findings-acl.400/",
+      "sections": {
+        "problem": "LLMs omit or corrupt elements of generated graph structures.",
+        "gap": "A generator often lacks precise feedback about its structured errors.",
+        "coreIdea": "A smaller independent verifier supplies fine-grained corrective instructions.",
+        "method": "Iterative online or offline generator--verifier correction.",
+        "evidence": "Consistent improvements are reported on three graph-generation datasets.",
+        "limitation": "Its error focus does not cover all grounding and granularity failures.",
+        "inspiration": "Add a bounded verifier with KnowAct-specific error labels and source context."
+      }
+    },
+    {
+      "id": "P004",
+      "title": "SAC-KG: Exploiting Large Language Models as Skilled Automatic Constructors for Domain Knowledge Graph",
+      "authors": "Hanzhu Chen et al.",
+      "year": 2024,
+      "venue": "ACL",
+      "phase": "Extraction / verification",
+      "url": "https://aclanthology.org/2024.acl-long.238/",
+      "sections": {
+        "problem": "Domain KG construction needs dependable precision at large scale.",
+        "gap": "Manual intervention limits scale while naive generation propagates errors.",
+        "coreIdea": "Separate Generator, Verifier, and Pruner roles during iterative expansion.",
+        "method": "Entity-centered multi-level graph expansion with verification and pruning.",
+        "evidence": "Reports a million-node graph and 89.32 percent sampled precision.",
+        "limitation": "Recall is difficult to establish and the task is not a bounded curriculum graph.",
+        "inspiration": "Use proposer--verifier separation, plus a coverage pass and quarantine."
+      }
+    },
+    {
+      "id": "P005",
+      "title": "KGGen: Extracting Knowledge Graphs from Plain Text with Language Models",
+      "authors": "Belinda Mo et al.",
+      "year": 2025,
+      "venue": "NeurIPS",
+      "phase": "Extraction / fusion",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/2b368455e832d2b1a60bcad8c4c6481f-Abstract-Conference.html",
+      "sections": {
+        "problem": "Aliases and related forms make automatically extracted graphs sparse.",
+        "gap": "Existing extractors retain redundant entities and relations.",
+        "coreIdea": "Separate extraction passes and iteratively cluster entities and relations.",
+        "method": "Language-model extraction with entity resolution and the MINE evaluation benchmark.",
+        "evidence": "Reports competitive retrieval and improved concision and information retention.",
+        "limitation": "Entity concision is not equivalent to diagnostic concept granularity.",
+        "inspiration": "Retrieve merge candidates, then adjudicate keep, alias, merge, or split."
+      }
+    },
+    {
+      "id": "P006",
+      "title": "KARMA: Leveraging Multi-Agent LLMs for Automated Knowledge Graph Enrichment",
+      "authors": "Yuxing Lu et al.",
+      "year": 2025,
+      "venue": "NeurIPS",
+      "phase": "End to end",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/517f9b9c227b9dd51dba4560f37165ed-Abstract-Conference.html",
+      "sections": {
+        "problem": "Scientific KGs require extraction, integration, conflict resolution, and provenance.",
+        "gap": "Single-stage systems struggle across the entire lifecycle.",
+        "coreIdea": "Coordinate specialized agents for different construction responsibilities.",
+        "method": "A nine-agent pipeline over scientific literature.",
+        "evidence": "Reports large-scale PubMed enrichment and conflict reduction.",
+        "limitation": "LLM-based judging and no causal test that nine agents are necessary.",
+        "inspiration": "Use role specialization only where it creates a checkable boundary."
+      }
+    },
+    {
+      "id": "P007",
+      "title": "Can LLMs be Good Graph Judge for Knowledge Graph Construction?",
+      "authors": "Haoyu Huang et al.",
+      "year": 2025,
+      "venue": "EMNLP",
+      "phase": "Verification",
+      "url": "https://aclanthology.org/2025.emnlp-main.554/",
+      "sections": {
+        "problem": "Noise, domain specificity, and hallucination reduce generated-KG precision.",
+        "gap": "Direct extraction lacks a robust post-generation quality gate.",
+        "coreIdea": "Entity-centric denoising followed by a trained LLM graph judge.",
+        "method": "Denoise input context, extract triples, and classify their quality.",
+        "evidence": "Evaluates two general and one domain-specific text--graph dataset.",
+        "limitation": "Binary filtering can sacrifice coverage and inherit judge bias.",
+        "inspiration": "Measure judge calibration and add typed repair instead of deletion alone."
+      }
+    },
+    {
+      "id": "P008",
+      "title": "LLMs as Knowledge Graph Refiners: Mitigating Factual Inconsistencies in Generative Knowledge Extraction",
+      "authors": "Donghyun Kim et al.",
+      "year": 2026,
+      "venue": "ACL",
+      "phase": "Repair",
+      "url": "https://aclanthology.org/2026.acl-long.1353/",
+      "sections": {
+        "problem": "Generated triples exhibit factual and representational inconsistencies.",
+        "gap": "Deletion-only filtering loses recoverable information.",
+        "coreIdea": "Choose an error-specific delete, edit, or rewrite action.",
+        "method": "Human-derived error taxonomy and a fine-tuned triple refiner.",
+        "evidence": "Reports broader quality gains across generative extractors.",
+        "limitation": "Triple-level factual repair omits diagnostic and graph-level validity.",
+        "inspiration": "Use keep, fix, rewrite, delete, and quarantine with independent approval."
+      }
+    },
+    {
+      "id": "P009",
+      "title": "GenIE: Generative Information Extraction",
+      "authors": "Martin Josifoski et al.",
+      "year": 2022,
+      "venue": "NAACL",
+      "phase": "Extraction",
+      "url": "https://aclanthology.org/2022.naacl-main.342/",
+      "sections": {
+        "problem": "Autoregressive extraction may generate objects outside a fixed KG schema.",
+        "gap": "Unconstrained decoding does not guarantee valid entities and relations.",
+        "coreIdea": "Constrain generation with entity and relation tries.",
+        "method": "End-to-end autoregressive closed information extraction.",
+        "evidence": "Demonstrates competitive closed extraction on established datasets.",
+        "limitation": "Fixed schemas are unsuitable for initial concept discovery.",
+        "inspiration": "Enforce hard graph contracts after open candidate discovery."
+      }
+    },
+    {
+      "id": "P010",
+      "title": "GoLLIE: Annotation Guidelines Improve Zero-Shot Information-Extraction",
+      "authors": "Oscar Sainz et al.",
+      "year": 2024,
+      "venue": "ICLR",
+      "phase": "Guidelines / extraction",
+      "url": "https://openreview.net/forum?id=Y3wpuxd7u9",
+      "sections": {
+        "problem": "IE systems generalize poorly to unseen schemas and nuanced labels.",
+        "gap": "Label names alone under-specify annotation decisions.",
+        "coreIdea": "Condition extraction on detailed natural-language guidelines.",
+        "method": "Code-like schema descriptions and annotation instructions for zero-shot IE.",
+        "evidence": "Evaluates generalization across a broad collection of IE datasets.",
+        "limitation": "Guideline adherence does not ensure source or ontology validity.",
+        "inspiration": "Provide positive examples, near misses, and boundary rules for all labels."
+      }
+    },
+    {
+      "id": "P011",
+      "title": "ACE: AI-Assisted Construction of Educational Knowledge Graphs with Prerequisite Relations",
+      "authors": "Mehmet Cem Aytekin; Yücel Saygın",
+      "year": 2024,
+      "venue": "Journal of Educational Data Mining",
+      "phase": "Educational KG",
+      "url": "https://jedm.educationaldatamining.org/index.php/JEDM/article/view/737",
+      "sections": {
+        "problem": "Experts cannot label all prerequisite pairs in a concept inventory.",
+        "gap": "Quadratic pair review makes educational KG authoring expensive.",
+        "coreIdea": "Rank candidate pairs for expert decisions and exploit graph inference.",
+        "method": "Embedding-based scoring, iterative expert labeling, and dynamic graph updates.",
+        "evidence": "Reports accurate graphs, reduced review effort, and a learner outcome study.",
+        "limitation": "Assumes concepts already exist and uses its own prerequisite semantics.",
+        "inspiration": "Prioritize expert review while keeping direct and inferred edges distinct."
+      }
+    },
+    {
+      "id": "P012",
+      "title": "A Brief Introduction to Evidence-Centered Design",
+      "authors": "Robert J. Mislevy; Russell G. Almond; Janice F. Lukas",
+      "year": 2003,
+      "venue": "ETS Research Report",
+      "phase": "Assessment design",
+      "url": "https://www.ets.org/research/policy_research_reports/publications/report/2003/hsgs.html",
+      "sections": {
+        "problem": "Assessment needs an explicit argument from observations to competence claims.",
+        "gap": "Tasks and scores are often designed without a coherent evidence model.",
+        "coreIdea": "Coordinate student, evidence, and task models.",
+        "method": "An assessment-design framework linking claims, observations, and elicitation tasks.",
+        "evidence": "A foundational conceptual and applied assessment framework.",
+        "limitation": "It is not a text-to-KG extraction algorithm.",
+        "inspiration": "Validate mastery rubrics and diagnostic questions as measurement artifacts."
+      }
+    },
+    {
+      "id": "P013",
+      "title": "The Role of Competency Questions in Enterprise Engineering",
+      "authors": "Michael Grüninger; Mark S. Fox",
+      "year": 1995,
+      "venue": "IFIP",
+      "phase": "Ontology design",
+      "url": "https://doi.org/10.1007/978-0-387-34847-6_3",
+      "sections": {
+        "problem": "Ontologies are hard to scope and evaluate when intended uses are implicit.",
+        "gap": "A representation can grow without a testable requirement boundary.",
+        "coreIdea": "Define competency questions the ontology must answer.",
+        "method": "Use questions to drive ontology axioms and benchmark adequacy.",
+        "evidence": "Foundational ontology-engineering method illustrated in enterprise modeling.",
+        "limitation": "Question design still requires domain judgment.",
+        "inspiration": "Freeze KnowAct graph requirements before LLM extraction."
+      }
+    }
+  ]
+}
