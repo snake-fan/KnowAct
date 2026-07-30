@@ -75,6 +75,18 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
 
         validate_segment_node_extraction_drafts((draft,), (segment,))
 
+    def test_segment_evidence_accepts_pdf_line_wrap_after_em_dash(self):
+        segment = _evidence_segment(
+            "Innovation rents are a form of economic rent—\nand economic rents occur throughout the economy."
+        )
+        draft = _segment_draft(
+            "draft_000001",
+            segment.segment_id,
+            "Innovation rents are a form of economic rent—and economic rents occur throughout the economy.",
+        )
+
+        validate_segment_node_extraction_drafts((draft,), (segment,))
+
     def test_segment_evidence_accepts_pdf_margin_glossary_intrusion(self):
         segment = _evidence_segment(
             "Simple linear regression is a very straightforward\n"
@@ -538,6 +550,30 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertIn("remaining_segments=0", logs)
         self.assertIn("Segment node extraction succeeded segments=1 total_drafts=1", logs)
 
+    def test_segment_node_extraction_retries_only_local_contract_failures(self):
+        model_client = EvidenceContractRetryModelClient()
+        step = LLMSegmentNodeExtractionStep(
+            model_client,
+            max_concurrent_requests=1,
+            max_contract_attempts=2,
+        )
+
+        with self.assertLogs("knowact.authoring.steps", level="WARNING") as context:
+            drafts = step.run((_parsed_segment("seg_000001", "chapter_1"),))
+
+        self.assertEqual(2, model_client.call_count)
+        self.assertEqual(
+            "chapter_1 introduces a diagnosable statistical learning concept.",
+            drafts[0].evidence_excerpt,
+        )
+        self.assertIn("Contract retry 2 of 2", model_client.prompts[1])
+        self.assertIn("rejected by deterministic validation", model_client.prompts[1])
+        self.assertIn("contract retry", "\n".join(context.output))
+        trace = step.last_trace
+        self.assertIsNotNone(trace)
+        self.assertIn("=== contract attempt 1 ===", trace.batch_traces[0].model_raw_output)
+        self.assertIn("=== contract attempt 2 ===", trace.batch_traces[0].model_raw_output)
+
     def test_segment_node_extraction_requests_segments_in_parallel(self):
         model_client = BlockingNodeExtractionModelClient(expected_concurrent_calls=2)
         step = LLMSegmentNodeExtractionStep(
@@ -787,6 +823,13 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertIn("may justify 8-12 drafts", extraction_prompt)
         self.assertIn("Treat 12 as an upper bound, not a quota", extraction_prompt)
         self.assertIn("evidence_excerpt", extraction_prompt)
+        self.assertIn("Return at most 12 drafts", extraction_prompt)
+        self.assertIn("count the items in the drafts array", extraction_prompt)
+        self.assertIn("one continuous span", extraction_prompt)
+        self.assertIn("not a quotation-reconstruction task", extraction_prompt)
+        self.assertIn("do not paraphrase, repair wording", extraction_prompt)
+        self.assertIn("avoid excerpts that cross a page boundary", extraction_prompt)
+        self.assertIn("no intervening source text has been omitted", extraction_prompt)
         self.assertIn("Do not output id, draft_id, segment_id", extraction_prompt)
         self.assertIn("Do not output source_id", extraction_prompt)
         self.assertIn("Parsed Source Segment", extraction_prompt)
@@ -841,6 +884,9 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         self.assertIn("Node Skeleton Reconciliation Agent Step", reconciliation_prompt)
         self.assertIn("supporting_draft_ids", reconciliation_prompt)
         self.assertIn("The workflow will derive final node ids", reconciliation_prompt)
+        self.assertIn("Return at most 24 skeletons", reconciliation_prompt)
+        self.assertIn("count the items in the skeletons array", reconciliation_prompt)
+        self.assertIn("the workflow rejects it unchanged", reconciliation_prompt)
         self.assertNotIn(source_materials[0].text, reconciliation_prompt)
 
         rubric_prompt = _render_prompt(
@@ -1202,6 +1248,36 @@ class BlockingNodeExtractionModelClient:
                         },
                         "grounding_note": f"Grounded in {location}.",
                         "evidence_excerpt": f"{location} introduces a diagnosable statistical learning concept.",
+                    }
+                ]
+            }
+        )
+
+
+class EvidenceContractRetryModelClient:
+    def __init__(self):
+        self.call_count = 0
+        self.prompts: list[str] = []
+
+    def complete(self, *, messages):
+        self.call_count += 1
+        prompt = "\n\n".join(message.content for message in messages)
+        self.prompts.append(prompt)
+        location = _location_from_prompt(prompt)
+        excerpt = (
+            "This paraphrase is not present in the segment."
+            if self.call_count == 1
+            else f"{location} introduces a diagnosable statistical learning concept."
+        )
+        return json.dumps(
+            {
+                "drafts": [
+                    {
+                        "name": f"Concept From {location}",
+                        "definition": f"Definition grounded in {location}.",
+                        "source_locator": {"locator": location},
+                        "grounding_note": f"Grounded in {location}.",
+                        "evidence_excerpt": excerpt,
                     }
                 ]
             }

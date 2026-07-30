@@ -1,0 +1,111 @@
+{
+  "metadata_version": "1.0",
+  "source_id": "Economy",
+  "benchmark_domain": "Economy",
+  "title": "The Economy: Introductory Economics Foundations",
+  "citation": "CORE Econ, The Economy 1.0, Units 1-4.",
+  "storage_path": "source_materials/Economy/experiment_scope.md",
+  "storage_uri": "storage/source_materials/Economy/experiment_scope.md",
+  "filename": "experiment_scope.md",
+  "size_bytes": 468122,
+  "content_sha256": "cf7f44613e50529d0293bd3511024ac14264612e99766d3f7aca5e6fc0282cae",
+  "uploaded_at": "2026-07-15T01:44:29.052790Z",
+  "question_bank_method": "reference_grounded_original_questions",
+  "question_bank_sources": [
+    {
+      "title": "CORE Econ, The Economy 1.0, Unit 1: The capitalist revolution",
+      "url": "https://books.core-econ.org/the-economy-v1/book/text/01.html",
+      "scope_note": "Official interactive text, questions, and exercises on capitalism, growth, inequality, and institutions."
+    },
+    {
+      "title": "CORE Econ, The Economy 1.0, Unit 2: Technology, population, and growth",
+      "url": "https://books.core-econ.org/the-economy-v1/book/text/02.html",
+      "scope_note": "Official interactive text, questions, and exercises on technology choice, innovation, and the Malthusian model."
+    },
+    {
+      "title": "CORE Econ, The Economy 1.0, Unit 3: Scarcity, work, and choice",
+      "url": "https://books.core-econ.org/the-economy-v1/book/text/03.html",
+      "scope_note": "Official interactive text, questions, and exercises on constrained choice, opportunity cost, and work hours."
+    },
+    {
+      "title": "CORE Econ, The Economy 1.0, Unit 4: Social interactions",
+      "url": "https://books.core-econ.org/the-economy-v1/book/text/04.html",
+      "scope_note": "Official interactive text, questions, and exercises on games, social preferences, cooperation, and institutions."
+    },
+    {
+      "title": "CORE Econ learning resources and quizzes",
+      "url": "https://www.core-econ.org/",
+      "scope_note": "Official CORE Econ resource and quiz catalog used to calibrate introductory question styles."
+    }
+  ],
+  "graph_authoring_scope": {
+    "aspect_name": "Introductory economics foundations",
+    "aspect_description": "Diagnosable concepts from The Economy Units 1-4: capitalism and long-run growth, technology and population, scarcity and individual choice, and strategic social interactions.",
+    "representative_tasks": [
+      "Use a long-run GDP-per-capita graph to explain the hockey-stick pattern and identify what the graph does not prove.",
+      "Distinguish total GDP, GDP per capita, nominal income, and real income when comparing living standards.",
+      "Explain how private property, markets, and firms jointly characterize a capitalist economic system.",
+      "Compare markets and firms as alternative ways of coordinating specialization and production.",
+      "Explain how specialization and technological progress can raise labour productivity and living standards.",
+      "Interpret income-distribution data that show inequality both between countries and within countries.",
+      "Assess whether a correlation between capitalism and growth is sufficient evidence of causation.",
+      "Explain why environmental damage and inequality can coexist with rising average GDP per capita.",
+      "Reconstruct the feedback mechanism that produces a Malthusian trap.",
+      "Explain how sustained technological progress can allow income growth to outpace population growth.",
+      "Use relative wages and energy prices to predict whether a cost-saving technology will be adopted.",
+      "Distinguish a production function from a single observed production outcome.",
+      "Calculate and interpret average product and marginal product from a production schedule.",
+      "Identify diminishing marginal product and explain its relevance to production choices.",
+      "Use an isocost line to compare the costs of alternative production techniques.",
+      "Explain why an innovator may earn temporary economic rents after adopting a superior technology.",
+      "Explain how competition and diffusion can erode an innovator's temporary rents.",
+      "Distinguish a general-purpose technology from a narrow process improvement.",
+      "Evaluate competing explanations for why the Industrial Revolution began in Britain.",
+      "Identify which assumptions in a simplified technological-change model are doing explanatory work.",
+      "Construct a feasible set for a choice involving limited time and multiple objectives.",
+      "Identify the opportunity cost of additional consumption, study, leisure, or work in a concrete scenario.",
+      "Use an indifference curve to compare bundles without treating utility as directly measurable happiness.",
+      "Interpret the marginal rate of substitution as willingness to trade one objective for another.",
+      "Use a concave production function to explain why additional study or work may have diminishing returns.",
+      "Distinguish feasible, infeasible, dominated, and efficient choices on a constrained-choice diagram.",
+      "Find a preferred feasible choice by combining a feasible frontier with indifference curves.",
+      "Explain why a tangency condition characterizes an interior optimum and when it may fail.",
+      "Separate the income effect and substitution effect of an increase in the wage rate.",
+      "Explain why higher wages need not cause every person to work more hours.",
+      "Use ceteris paribus reasoning to evaluate a claim about study time and academic performance.",
+      "Identify omitted variables that could confound an observed relationship between effort and outcomes.",
+      "Compare average and marginal quantities and explain why they can move in different directions.",
+      "Explain scarcity as a constraint on choice rather than as a synonym for poverty.",
+      "Identify self-interest, altruism, reciprocity, and inequality aversion in a strategic interaction.",
+      "Represent a two-player interaction with actions, payoffs, and outcomes.",
+      "Determine whether a strategy is dominant by comparing payoffs across the other player's possible actions.",
+      "Find a Nash equilibrium and explain why it need not maximize joint wellbeing.",
+      "Explain the conflict between individual incentives and collective outcomes in a prisoner's dilemma.",
+      "Diagnose free riding in a public-goods game and identify the payoff structure that sustains it.",
+      "Predict how repeated interaction can change incentives for cooperation.",
+      "Explain how reciprocity and credible punishment may support cooperative outcomes.",
+      "Distinguish altruistic preferences from strategic cooperation motivated by future rewards.",
+      "Use inequality aversion to explain behavior that a purely self-interested model cannot explain.",
+      "Predict how changing a game's rules or payoffs can change its equilibrium.",
+      "Distinguish a coordination problem from a social dilemma using payoff comparisons.",
+      "Interpret experimental-game evidence without assuming that one observed choice reveals a fixed personality type.",
+      "Explain how institutions can alter incentives while preferences remain unchanged.",
+      "Design a diagnostic comparison that separates misunderstanding of Nash equilibrium from disagreement about fairness.",
+      "Connect capitalism, technological change, constrained choice, and social interaction without collapsing them into one causal claim."
+    ],
+    "excluded_topics": [
+      "Units 5 and later of The Economy",
+      "Detailed firm governance and employment contracts",
+      "Supply-and-demand equilibrium and price-taking markets",
+      "Credit, banking, money, inflation, unemployment, and fiscal policy",
+      "International trade and macroeconomic stabilization",
+      "Advanced welfare economics and formal social-choice theory",
+      "Econometric estimation beyond qualitative ceteris paribus reasoning",
+      "Calculus-based optimization proofs",
+      "Policy prescriptions not developed in Units 1-4",
+      "Historical facts that do not support a reusable economic concept"
+    ],
+    "target_node_count": 20,
+    "max_node_count": 24
+  }
+}

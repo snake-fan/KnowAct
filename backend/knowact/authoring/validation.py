@@ -11,11 +11,13 @@ from backend.knowact.authoring.schemas import (
     NodeSkeletonVerificationResult,
     ParsedSourceSegment,
     SegmentNodeExtractionDraft,
+    SegmentNodeExtractionDraftPatch,
     SourceGroundedNodeSkeleton,
 )
 
 
 REQUIRED_MASTERY_LEVELS = {level.value for level in MasteryLevel}
+MAX_SEGMENT_NODE_EXTRACTION_DRAFTS = 12
 
 
 def validate_parsed_source_segments(
@@ -57,6 +59,7 @@ def validate_segment_node_extraction_drafts(
         raise KnowActValidationError(f"Duplicate segment node extraction draft ids: {sorted(duplicate_ids)}")
 
     segments_by_id = {segment.segment_id: segment for segment in segments}
+    draft_counts_by_segment: dict[str, int] = {}
     for draft in drafts:
         segment = segments_by_id.get(draft.segment_id)
         if segment is None:
@@ -70,6 +73,39 @@ def validate_segment_node_extraction_drafts(
         if not _evidence_excerpt_matches(draft.evidence_excerpt, segment.text):
             raise KnowActValidationError(
                 f"Segment node extraction draft {draft.draft_id} evidence excerpt was not found in segment {segment.segment_id}"
+            )
+        draft_counts_by_segment[draft.segment_id] = (
+            draft_counts_by_segment.get(draft.segment_id, 0) + 1
+        )
+
+    over_budget_segments = {
+        segment_id: count
+        for segment_id, count in draft_counts_by_segment.items()
+        if count > MAX_SEGMENT_NODE_EXTRACTION_DRAFTS
+    }
+    if over_budget_segments:
+        raise KnowActValidationError(
+            "Segment node extraction exceeded the per-segment draft limit: "
+            f"{over_budget_segments}; maximum={MAX_SEGMENT_NODE_EXTRACTION_DRAFTS}"
+        )
+
+
+def validate_segment_node_extraction_draft_patches(
+    patches: Sequence[SegmentNodeExtractionDraftPatch],
+    segment: ParsedSourceSegment,
+) -> None:
+    """Validate one model response before it enters global draft assembly."""
+
+    if len(patches) > MAX_SEGMENT_NODE_EXTRACTION_DRAFTS:
+        raise KnowActValidationError(
+            f"Segment {segment.segment_id} returned {len(patches)} drafts; "
+            f"maximum={MAX_SEGMENT_NODE_EXTRACTION_DRAFTS}"
+        )
+    for patch_index, patch in enumerate(patches, start=1):
+        if not _evidence_excerpt_matches(patch.evidence_excerpt, segment.text):
+            raise KnowActValidationError(
+                f"Segment {segment.segment_id} draft patch {patch_index} evidence_excerpt "
+                f"was not found in the segment: {patch.evidence_excerpt!r}"
             )
 
 
@@ -298,6 +334,13 @@ def _line_wrap_variants(value: str) -> set[str]:
             _normalized_text(candidate),
             _normalized_text(re.sub(wrapped_hyphen, "-", candidate)),
             _normalized_text(re.sub(wrapped_hyphen, "", candidate)),
+            _normalized_text(
+                re.sub(
+                    r"(?<=[—–])[ \t]*\r?\n[ \t]*(?=[A-Za-z])",
+                    "",
+                    candidate,
+                )
+            ),
         )
     }
 

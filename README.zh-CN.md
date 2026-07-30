@@ -80,7 +80,7 @@ KnowAct 构造受控的用户画像，并测试 agent 能否通过对话恢复�
 make setup
 ```
 
-只有在运行需要外部模型服务的流程时才需要填写 `.env`，例如 LLM-backed graph authoring 或 simulator turn。仅启动后端健康检查和本地 UI/API 联调时，可以先不填真实密钥。Graph authoring 只接收人工预处理的 UTF-8 Markdown，并要求显式填写抽取方面；默认设计目标约为 20 个代表性节点、最多 24 个，但目标不是必须凑满的配额。
+只有在运行需要外部模型服务的流程时才需要填写 `.env`，例如 LLM-backed graph authoring 或 simulator turn。仅启动后端健康检查和本地 UI/API 联调时，可以先不填真实密钥。Graph authoring 固定使用三个 filesystem-managed sources：`Economy`、`ISLP` 和 `OSTEP`。把人工预处理的 UTF-8 Markdown 放到 `storage/source_materials/{source_id}/`；版本化的 `metadata.json` 保存同名 domain、aspect、不少于 50 道有参考依据的 representative questions、领域排除项和节点预算。因此生成表单只填写 Source、Run ID 和 Provider。
 
 Episode 注册界面从 `KNOWACT_OPENAI_MODELS` 和 `KNOWACT_DEEPSEEK_MODELS`（逗号分隔）加载 provider-scoped model 下拉选项，并分别使用 `KNOWACT_OPENAI_MODEL` 和 `KNOWACT_DEEPSEEK_MODEL` 作为默认值。只有已配置 API key 的 provider 可用。当前持久化 Episode Run Queue 是单进程实现，不要用多个 Uvicorn workers 启动后端。
 
@@ -123,11 +123,11 @@ make check
 
 KnowAct 使用半合成的基准构造流程：
 
-v1 先从单一 benchmark domain `statistical_learning_with_python` 开始，用于跑通 data authoring、simulation、active diagnosis、final reconstruction 和 scoring，再考虑跨领域校准。当前 V1 graph scope 跟随完整选定 authoritative source，即 *An Introduction to Statistical Learning with Applications in Python*，不再使用早期 supervised-only slice 或固定 30-50 nodes 目标。仍使用旧 `classical_supervised_ml_algorithms` 名称的现有 artifacts 或代码路径应视为 migration / compatibility 状态。
+v1 benchmark construction 固定使用三个 source/domain identity：`Economy`、`ISLP` 和 `OSTEP`。它是一个小规模科研配置，不是通用文档接入产品。每个 evaluation episode 仍然只绑定一个领域的 reviewed graph 和 reviewed map；跨领域校准属于实验问题，而不是前端配置能力。仍使用 `statistical_learning_with_python` 或 `classical_supervised_ml_algorithms` 的现有 artifacts / 代码路径应视为 migration / compatibility 状态。
 
 1. **Benchmark 数据编写**
 
-   项目自写的 graph authoring agent workflow 会通过模型 API 调用生成 candidate knowledge graph 和 candidate knowledge map。Graph authoring 先从 Parsed Source Markdown 派生 Parsed Source Segments，再用受控的内部并行抽取 segment-level node drafts，默认 8 路并发，并通过专门的 reconciliation step 生成带 source locator 和简短 source grounding notes 的 source-grounded node skeleton；draft id、输出和 trace 仍按原始 segment 顺序组装，以保持 replay 确定性，长任务期间 progress logs 会报告 completed 与 remaining segment counts。后续 node rubric 与 edge proposal steps 只消费这些结构化 intermediate artifacts，不再接收完整 source text。node rubric step 补全 diagnostic goal、L0-L5 rubrics、diagnostic signals 和 simulator behavior；edge step 使用完整 candidate nodes、rubrics、locators 和 source grounding notes 提议 candidate edges。graph authoring workflow 的最终审阅输出是两个 JSON list 文件，分别存放 nodes 和 edges；candidate 状态只属于文件名或审阅状态，不写进 node / edge 对象内容。人工 review 后，authored graph data 也继续分成 node 与 edge 两个 JSON list 文件存储。Candidate nodes 必须从选定 authoritative source 中抽取，并保留 source locator；不应依赖模型记忆现场编写。Persona、background、preferences 和 task goal 可以指导 map 生成，但 v1 evaluation 的评分只使用 benchmark author 审核后的 authored knowledge graph 和 ground-truth knowledge map。
+   项目自写的 graph authoring agent workflow 会通过模型 API 调用生成 candidate knowledge graph 和 candidate knowledge map。Graph generation 请求只包含固定 Source、可选 Run ID 和 Provider；后端校验本地 Markdown，并从 metadata 加载稳定研究 scope。随后 workflow 派生 Parsed Source Segments，用受控并行抽取 segment-level node drafts，再通过 reconciliation 生成带 source locator 和简短 grounding notes 的 source-grounded node skeleton。后续 rubric 与 edge steps 只消费结构化 intermediate artifacts，不再接收完整 source text。最终审阅输出仍是分别存放 nodes 和 edges 的两个 JSON list 文件。Candidate nodes 必须从选定 authoritative source 中抽取并保留 source locator；不应依赖模型记忆现场编写。Persona、background、preferences 和 task goal 可以指导 map 生成，但 v1 evaluation 的评分只使用 benchmark author 审核后的 authored knowledge graph 和 ground-truth knowledge map。
 
    每个 v1 evaluation episode 由显式且不可变的 manifest 声明，用于绑定 authored graph、hidden map、可选 profile context、`max_turns`、interaction rule、固定的 `squared_mastery_distance_v1` scoring profile，以及锁定的 agent / provider / model / temperature / retry 配置。Runtime workbench 将可运行 episodes 加载到一个持久化 FIFO run queue，支持受限并行执行、turn-level checkpoint 恢复、单个 episode 取消与结果查看，不创建 batch 资源。
 

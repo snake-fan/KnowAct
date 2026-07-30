@@ -107,6 +107,7 @@ export type ReviewedGraphPayload = {
 
 export type GraphCandidateResponse = {
   workflow: string;
+  benchmark_domain: string;
   material: {
     storage_uri: string;
     filename: string;
@@ -126,7 +127,7 @@ export type GraphCandidateResponse = {
   source_grounded_node_skeletons: unknown[];
   candidate_nodes: KnowledgeNode[];
   candidate_edges: KnowledgeEdge[];
-  artifact_paths: GraphCandidateArtifactPaths | null;
+  artifact_paths: GraphCandidateArtifactPaths;
 };
 
 export type BenchmarkDomainListResponse = {
@@ -374,42 +375,18 @@ export async function readReviewedMap(
   );
 }
 
-export async function uploadSourceMaterial(input: {
-  file: File;
-  sourceId: string;
-  title: string;
-  citation?: string;
-}): Promise<SourceMaterialRecord> {
-  const form = new FormData();
-  form.append("file", input.file);
-  form.append("source_id", input.sourceId);
-  form.append("title", input.title);
-  if (input.citation?.trim()) {
-    form.append("citation", input.citation.trim());
-  }
-  return requestJson<SourceMaterialRecord>("/api/authoring/source-materials", {
-    method: "POST",
-    body: form
-  });
-}
-
 export async function generateCandidateGraph(input: {
   sourceId: string;
-  benchmarkDomain: string;
   runId?: string;
   clientProvider: "openai" | "deepseek";
-  scope: GraphAuthoringScope;
 }): Promise<GraphCandidateResponse> {
   return requestJson<GraphCandidateResponse>("/api/authoring/graph-candidates", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       source_id: input.sourceId,
-      benchmark_domain: input.benchmarkDomain,
       run_id: input.runId || null,
-      client_provider: input.clientProvider,
-      scope: input.scope,
-      write_artifacts: true
+      client_provider: input.clientProvider
     })
   });
 }

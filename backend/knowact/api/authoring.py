@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import re
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from backend.knowact.authoring.openai_workflow import (
@@ -61,6 +61,11 @@ from backend.knowact.authoring.profile_context_output import (
     write_candidate_profile_context_run,
 )
 from backend.knowact.authoring.review_promotion import promote_candidate_graph, promote_candidate_map
+from backend.knowact.authoring.source_configuration import (
+    GraphAuthoringSourceConfigurationError,
+    list_graph_authoring_source_metadata,
+    load_graph_authoring_source_metadata,
+)
 from backend.knowact.authoring.schemas import (
     CandidateProfileContext,
     ConfirmedProfileContext,
@@ -82,12 +87,9 @@ from backend.knowact.storage.source_material_catalog import (
     LocalMarkdownMaterial,
     MaterialFileError,
     MaterialFileNotFoundError,
-    MaterialFileSizeError,
     MaterialFileTypeError,
     SourceMaterialRecord,
-    list_source_materials,
     load_markdown_source_material,
-    save_markdown_source_material,
 )
 from backend.knowact.storage.reviewed_graphs import (
     AUTHORED_EDGES_FILENAME,
@@ -134,14 +136,11 @@ _LOGGER = get_knowact_logger("api.authoring")
 class GraphCandidateAuthoringRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    benchmark_domain: str
     source_id: str
-    scope: GraphAuthoringScope
-    write_artifacts: bool = True
     run_id: str | None = None
     client_provider: GraphAuthoringClientProvider = DEFAULT_GRAPH_AUTHORING_CLIENT_PROVIDER
 
-    @field_validator("benchmark_domain", "source_id")
+    @field_validator("source_id")
     @classmethod
     def _safe_ids_must_be_safe(cls, value: str) -> str:
         return _validate_safe_id(value, "id")
@@ -415,13 +414,14 @@ class GraphCandidateAuthoringResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     workflow: str
+    benchmark_domain: str
     material: SourceMaterialInfo
     scope: GraphAuthoringScope
     run_log_summary: GraphAuthoringRunLogSummary
     source_grounded_node_skeletons: tuple[SourceGroundedNodeSkeleton, ...]
     candidate_nodes: tuple[KnowledgeNode, ...]
     candidate_edges: tuple[KnowledgeEdge, ...]
-    artifact_paths: GraphCandidateArtifactPaths | None = None
+    artifact_paths: GraphCandidateArtifactPaths
 
 
 class CandidateGraphArtifactsResponse(BaseModel):
@@ -873,34 +873,6 @@ def build_authoring_router(
             artifact_paths=artifact_paths,
         )
 
-    @router.post(
-        "/source-materials",
-        response_model=SourceMaterialRecord,
-        summary="Upload one UTF-8 Markdown source material for graph authoring.",
-    )
-    def upload_source_material(
-        file: UploadFile = File(...),
-        source_id: str = Form(...),
-        title: str = Form(...),
-        citation: str | None = Form(None),
-    ) -> SourceMaterialRecord:
-        try:
-            safe_source_id = _validate_safe_id_or_422(source_id, "source_id")
-            return save_markdown_source_material(
-                storage_root=storage_root,
-                source_id=safe_source_id,
-                title=title,
-                citation=citation,
-                filename=file.filename or "",
-                content=file.file,
-            )
-        except MaterialFileTypeError as exc:
-            raise HTTPException(status_code=415, detail=str(exc)) from exc
-        except MaterialFileSizeError as exc:
-            raise HTTPException(status_code=413, detail=str(exc)) from exc
-        except MaterialFileError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-
     @router.get(
         "/candidate-maps/{benchmark_domain}",
         response_model=CandidateMapRunListResponse,
@@ -1080,10 +1052,16 @@ def build_authoring_router(
     @router.get(
         "/source-materials",
         response_model=SourceMaterialListResponse,
-        summary="List uploaded source materials available for graph authoring.",
+        summary="List filesystem-configured research sources available for graph authoring.",
     )
-    def list_uploaded_source_materials() -> SourceMaterialListResponse:
-        return SourceMaterialListResponse(source_materials=list_source_materials(storage_root=storage_root))
+    def list_configured_source_materials() -> SourceMaterialListResponse:
+        try:
+            metadata = list_graph_authoring_source_metadata(storage_root=storage_root)
+        except GraphAuthoringSourceConfigurationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return SourceMaterialListResponse(
+            source_materials=tuple(item.source_record() for item in metadata)
+        )
 
     @router.get(
         "/candidate-graphs/{benchmark_domain}",
@@ -1228,26 +1206,32 @@ def build_authoring_router(
     @router.post(
         "/graph-candidates",
         response_model=GraphCandidateAuthoringResponse,
-        summary="Run scoped Graph Authoring from one uploaded Markdown source material.",
+        summary="Run Graph Authoring from one filesystem-configured research source.",
     )
     def create_graph_candidates(
         request: GraphCandidateAuthoringRequest,
     ) -> GraphCandidateAuthoringResponse:
         run_id = request.run_id or default_graph_authoring_run_id()
-        output_dir = _candidate_graph_output_dir(root, request.benchmark_domain, run_id)
-        _LOGGER.info(
-            "Graph candidate authoring request received run_id=%s benchmark_domain=%s source_id=%s aspect=%s target_nodes=%d max_nodes=%d client_provider=%s write_artifacts=%s",
-            run_id,
-            request.benchmark_domain,
-            request.source_id,
-            request.scope.aspect_name,
-            request.scope.target_node_count,
-            request.scope.max_node_count,
-            request.client_provider,
-            request.write_artifacts,
-        )
 
         try:
+            source_configuration = load_graph_authoring_source_metadata(
+                storage_root=storage_root,
+                source_id=request.source_id,
+            )
+            benchmark_domain = source_configuration.benchmark_domain
+            scope = source_configuration.graph_authoring_scope
+            output_dir = _candidate_graph_output_dir(root, benchmark_domain, run_id)
+            _LOGGER.info(
+                "Graph candidate authoring request received run_id=%s benchmark_domain=%s source_id=%s aspect=%s target_nodes=%d max_nodes=%d question_bank_size=%d client_provider=%s",
+                run_id,
+                benchmark_domain,
+                request.source_id,
+                scope.aspect_name,
+                scope.target_node_count,
+                scope.max_node_count,
+                len(scope.representative_tasks),
+                request.client_provider,
+            )
             material = load_markdown_source_material(
                 storage_root=storage_root,
                 source_id=request.source_id,
@@ -1268,30 +1252,24 @@ def build_authoring_router(
             run_result = workflow.run_with_log(
                 (source_material,),
                 run_id=run_id,
-                scope=request.scope,
+                scope=scope,
                 source_metadata=(_run_log_source_material(material),),
-                intermediate_artifact_writer=(
-                    GraphAuthoringIntermediateArtifactWriter(output_dir)
-                    if request.write_artifacts
-                    else None
-                ),
+                intermediate_artifact_writer=GraphAuthoringIntermediateArtifactWriter(output_dir),
             )
         except MaterialFileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except MaterialFileTypeError as exc:
             raise HTTPException(status_code=415, detail=str(exc)) from exc
-        except MaterialFileSizeError as exc:
-            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        except GraphAuthoringSourceConfigurationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         except MaterialFileError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except GraphAuthoringWorkflowRunError as exc:
-            workflow_log_uri = None
-            if request.write_artifacts:
-                workflow_log_uri = _write_failed_workflow_log(
-                    exc,
-                    output_dir=output_dir,
-                    root=root,
-                )
+            workflow_log_uri = _write_failed_workflow_log(
+                exc,
+                output_dir=output_dir,
+                root=root,
+            )
             error = exc.run_log.error
             _LOGGER.error(
                 "Graph candidate authoring failed run_id=%s error_type=%s message=%s workflow_log_uri=%s",
@@ -1310,50 +1288,48 @@ def build_authoring_router(
 
         result = run_result.workflow_result
         run_log = run_result.run_log
-        artifact_paths = None
-        if request.write_artifacts:
-            nodes_path, edges_path = write_graph_authoring_output(result, output_dir)
-            _LOGGER.info(
-                "Graph candidate artifacts written run_id=%s candidate_nodes_uri=%s candidate_edges_uri=%s",
-                run_id,
-                _relative_uri(nodes_path, root),
-                _relative_uri(edges_path, root),
-            )
-            artifact_paths = _candidate_graph_artifact_paths(
-                output_dir=output_dir,
-                root=root,
-            )
-            log_artifact_paths = GraphAuthoringLogArtifactPaths(
-                **artifact_paths.model_dump(),
-            )
-            run_log = with_artifact_paths(run_log, log_artifact_paths)
-            log_path = write_graph_authoring_run_log(run_log, output_dir)
-            _LOGGER.info(
-                "Graph authoring run log written run_id=%s workflow_log_uri=%s",
-                run_id,
-                _relative_uri(log_path, root),
-            )
+        nodes_path, edges_path = write_graph_authoring_output(result, output_dir)
+        _LOGGER.info(
+            "Graph candidate artifacts written run_id=%s candidate_nodes_uri=%s candidate_edges_uri=%s",
+            run_id,
+            _relative_uri(nodes_path, root),
+            _relative_uri(edges_path, root),
+        )
+        artifact_paths = _candidate_graph_artifact_paths(
+            output_dir=output_dir,
+            root=root,
+        )
+        log_artifact_paths = GraphAuthoringLogArtifactPaths(
+            **artifact_paths.model_dump(),
+        )
+        run_log = with_artifact_paths(run_log, log_artifact_paths)
+        log_path = write_graph_authoring_run_log(run_log, output_dir)
+        _LOGGER.info(
+            "Graph authoring run log written run_id=%s workflow_log_uri=%s",
+            run_id,
+            _relative_uri(log_path, root),
+        )
 
         _LOGGER.info(
-            "Graph candidate authoring succeeded run_id=%s skeletons=%d candidate_nodes=%d candidate_edges=%d write_artifacts=%s",
+            "Graph candidate authoring succeeded run_id=%s skeletons=%d candidate_nodes=%d candidate_edges=%d",
             run_id,
             len(result.source_grounded_node_skeletons),
             len(result.candidate_nodes),
             len(result.candidate_edges),
-            request.write_artifacts,
         )
         return GraphCandidateAuthoringResponse(
             workflow="Graph Authoring Agent Workflow",
+            benchmark_domain=benchmark_domain,
             material=SourceMaterialInfo(
                 storage_uri=material.storage_uri,
                 filename=material.filename,
                 size_bytes=material.size_bytes,
-                content_sha256=material_record.content_sha256 or "",
+                content_sha256=source_configuration.content_sha256,
                 source_id=material_record.source_id,
                 title=material_record.title,
                 citation=material_record.citation,
             ),
-            scope=request.scope,
+            scope=scope,
             run_log_summary=summarize_run_log(run_log),
             source_grounded_node_skeletons=result.source_grounded_node_skeletons,
             candidate_nodes=result.candidate_nodes,

@@ -13,8 +13,12 @@ A selected textbook, course material, paper, or reference used as the source bas
 _Avoid_: general knowledge, model memory, unsourced topic list
 
 **Source Material Catalog**:
-A Markdown-only authoring registry that gives uploaded source materials stable identities, storage paths, sizes, and content hashes.
+A filesystem-managed Markdown authoring registry that gives the three fixed local source materials stable identities, storage paths, sizes, and content hashes.
 _Avoid_: benchmark graph manifest, reviewed graph data, book-only library
+
+**Graph Authoring Source Metadata**:
+A versioned configuration colocated with one fixed local source, containing its identity, citation, content hash, benchmark domain, complete **Graph Authoring Scope**, question-bank method, and public question-bank references.
+_Avoid_: per-run frontend form, uploaded source payload, reviewed graph manifest
 
 **Parsed Source Markdown**:
 The manually prepared UTF-8 Markdown representation of an **Authoritative Source** used directly during graph authoring.
@@ -25,7 +29,7 @@ An authoring-only semantic slice of **Parsed Source Markdown** that preserves it
 _Avoid_: chunk, PDF chunk, raw paragraph chunk
 
 **Graph Authoring Scope**:
-An author-declared aspect boundary containing a name, description, representative user tasks, exclusions, a soft target node count, and a hard maximum node count.
+A source-metadata-defined aspect boundary containing a name, description, at least 50 reference-grounded original representative diagnostic questions, domain-specific exclusions, a soft target node count, and a hard maximum node count.
 _Avoid_: whole-book extraction, keyword-only filter, mandatory node quota
 
 **Source Evidence Excerpt**:
@@ -708,11 +712,10 @@ _Avoid_: ground-truth edge, authored edge
 - The **Evaluation Runtime** derives the relevant **Confirmed Profile Context Snapshot** from the selected **Reviewed Map** rather than duplicating profile identity in the **Evaluation Episode Manifest**.
 - V1 uses one fixed **Scoring Profile**, `squared_mastery_distance_v1`.
 - An **Evaluation Episode Manifest** may reference the v1 **Scoring Profile** but must not override it.
-- V1 targets one **Benchmark Domain** before multi-domain expansion.
-- The first v1 **Benchmark Domain** is **Statistical Learning With Python Domain**.
-- The primary v1 **Authoritative Source** is *An Introduction to Statistical Learning with Applications in Python*.
-- The first v1 graph follows **V1 Full-Source Graph Scope**.
-- The first v1 graph should contain enough **Knowledge Nodes** to distinguish different user knowledge structures without treating 30-50 nodes as a hard cap.
+- V1 benchmark construction uses exactly three fixed **Benchmark Domains** and source ids: `Economy`, `ISLP`, and `OSTEP`.
+- Each fixed source has one versioned **Graph Authoring Source Metadata** file, and its benchmark domain must equal its source id.
+- Each fixed source defines its own aspect, representative diagnostic question bank, excluded topics, and node budget; those stable research inputs are not supplied per run.
+- Each **Evaluation Episode** still binds exactly one domain-specific reviewed graph and reviewed map.
 - A **Reviewed Map** and a **Reconstructed Knowledge Map** are compared over the same **Authored Knowledge Graph** in v1.
 - An **Agent Working Knowledge Map** may evolve during an **Evaluation Episode** and is distinct from the **Final Reconstruction Submission** used for primary scoring.
 - An **Agent Working Knowledge Map** is initialized over every **Knowledge Node** in the **Episode Knowledge Graph**.
@@ -978,10 +981,10 @@ _Avoid_: ground-truth edge, authored edge
 - "episode detail" can mean either benchmark-author management display or tested-agent delivery; resolved: **Runtime Management View** may show reference identities, while **Tested-Agent-Visible Episode Context** must not.
 - "episode manifests belong to one domain directory" can limit cross-domain experiment orchestration; resolved: v1 stores runnable episode manifests in a **Runtime Episode Registry** while each manifest still selects one domain graph version and one hidden **Reviewed Map**.
 - "scoring profile" can imply per-episode custom metrics; resolved: v1 uses fixed `squared_mastery_distance_v1` for comparability.
-- "benchmark domain" can imply a multi-domain suite; resolved: v1 starts with one domain and defers multi-domain calibration.
-- "machine learning algorithms" can underspecify the source scope; resolved: the first domain is **Statistical Learning With Python Domain**.
-- "enough knowledge nodes" is vague; resolved: the first v1 graph follows **V1 Full-Source Graph Scope** rather than a fixed 30-50 node cap.
-- "authoritative source" can remain underspecified; resolved: v1 starts from *An Introduction to Statistical Learning with Applications in Python*.
+- "benchmark domain" can imply an open-ended multi-domain platform; resolved: v1 construction is fixed to `Economy`, `ISLP`, and `OSTEP`, while each episode remains single-domain.
+- "representative tasks" can imply a long per-run form; resolved: each source metadata contains at least 50 reference-grounded original diagnostic questions.
+- "source scope" can drift between runs; resolved: aspect, exclusions, and node budgets are versioned with the fixed source metadata.
+- "authoritative source" can remain underspecified; resolved: each of the three fixed source ids maps to one local Markdown file plus auditable metadata and public question-bank references.
 - "one turn" can hide multiple questions; resolved: v1 **Interaction Turn** allows one primary **Diagnostic Question**.
 - "multi-node question" can mean either one **Integrated Diagnostic Question** or a batch of independent questions; resolved: one integrated question is allowed, while multiple independent questions in one turn are disallowed.
 - "Question Router" can sound like tested-agent question selection; resolved: **Question Grounding** only interprets a received **Diagnostic Question** against **Knowledge Nodes**.

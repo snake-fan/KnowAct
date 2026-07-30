@@ -43,6 +43,13 @@ Success means the set covers the representative tasks with minimal redundancy, s
                 TASK_DATA_BOUNDARY_RULES,
                 INTERMEDIATE_SOURCE_GROUNDING_RULES,
                 NODE_DESIGN_RULES,
+                f"""
+Hard node-budget contract for this run:
+- Return at most {scope.max_node_count} skeletons. This is a hard schema constraint, not guidance.
+- Aim near {scope.target_node_count} only when that many strong, nonredundant concepts are supported.
+- Before emitting JSON, count the items in the skeletons array. If the count is greater than {scope.max_node_count}, merge overlapping concepts or remove the least diagnostic items until the count is {scope.max_node_count} or fewer.
+- Never emit an over-budget array for a downstream step to truncate; the workflow rejects it unchanged.
+""".strip(),
                 """
 Input boundary:
 This step receives only Segment Node Extraction Drafts and their source-grounding metadata.

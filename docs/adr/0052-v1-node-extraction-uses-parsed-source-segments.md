@@ -1,6 +1,6 @@
 # V1 node extraction uses deterministic Markdown segments
 
-> Amended by ADR 0058 for the explicit aspect scope, exact evidence excerpts, and approximately-20-node budget.
+> Amended by ADR 0058 for the explicit aspect scope, exact evidence excerpts, and approximately-20-node budget. ADR 0059 replaces the uploaded-source wording with fixed filesystem-managed sources.
 
 Accepted. Graph authoring derives deterministic, non-overlapping `Parsed Source Segments` from one uploaded Markdown source before any model extraction call. Each segment preserves a run-local sequential id, shallow heading path, source locator, character count, and full segment text for replay. Character-based segmentation remains an internal implementation detail; request callers do not tune segment thresholds.
 

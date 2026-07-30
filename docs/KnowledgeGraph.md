@@ -457,9 +457,9 @@ LLM workflow 可以用于从选定的权威教材、课程材料或论文中生�
 
 v1 的 source-grounded node skeleton list 必须先从 authoritative source 抽取。每个 node skeleton 都应带 source locator 和从 source segment 继承的精确 evidence excerpt；不要在没有可核对证据的情况下凭常识现编 node 清单。后续 `Node Rubric Authoring Agent Step` 再把经独立 verifier 保留的 skeleton 补全为完整 candidate node。
 
-v1 的抽取过程不以手工编写 candidate node inventory 为主，而是先实现 `Graph Authoring Agent Workflow`。benchmark author 先在项目外把三本 source material 手工转换为 Markdown，再上传选定的一本并声明 `Graph Authoring Scope`。workflow 通过项目自写的轻量 agent frame 调用模型 API，分步骤执行方面相关知识点抽取、精确证据核对、全局合并与代表性选择、独立 skeleton verification、node rubric 编写和关系提议。
+v1 的抽取过程不以手工编写 candidate node inventory 为主，而是先实现 `Graph Authoring Agent Workflow`。benchmark author 先在项目外把三本 source material 手工转换为 Markdown，分别放入 `storage/source_materials/Economy`、`ISLP` 和 `OSTEP`。每个 source 的 `metadata.json` 固定保存完整 `Graph Authoring Scope`；前端只选择 source，不上传材料或逐项填写 scope。workflow 通过项目自写的轻量 agent frame 调用模型 API，分步骤执行方面相关知识点抽取、精确证据核对、全局合并与代表性选择、独立 skeleton verification、node rubric 编写和关系提议。
 
-`Graph Authoring Scope` 由 aspect name/description、representative tasks、excluded topics、target node count 和 maximum node count 构成。初始窄切片以约 20 个节点为软目标、24 个为硬上限；target 不是 quota，来源证据或诊断价值不足时必须少取而不能补弱节点。
+`Graph Authoring Scope` 由 aspect name/description、representative tasks、excluded topics、target node count 和 maximum node count 构成。三个固定 source 的 metadata 各自包含不少于 50 道基于公开资料覆盖范围编写的 original representative questions，并记录参考 URL；excluded topics 也按领域分别维护。初始窄切片以约 20 个节点为软目标、24 个为硬上限；target 不是 quota，来源证据或诊断价值不足时必须少取而不能补弱节点。
 
 workflow 的最终可审阅输出只包含两个 JSON list 文件：
 
@@ -523,8 +523,8 @@ Graph authoring 是一个 `Graph Authoring Agent Workflow`，其中包含多个 
 
 ``` text
 Node Extraction Agent Step
-= one uploaded Markdown segment
-+ explicit Graph Authoring Scope
+= one local Markdown segment
++ metadata-loaded Graph Authoring Scope
 → aspect-relevant Segment Node Extraction Drafts
 → exact evidence excerpt membership validation
 

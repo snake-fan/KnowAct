@@ -72,9 +72,22 @@ reports/generated/
 benchmark/domains/*/candidate_graphs/*/workflow_log.json
 benchmark/domains/*/candidate_graphs/*/agent_traces/
 
-# Local source materials used by test API PDF upload checks
+# Local source texts stay untracked. The three small authoring metadata files are
+# versioned so their scope, reference-grounded question banks, and node budgets
+# remain reproducible without committing the books themselves.
 storage/*
 !storage/.gitkeep
+!storage/source_materials/
+storage/source_materials/*
+!storage/source_materials/Economy/
+!storage/source_materials/ISLP/
+!storage/source_materials/OSTEP/
+storage/source_materials/Economy/*
+storage/source_materials/ISLP/*
+storage/source_materials/OSTEP/*
+!storage/source_materials/Economy/metadata.json
+!storage/source_materials/ISLP/metadata.json
+!storage/source_materials/OSTEP/metadata.json
 
 # Notebooks and interactive analysis checkpoints
 .ipynb_checkpoints/

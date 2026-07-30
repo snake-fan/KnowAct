@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 import unittest
@@ -32,57 +33,51 @@ class V1AuthoringApiTest(unittest.TestCase):
                 response.json(),
             )
 
-    def test_authoring_api_uploads_markdown_and_lists_hashed_catalog_record(self):
+    def test_authoring_api_lists_filesystem_configured_source(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
+            configured = _configure_source(workspace_root)
             client = _test_client(workspace_root)
 
-            response = _upload_source(client)
+            response = client.get("/api/authoring/source-materials")
 
             self.assertEqual(200, response.status_code)
-            payload = response.json()
-            self.assertEqual("isl_scope", payload["source_id"])
-            self.assertEqual("source_materials/isl_scope/source.md", payload["storage_path"])
-            self.assertEqual("storage/source_materials/isl_scope/source.md", payload["storage_uri"])
-            self.assertEqual("isl_scope.md", payload["filename"])
-            self.assertEqual(64, len(payload["content_sha256"]))
-            stored_path = workspace_root / "storage" / payload["storage_path"]
-            self.assertEqual(SOURCE_TEXT, stored_path.read_text(encoding="utf-8"))
+            self.assertEqual([configured], response.json()["source_materials"])
+            self.assertEqual(
+                SOURCE_TEXT,
+                (workspace_root / "storage/source_materials/ISLP/source.md").read_text(
+                    encoding="utf-8"
+                ),
+            )
+            upload_response = client.post(
+                "/api/authoring/source-materials",
+                files={"file": ("source.md", SOURCE_TEXT.encode(), "text/markdown")},
+            )
+            self.assertEqual(405, upload_response.status_code)
 
-            list_response = client.get("/api/authoring/source-materials")
-            self.assertEqual(200, list_response.status_code)
-            self.assertEqual([payload], list_response.json()["source_materials"])
-
-    def test_authoring_api_rejects_pdf_and_blank_markdown_uploads(self):
+    def test_authoring_api_rejects_invalid_filesystem_configuration(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            client = _test_client(Path(temp_dir))
-            pdf_response = client.post(
-                "/api/authoring/source-materials",
-                data={"source_id": "bad_pdf", "title": "Bad PDF"},
-                files={"file": ("book.pdf", b"%PDF", "application/pdf")},
-            )
-            blank_response = client.post(
-                "/api/authoring/source-materials",
-                data={"source_id": "blank_md", "title": "Blank Markdown"},
-                files={"file": ("blank.md", b" \n", "text/markdown")},
-            )
+            workspace_root = Path(temp_dir)
+            _configure_source(workspace_root, representative_task_count=49)
+            client = _test_client(workspace_root)
 
-            self.assertEqual(415, pdf_response.status_code)
-            self.assertIn("only Markdown", pdf_response.json()["detail"])
-            self.assertEqual(422, blank_response.status_code)
-            self.assertIn("no non-whitespace text", blank_response.json()["detail"])
+            response = client.get("/api/authoring/source-materials")
+
+            self.assertEqual(422, response.status_code)
+            self.assertIn("at least 50 representative tasks", response.json()["detail"])
 
     def test_authoring_api_runs_scoped_markdown_workflow_and_writes_auditable_artifacts(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             model_client = FixtureGraphModelClient()
+            _configure_source(workspace_root)
             client = _test_client(workspace_root, model_client)
-            self.assertEqual(200, _upload_source(client).status_code)
 
             response = _generate_fixture_candidate_response(client, run_id="scoped_run_001")
 
             self.assertEqual(200, response.status_code, response.text)
             payload = response.json()
+            self.assertEqual("ISLP", payload["benchmark_domain"])
             self.assertEqual("Model flexibility and generalization", payload["scope"]["aspect_name"])
             self.assertEqual(20, payload["scope"]["target_node_count"])
             self.assertEqual(24, payload["scope"]["max_node_count"])
@@ -111,40 +106,42 @@ class V1AuthoringApiTest(unittest.TestCase):
                 draft["evidence_excerpt"],
             )
 
-    def test_authoring_api_requires_explicit_scope_and_known_markdown_source(self):
+    def test_authoring_api_derives_scope_and_rejects_legacy_request_fields(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            client = _test_client(Path(temp_dir))
-            missing_scope = client.post(
-                "/api/authoring/graph-candidates",
-                json={"benchmark_domain": "statistical_learning", "source_id": "missing"},
-            )
+            workspace_root = Path(temp_dir)
+            _configure_source(workspace_root)
+            client = _test_client(workspace_root)
             missing_source = client.post(
+                "/api/authoring/graph-candidates",
+                json={"source_id": "missing"},
+            )
+            legacy_fields = client.post(
                 "/api/authoring/graph-candidates",
                 json={
                     "benchmark_domain": "statistical_learning",
-                    "source_id": "missing",
+                    "source_id": "ISLP",
                     "scope": _scope_payload(),
                 },
             )
 
-            self.assertEqual(422, missing_scope.status_code)
             self.assertEqual(404, missing_source.status_code)
+            self.assertEqual(422, legacy_fields.status_code)
 
     def test_authoring_api_reads_and_saves_candidate_graph_artifacts(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
+            _configure_source(workspace_root)
             client = _test_client(workspace_root)
-            _upload_source(client)
             created = _generate_fixture_candidate(client, run_id="edit_run_001")
 
             read_response = client.get(
-                "/api/authoring/candidate-graphs/statistical_learning/edit_run_001"
+                "/api/authoring/candidate-graphs/ISLP/edit_run_001"
             )
             self.assertEqual(200, read_response.status_code)
             graph = read_response.json()
             graph["candidate_nodes"][0]["definition"] = "Reviewed definition."
             save_response = client.put(
-                "/api/authoring/candidate-graphs/statistical_learning/edit_run_001",
+                "/api/authoring/candidate-graphs/ISLP/edit_run_001",
                 json={
                     "candidate_nodes": graph["candidate_nodes"],
                     "candidate_edges": graph["candidate_edges"],
@@ -159,8 +156,8 @@ class V1AuthoringApiTest(unittest.TestCase):
     def test_authoring_api_rejects_invalid_candidate_edit_without_overwrite(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
+            _configure_source(workspace_root)
             client = _test_client(workspace_root)
-            _upload_source(client)
             created = _generate_fixture_candidate(client, run_id="invalid_edit_001")
             nodes_path = workspace_root / created["artifact_paths"]["candidate_nodes_uri"]
             before = nodes_path.read_bytes()
@@ -168,7 +165,7 @@ class V1AuthoringApiTest(unittest.TestCase):
             invalid_node["levels"] = {"L0": "Only one level"}
 
             response = client.put(
-                "/api/authoring/candidate-graphs/statistical_learning/invalid_edit_001",
+                "/api/authoring/candidate-graphs/ISLP/invalid_edit_001",
                 json={"candidate_nodes": [invalid_node], "candidate_edges": []},
             )
 
@@ -178,10 +175,10 @@ class V1AuthoringApiTest(unittest.TestCase):
     def test_authoring_api_promotes_once_to_immutable_reviewed_version(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
+            _configure_source(workspace_root)
             client = _test_client(workspace_root)
-            _upload_source(client)
             _generate_fixture_candidate(client, run_id="promotion_run_001")
-            url = "/api/authoring/candidate-graphs/statistical_learning/promotion_run_001/promotion"
+            url = "/api/authoring/candidate-graphs/ISLP/promotion_run_001/promotion"
 
             first = client.post(url, json={"version": "v1"})
             second = client.post(url, json={"version": "v1"})
@@ -190,7 +187,7 @@ class V1AuthoringApiTest(unittest.TestCase):
             self.assertEqual(409, second.status_code)
             manifest = first.json()["graph_manifest"]
             self.assertEqual("promotion_run_001", manifest["promoted_from_candidate_run"])
-            self.assertEqual("isl_scope", manifest["source"][0]["source_id"])
+            self.assertEqual("ISLP", manifest["source"][0]["source_id"])
 
     def test_authoring_api_selects_deepseek_provider(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -202,7 +199,7 @@ class V1AuthoringApiTest(unittest.TestCase):
                     workspace_root=workspace_root,
                 )
             )
-            _upload_source(client)
+            _configure_source(workspace_root)
 
             response = _generate_fixture_candidate_response(
                 client,
@@ -218,8 +215,8 @@ class V1AuthoringApiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             model_client = IncompleteNodeGraphModelClient()
+            _configure_source(workspace_root)
             client = _test_client(workspace_root, model_client)
-            _upload_source(client)
 
             response = _generate_fixture_candidate_response(client, run_id="bad_run_001")
 
@@ -239,7 +236,7 @@ class V1AuthoringApiTest(unittest.TestCase):
 class FixtureGraphModelClient:
     def __init__(self):
         self.calls = []
-        self._last_source_id = "isl_scope"
+        self._last_source_id = "ISLP"
         self.message_profile = OPENAI_MESSAGE_PROFILE
         self.metadata = ModelClientMetadata(
             provider="openai",
@@ -264,7 +261,7 @@ class FixtureGraphModelClient:
                         "name": "Train Test Split",
                         "definition": "Separating data into training and test sets to estimate out-of-sample performance.",
                         "source_locators": [
-                            {"source_id": "isl_scope", "locator": "Model Assessment"}
+                            {"source_id": "ISLP", "locator": "Model Assessment"}
                         ],
                         "grounding_notes": [
                             "The source presents a held-out split as an estimate of out-of-sample performance."
@@ -361,24 +358,55 @@ def _test_client(
     )
 
 
-def _upload_source(client: TestClient):
-    return client.post(
-        "/api/authoring/source-materials",
-        data={
-            "source_id": "isl_scope",
-            "title": "ISL Scoped Source",
-            "citation": "development fixture",
-        },
-        files={"file": ("isl_scope.md", SOURCE_TEXT.encode(), "text/markdown")},
+def _configure_source(
+    workspace_root: Path,
+    *,
+    representative_task_count: int = 50,
+) -> dict[str, object]:
+    material_dir = workspace_root / "storage/source_materials/ISLP"
+    material_dir.mkdir(parents=True)
+    source_path = material_dir / "source.md"
+    source_path.write_text(SOURCE_TEXT, encoding="utf-8")
+    source_bytes = SOURCE_TEXT.encode()
+    record = {
+        "source_id": "ISLP",
+        "title": "ISL Scoped Source",
+        "citation": "development fixture",
+        "storage_path": "source_materials/ISLP/source.md",
+        "storage_uri": "storage/source_materials/ISLP/source.md",
+        "filename": "source.md",
+        "size_bytes": len(source_bytes),
+        "content_sha256": hashlib.sha256(source_bytes).hexdigest(),
+        "uploaded_at": "2026-07-30T00:00:00Z",
+    }
+    metadata = {
+        **record,
+        "metadata_version": "1.0",
+        "benchmark_domain": "ISLP",
+        "question_bank_method": "reference_grounded_original_questions",
+        "question_bank_sources": [
+            {
+                "title": "Fixture reference",
+                "url": "https://example.com/reference",
+                "scope_note": "Supports the test question bank.",
+            }
+        ],
+        "graph_authoring_scope": _scope_payload(representative_task_count),
+    }
+    (material_dir / "metadata.json").write_text(
+        json.dumps(metadata, indent=2) + "\n",
+        encoding="utf-8",
     )
+    return record
 
 
-def _scope_payload():
+def _scope_payload(representative_task_count: int = 50):
     return {
         "aspect_name": "Model flexibility and generalization",
         "aspect_description": "Concepts needed to reason about training/test performance and overfitting.",
         "representative_tasks": [
-            "Explain why training error and test error can move differently."
+            f"Diagnostic question {index}: explain a model-assessment decision."
+            for index in range(1, representative_task_count + 1)
         ],
         "excluded_topics": ["Unrelated classification algorithms"],
         "target_node_count": 20,
@@ -395,9 +423,7 @@ def _generate_fixture_candidate_response(
     return client.post(
         "/api/authoring/graph-candidates",
         json={
-            "source_id": "isl_scope",
-            "benchmark_domain": "statistical_learning",
-            "scope": _scope_payload(),
+            "source_id": "ISLP",
             "client_provider": client_provider,
             "run_id": run_id,
         },
@@ -425,7 +451,7 @@ def _source_id_from_prompt(prompt: str) -> str:
     for line in prompt.splitlines():
         if line.startswith(marker):
             return line[len(marker):].strip()
-    return "isl_scope"
+    return "ISLP"
 
 
 if __name__ == "__main__":

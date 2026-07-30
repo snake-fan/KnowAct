@@ -43,7 +43,10 @@ from backend.knowact.authoring.schemas import (
     SourceMaterial,
 )
 from backend.knowact.authoring.templates.edge_proposal import build_edge_proposal_messages
-from backend.knowact.authoring.templates.node_extraction import build_node_extraction_messages
+from backend.knowact.authoring.templates.node_extraction import (
+    build_node_extraction_contract_retry_messages,
+    build_node_extraction_messages,
+)
 from backend.knowact.authoring.templates.node_skeleton_reconciliation import (
     build_node_skeleton_reconciliation_messages,
 )
@@ -55,13 +58,18 @@ from backend.knowact.authoring.templates.node_rubric_authoring import (
 )
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeNode, SourceLocator
 from backend.knowact.llm.client import ModelClient
+from backend.knowact.authoring.validation import (
+    validate_segment_node_extraction_draft_patches,
+)
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessageProfile
+from backend.knowact.validation.exceptions import KnowActValidationError
 from backend.knowact.logging_config import get_knowact_logger
 
 
 AgentStepParser = Callable[[str], tuple[BaseModel, ...]]
 AgentStepOutputSerializer = Callable[[tuple[BaseModel, ...]], dict[str, object]]
 DEFAULT_SEGMENT_NODE_EXTRACTION_MAX_CONCURRENT_REQUESTS = 8
+DEFAULT_SEGMENT_NODE_EXTRACTION_MAX_CONTRACT_ATTEMPTS = 3
 SEGMENT_NODE_EXTRACTION_PROGRESS_LOG_INTERVAL_SECONDS = 30.0
 _LOGGER = get_knowact_logger("authoring.steps")
 
@@ -148,11 +156,16 @@ class LLMSegmentNodeExtractionStep:
         model_client: ModelClient,
         *,
         max_concurrent_requests: int = DEFAULT_SEGMENT_NODE_EXTRACTION_MAX_CONCURRENT_REQUESTS,
+        max_contract_attempts: int = DEFAULT_SEGMENT_NODE_EXTRACTION_MAX_CONTRACT_ATTEMPTS,
     ) -> None:
         self._model_client = model_client
         self._max_concurrent_requests = _validate_positive_int(
             max_concurrent_requests,
             "max_concurrent_requests",
+        )
+        self._max_contract_attempts = _validate_positive_int(
+            max_contract_attempts,
+            "max_contract_attempts",
         )
         self.last_trace: WorkflowRunAgentTrace | None = None
 
@@ -167,6 +180,7 @@ class LLMSegmentNodeExtractionStep:
             trace_setter=self._set_last_trace,
             message_profile=_message_profile_for(self._model_client),
             max_concurrent_requests=self._max_concurrent_requests,
+            max_contract_attempts=self._max_contract_attempts,
             scope=scope,
         )
 
@@ -358,6 +372,7 @@ def _run_traced_segment_node_extraction_step(
     trace_setter: Callable[[WorkflowRunAgentTrace | None], None],
     message_profile: ModelMessageProfile,
     max_concurrent_requests: int,
+    max_contract_attempts: int,
     scope: GraphAuthoringScope,
 ) -> tuple[SegmentNodeExtractionDraft, ...]:
     trace_setter(None)
@@ -384,6 +399,7 @@ def _run_traced_segment_node_extraction_step(
                 segment=segment,
                 segment_index=segment_index,
                 total_segments=total_segments,
+                max_contract_attempts=max_contract_attempts,
                 scope=scope,
             ): segment_index
             for segment_index, segment in enumerate(segments, start=1)
@@ -414,12 +430,13 @@ def _run_traced_segment_node_extraction_step(
                     completed_draft_count += len(result.parsed_patches)
                     remaining_segments = total_segments - len(completed_results)
                     _LOGGER.info(
-                        "Segment node extraction segment succeeded segment_index=%s segment_total=%s segment_id=%s draft_count=%s total_drafts=%s completed_segments=%s remaining_segments=%s active_or_queued_segments=%s elapsed_seconds=%.3f",
+                        "Segment node extraction segment succeeded segment_index=%s segment_total=%s segment_id=%s draft_count=%s total_drafts=%s contract_attempts=%s completed_segments=%s remaining_segments=%s active_or_queued_segments=%s elapsed_seconds=%.3f",
                         result.segment_index,
                         total_segments,
                         result.segment.segment_id,
                         len(result.parsed_patches),
                         completed_draft_count,
+                        result.contract_attempts,
                         len(completed_results),
                         remaining_segments,
                         len(pending_futures),
@@ -513,6 +530,7 @@ class _SegmentNodeExtractionResult:
     segment: ParsedSourceSegment
     redacted_raw_output: str
     parsed_patches: tuple[SegmentNodeExtractionDraftPatch, ...]
+    contract_attempts: int
     elapsed_seconds: float
 
 
@@ -541,6 +559,7 @@ def _extract_segment_node_patches(
     segment: ParsedSourceSegment,
     segment_index: int,
     total_segments: int,
+    max_contract_attempts: int,
     scope: GraphAuthoringScope,
 ) -> _SegmentNodeExtractionResult:
     segment_started_at = monotonic()
@@ -554,32 +573,89 @@ def _extract_segment_node_patches(
         segment.location,
     )
 
-    redacted_raw_output: str | None = None
-    try:
-        raw_output = model_client.complete(
-            messages=build_node_extraction_messages(
-                segment,
-                scope=scope,
-                message_profile=message_profile,
+    redacted_attempt_outputs: list[str] = []
+    previous_raw_output: str | None = None
+    rejection_message: str | None = None
+
+    for attempt_number in range(1, max_contract_attempts + 1):
+        raw_output: str | None = None
+        try:
+            if previous_raw_output is None or rejection_message is None:
+                messages = build_node_extraction_messages(
+                    segment,
+                    scope=scope,
+                    message_profile=message_profile,
+                )
+            else:
+                messages = build_node_extraction_contract_retry_messages(
+                    segment,
+                    scope=scope,
+                    previous_raw_output=previous_raw_output,
+                    rejection_message=rejection_message,
+                    attempt_number=attempt_number,
+                    max_attempts=max_contract_attempts,
+                    message_profile=message_profile,
+                )
+            raw_output = model_client.complete(messages=messages)
+            redacted_attempt_outputs.append(redact_logged_text(raw_output))
+            parsed_patches = tuple(parse_segment_node_extraction_output(raw_output))
+            validate_segment_node_extraction_draft_patches(parsed_patches, segment)
+        except KnowActValidationError as exc:
+            if attempt_number >= max_contract_attempts:
+                raise _SegmentNodeExtractionFailure(
+                    segment_index=segment_index,
+                    segment=segment,
+                    redacted_raw_output=_render_contract_attempt_outputs(
+                        redacted_attempt_outputs
+                    ),
+                    elapsed_seconds=monotonic() - segment_started_at,
+                    cause=exc,
+                ) from exc
+            rejection_message = str(exc)
+            previous_raw_output = raw_output
+            _LOGGER.warning(
+                "Segment node extraction contract retry segment_index=%s segment_total=%s segment_id=%s rejected_attempt=%s max_contract_attempts=%s message=%s",
+                segment_index,
+                total_segments,
+                segment.segment_id,
+                attempt_number,
+                max_contract_attempts,
+                rejection_message,
             )
-        )
-        redacted_raw_output = redact_logged_text(raw_output)
-        parsed_patches = parse_segment_node_extraction_output(raw_output)
-    except Exception as exc:
-        raise _SegmentNodeExtractionFailure(
+            continue
+        except Exception as exc:
+            raise _SegmentNodeExtractionFailure(
+                segment_index=segment_index,
+                segment=segment,
+                redacted_raw_output=_render_contract_attempt_outputs(
+                    redacted_attempt_outputs
+                ),
+                elapsed_seconds=monotonic() - segment_started_at,
+                cause=exc,
+            ) from exc
+
+        return _SegmentNodeExtractionResult(
             segment_index=segment_index,
             segment=segment,
-            redacted_raw_output=redacted_raw_output,
+            redacted_raw_output=_render_contract_attempt_outputs(
+                redacted_attempt_outputs
+            ),
+            parsed_patches=parsed_patches,
+            contract_attempts=attempt_number,
             elapsed_seconds=monotonic() - segment_started_at,
-            cause=exc,
-        ) from exc
+        )
 
-    return _SegmentNodeExtractionResult(
-        segment_index=segment_index,
-        segment=segment,
-        redacted_raw_output=redacted_raw_output,
-        parsed_patches=tuple(parsed_patches),
-        elapsed_seconds=monotonic() - segment_started_at,
+    raise AssertionError("segment node extraction contract-attempt loop exhausted")
+
+
+def _render_contract_attempt_outputs(outputs: Sequence[str]) -> str | None:
+    if not outputs:
+        return None
+    if len(outputs) == 1:
+        return outputs[0]
+    return "\n\n".join(
+        f"=== contract attempt {attempt_number} ===\n{output}"
+        for attempt_number, output in enumerate(outputs, start=1)
     )
 
 

@@ -5,7 +5,6 @@ import {
   CandidateGraphPromotionResponse,
   KnowledgeEdge,
   KnowledgeNode,
-  GraphAuthoringScope,
   ReviewedGraphVersionSummary,
   SourceMaterialRecord,
   generateCandidateGraph,
@@ -14,8 +13,7 @@ import {
   listSourceMaterials,
   promoteCandidateGraph,
   readReviewedGraph,
-  saveCandidateGraph,
-  uploadSourceMaterial
+  saveCandidateGraph
 } from "../../api/authoring";
 import { CandidateGraphCanvas } from "./CandidateGraphCanvas";
 import {
@@ -31,15 +29,8 @@ import {
 export function CandidateGraphWorkbench() {
   const [materials, setMaterials] = useState<SourceMaterialRecord[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState("");
-  const [benchmarkDomain, setBenchmarkDomain] = useState("");
   const [runId, setRunId] = useState("");
   const [clientProvider, setClientProvider] = useState<"openai" | "deepseek">("openai");
-  const [aspectName, setAspectName] = useState("");
-  const [aspectDescription, setAspectDescription] = useState("");
-  const [representativeTasks, setRepresentativeTasks] = useState("");
-  const [excludedTopics, setExcludedTopics] = useState("");
-  const [targetNodeCount, setTargetNodeCount] = useState(20);
-  const [maxNodeCount, setMaxNodeCount] = useState(24);
   const [graph, setGraph] = useState<CandidateGraphPayload | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
   const [nodePositions, setNodePositions] = useState<NodePositionMap>({});
@@ -93,16 +84,6 @@ export function CandidateGraphWorkbench() {
     });
   }
 
-  async function refreshMaterials() {
-    await runTask("materials", async () => {
-      const nextMaterials = await listSourceMaterials();
-      setMaterials(nextMaterials);
-      if (!selectedSourceId && nextMaterials.length > 0) {
-        setSelectedSourceId(nextMaterials[0].source_id);
-      }
-    });
-  }
-
   async function handleReviewedDomainChange(domain: string) {
     setReviewedDomain(domain);
     setReviewedVersions([]);
@@ -141,65 +122,20 @@ export function CandidateGraphWorkbench() {
     });
   }
 
-  async function handleUpload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const file = form.get("file");
-    const sourceId = String(form.get("source_id") ?? "").trim();
-    const title = String(form.get("title") ?? "").trim();
-    const citation = String(form.get("citation") ?? "").trim();
-    if (!(file instanceof File) || file.size === 0) {
-      setError("Choose a Markdown file before uploading.");
-      return;
-    }
-    await runTask("upload", async () => {
-      const material = await uploadSourceMaterial({ file, sourceId, title, citation });
-      setSelectedSourceId(material.source_id);
-      setNotice(`Uploaded ${material.source_id}`);
-      await refreshMaterials();
-    });
-  }
-
   async function handleGenerate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedSourceId) {
       setError("Select a source material first.");
       return;
     }
-    if (!benchmarkDomain.trim()) {
-      setError("Enter a benchmark domain first.");
-      return;
-    }
-    const tasks = _nonblankLines(representativeTasks);
-    if (!aspectName.trim() || !aspectDescription.trim() || tasks.length === 0) {
-      setError("Enter the aspect name, description, and at least one representative task.");
-      return;
-    }
-    if (maxNodeCount < targetNodeCount) {
-      setError("Maximum nodes must be greater than or equal to target nodes.");
-      return;
-    }
-    const scope: GraphAuthoringScope = {
-      aspect_name: aspectName.trim(),
-      aspect_description: aspectDescription.trim(),
-      representative_tasks: tasks,
-      excluded_topics: _nonblankLines(excludedTopics),
-      target_node_count: targetNodeCount,
-      max_node_count: maxNodeCount
-    };
     await runTask("generate", async () => {
       const response = await generateCandidateGraph({
         sourceId: selectedSourceId,
-        benchmarkDomain,
         runId: runId.trim() || undefined,
-        clientProvider,
-        scope
+        clientProvider
       });
-      if (!response.artifact_paths) {
-        throw new Error("Generation completed without artifact paths.");
-      }
       const nextGraph: CandidateGraphPayload = {
-        benchmark_domain: benchmarkDomain,
+        benchmark_domain: response.benchmark_domain,
         run_id: response.run_log_summary.run_id,
         candidate_nodes: response.candidate_nodes,
         candidate_edges: response.candidate_edges,
@@ -378,27 +314,6 @@ export function CandidateGraphWorkbench() {
             </button>
           </div>
 
-          <form className="panel-block" onSubmit={handleUpload}>
-            <h2>Source Material</h2>
-            <label>
-              Markdown
-              <input name="file" type="file" accept="text/markdown,.md,.markdown" />
-            </label>
-            <label>
-              Source ID
-              <input name="source_id" placeholder="Enter a stable identifier for this source" required />
-            </label>
-            <label>
-              Title
-              <input name="title" placeholder="Enter the source material title" required />
-            </label>
-            <label>
-              Citation
-              <input name="citation" placeholder="Enter citation details (optional)" />
-            </label>
-            <button type="submit" disabled={busy !== null}>Upload</button>
-          </form>
-
           <form className="panel-block" onSubmit={handleGenerate}>
             <h2>Generate</h2>
             <label>
@@ -411,70 +326,6 @@ export function CandidateGraphWorkbench() {
                   </option>
                 ))}
               </select>
-            </label>
-            <label>
-              Benchmark Domain
-              <input
-                value={benchmarkDomain}
-                onChange={(event) => setBenchmarkDomain(event.target.value)}
-                placeholder="Enter the domain identifier for this benchmark"
-                required
-              />
-            </label>
-            <label>
-              Aspect Name
-              <input
-                value={aspectName}
-                onChange={(event) => setAspectName(event.target.value)}
-                placeholder="e.g. Model flexibility and overfitting"
-                required
-              />
-            </label>
-            <label>
-              Aspect Description
-              <textarea
-                value={aspectDescription}
-                onChange={(event) => setAspectDescription(event.target.value)}
-                placeholder="Define what is in scope and the intended conceptual boundary."
-                required
-              />
-            </label>
-            <label>
-              Representative Tasks (one per line)
-              <textarea
-                value={representativeTasks}
-                onChange={(event) => setRepresentativeTasks(event.target.value)}
-                placeholder="Explain why training error can fall while test error rises."
-                required
-              />
-            </label>
-            <label>
-              Excluded Topics (one per line)
-              <textarea
-                value={excludedTopics}
-                onChange={(event) => setExcludedTopics(event.target.value)}
-                placeholder="Optional explicit exclusions"
-              />
-            </label>
-            <label>
-              Target Nodes
-              <input
-                type="number"
-                min={5}
-                max={40}
-                value={targetNodeCount}
-                onChange={(event) => setTargetNodeCount(Number(event.target.value))}
-              />
-            </label>
-            <label>
-              Maximum Nodes
-              <input
-                type="number"
-                min={5}
-                max={50}
-                value={maxNodeCount}
-                onChange={(event) => setMaxNodeCount(Number(event.target.value))}
-              />
             </label>
             <label>
               Run ID
@@ -496,35 +347,13 @@ export function CandidateGraphWorkbench() {
               type="submit"
               disabled={
                 busy !== null ||
-                !selectedSourceId ||
-                !benchmarkDomain.trim() ||
-                !aspectName.trim() ||
-                !aspectDescription.trim() ||
-                _nonblankLines(representativeTasks).length === 0
+                !selectedSourceId
               }
             >
               Generate
             </button>
           </form>
 
-          <div className="panel-block material-list">
-            <h2>Catalog</h2>
-            {materials.length === 0 ? (
-              <p className="empty">No source materials uploaded.</p>
-            ) : (
-              materials.map((material) => (
-                <button
-                  key={material.source_id}
-                  type="button"
-                  className={material.source_id === selectedSourceId ? "list-row active" : "list-row"}
-                  onClick={() => setSelectedSourceId(material.source_id)}
-                >
-                  <strong>{material.source_id}</strong>
-                  <span>{material.title}</span>
-                </button>
-              ))
-            )}
-          </div>
         </aside>
 
         <section className="graph-panel">
@@ -620,13 +449,6 @@ export function CandidateGraphWorkbench() {
   );
 }
 
-
-function _nonblankLines(value: string): string[] {
-  return value
-    .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
 
 function NodeInspector({
   node,
