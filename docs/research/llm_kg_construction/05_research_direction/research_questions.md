@@ -1,6 +1,6 @@
 # Research Questions and Hypotheses
 
-These are optional graph-construction research questions for a future dedicated study. They are not all part of the current KnowAct paper. The paper treats graph quality as a supporting check: full expert review of the approximately 20-node scoped graph plus one small one-shot-versus-staged comparison.
+These are optional graph-construction research questions for a future dedicated study. They are not part of the current KnowAct paper. The paper treats graph quality only as a prerequisite content-validity check: two independent domain experts review the complete approximately 20-node scoped graph and all of its edges, with disagreement adjudication and no authoring-method comparison.
 
 ## RQ-KG1: Construction quality
 

@@ -1,0 +1,7 @@
+item_order,item_type,item_id,item_text,task_coverage,missing_or_redundant_content,rationale,overall_decision
+1,representative_task,task_01,Explain prediction versus inference and choose an appropriate modeling objective.,,,,
+2,representative_task,task_02,"Reason about model flexibility, training error, test error, overfitting, and the bias-variance trade-off.",,,,
+3,representative_task,task_03,Formulate simple and multiple linear regression and interpret coefficients.,,,,
+4,representative_task,task_04,"Assess regression fit and uncertainty using residual error, R-squared, confidence intervals, and hypothesis tests.",,,,
+5,representative_task,task_05,"Recognize important assumptions, interactions, nonlinear terms, and common limitations of linear regression.",,,,
+6,overall_graph,overall_graph,"Judge whether the complete graph is adequate for the declared aspect and representative tasks.",,,,
