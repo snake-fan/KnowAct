@@ -1,11 +1,14 @@
 from collections.abc import Sequence
+import re
 
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeEdgeType, KnowledgeGraph, KnowledgeNode
 from backend.knowact.core.map import MasteryLevel
 from backend.knowact.validation.exceptions import KnowActValidationError
 from backend.knowact.validation.graph import validate_knowledge_graph
 from backend.knowact.authoring.schemas import (
+    GraphAuthoringScope,
     NodeSkeletonReconciliationResult,
+    NodeSkeletonVerificationResult,
     ParsedSourceSegment,
     SegmentNodeExtractionDraft,
     SourceGroundedNodeSkeleton,
@@ -64,18 +67,29 @@ def validate_segment_node_extraction_drafts(
             raise KnowActValidationError(
                 f"Segment node extraction draft {draft.draft_id} source locator source_id does not match segment source_id"
             )
+        if not _evidence_excerpt_matches(draft.evidence_excerpt, segment.text):
+            raise KnowActValidationError(
+                f"Segment node extraction draft {draft.draft_id} evidence excerpt was not found in segment {segment.segment_id}"
+            )
 
 
 def validate_node_skeleton_reconciliation_result(
     result: NodeSkeletonReconciliationResult,
     drafts: Sequence[SegmentNodeExtractionDraft],
+    scope: GraphAuthoringScope | None = None,
 ) -> None:
     validate_source_grounded_node_skeletons(result.source_grounded_node_skeletons)
 
     if len(result.records) != len(result.source_grounded_node_skeletons):
         raise KnowActValidationError("Node skeleton reconciliation record count must match skeleton count")
+    if scope is not None and len(result.records) > scope.max_node_count:
+        raise KnowActValidationError(
+            "Node skeleton reconciliation exceeded max_node_count: "
+            f"{len(result.records)} > {scope.max_node_count}"
+        )
 
-    draft_ids = {draft.draft_id for draft in drafts}
+    drafts_by_id = {draft.draft_id: draft for draft in drafts}
+    draft_ids = set(drafts_by_id)
     segment_ids = {draft.segment_id for draft in drafts}
     skeleton_ids = [record.id for record in result.records]
     duplicate_ids = _duplicates(skeleton_ids)
@@ -92,11 +106,72 @@ def validate_node_skeleton_reconciliation_result(
             raise KnowActValidationError(
                 f"Node skeleton reconciliation record {record.id} references unknown drafts: {sorted(unknown_drafts)}"
             )
+        supporting_drafts = tuple(
+            drafts_by_id[draft_id] for draft_id in record.supporting_draft_ids
+        )
         unknown_segments = set(record.supporting_segment_ids) - segment_ids
         if unknown_segments:
             raise KnowActValidationError(
                 f"Node skeleton reconciliation record {record.id} references unknown segments: {sorted(unknown_segments)}"
             )
+        expected_supporting_segments = {draft.segment_id for draft in supporting_drafts}
+        if set(record.supporting_segment_ids) != expected_supporting_segments:
+            raise KnowActValidationError(
+                f"Node skeleton reconciliation record {record.id} segment provenance does not match supporting drafts"
+            )
+        supporting_evidence = {draft.evidence_excerpt for draft in supporting_drafts}
+        unknown_evidence = set(record.evidence_excerpts) - supporting_evidence
+        if unknown_evidence:
+            raise KnowActValidationError(
+                f"Node skeleton reconciliation record {record.id} contains evidence not present in its supporting drafts"
+            )
+        if record.evidence_excerpts != skeleton.source_evidence_excerpts:
+            raise KnowActValidationError(
+                f"Node skeleton reconciliation record {record.id} evidence does not match skeleton evidence"
+            )
+
+
+def validate_node_skeleton_verification_result(
+    result: NodeSkeletonVerificationResult,
+    skeletons: Sequence[SourceGroundedNodeSkeleton],
+    scope: GraphAuthoringScope,
+) -> None:
+    input_ids = [skeleton.id for skeleton in skeletons]
+    decision_ids = [decision.id for decision in result.decisions]
+    if len(decision_ids) != len(set(decision_ids)):
+        raise KnowActValidationError("Node skeleton verification contains duplicate decision ids")
+    if set(decision_ids) != set(input_ids):
+        missing = set(input_ids) - set(decision_ids)
+        extra = set(decision_ids) - set(input_ids)
+        raise KnowActValidationError(
+            f"Node skeleton verification decisions do not match inputs; missing={sorted(missing)} extra={sorted(extra)}"
+        )
+
+    for decision in result.decisions:
+        if decision.decision == "keep" and (
+            decision.grounding_status != "supported"
+            or decision.scope_status != "in_scope"
+            or decision.diagnostic_value == "low"
+        ):
+            raise KnowActValidationError(
+                f"Node skeleton verification keep decision for {decision.id} violates keep criteria"
+            )
+
+    expected_kept_ids = {
+        decision.id for decision in result.decisions if decision.decision == "keep"
+    }
+    actual_kept_ids = [skeleton.id for skeleton in result.verified_skeletons]
+    if set(actual_kept_ids) != expected_kept_ids or len(actual_kept_ids) != len(expected_kept_ids):
+        raise KnowActValidationError(
+            "Verified skeletons do not match node skeleton verification keep decisions"
+        )
+    if not result.verified_skeletons:
+        raise KnowActValidationError("Node skeleton verification kept no skeletons")
+    if len(result.verified_skeletons) > scope.max_node_count:
+        raise KnowActValidationError(
+            "Node skeleton verification exceeded max_node_count: "
+            f"{len(result.verified_skeletons)} > {scope.max_node_count}"
+        )
 
 
 def validate_source_grounded_node_skeletons(
@@ -189,3 +264,89 @@ def _canonicalize_candidate_edge(edge: KnowledgeEdge) -> KnowledgeEdge:
 
 def _is_blank(value: str | None) -> bool:
     return value is None or not value.strip()
+
+
+def _normalized_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def _evidence_excerpt_matches(excerpt: str, segment_text: str) -> bool:
+    """Match verbatim evidence while tolerating PDF-to-Markdown line wrapping.
+
+    A PDF line break can split a word as ``func-\ntional`` or wrap a genuine
+    compound as ``non-\nparametric``. Both are layout artifacts, so matching
+    checks the raw whitespace-normalized text plus the two defensible line-wrap
+    interpretations. No general punctuation or word changes are allowed.
+    """
+
+    excerpt_variants = _line_wrap_variants(excerpt)
+    segment_variants = _line_wrap_variants(segment_text)
+    return any(
+        excerpt_variant in segment_variant
+        for excerpt_variant in excerpt_variants
+        for segment_variant in segment_variants
+    )
+
+
+def _line_wrap_variants(value: str) -> set[str]:
+    wrapped_hyphen = r"(?<=[A-Za-z])-[ \t]*\r?\n[ \t]*(?=[a-z])"
+    values = (value, _strip_pdf_margin_annotations(value))
+    return {
+        normalized
+        for candidate in values
+        for normalized in (
+            _normalized_text(candidate),
+            _normalized_text(re.sub(wrapped_hyphen, "-", candidate)),
+            _normalized_text(re.sub(wrapped_hyphen, "", candidate)),
+        )
+    }
+
+
+def _strip_pdf_margin_annotations(value: str) -> str:
+    """Remove narrowly recognizable margin-glossary intrusions for matching.
+
+    Miner-style PDF text sometimes inserts a short, far-right glossary label
+    between two prose lines. A continuation can also appear after a word that
+    was hyphenated at the physical line boundary. This creates strings such as
+    ``sin- regression\ngle``. The rules below target only those layout shapes;
+    the stored source and model evidence remain unchanged and auditable.
+    """
+
+    lines = value.splitlines()
+    kept: list[str] = []
+    pending_margin_annotation: str | None = None
+    for index, line in enumerate(lines):
+        stripped = line.lstrip(" \t")
+        indentation = len(line) - len(stripped)
+        if indentation >= 40 and len(stripped) <= 80:
+            pending_margin_annotation = stripped
+            continue
+
+        next_line = lines[index + 1].lstrip(" \t") if index + 1 < len(lines) else ""
+        if next_line[:1].islower():
+            margin_after_hyphen = re.match(
+                r"^(.+[A-Za-z]-)[ \t]+[A-Za-z][A-Za-z -]{0,60}$",
+                line,
+            )
+            if margin_after_hyphen is not None:
+                line = margin_after_hyphen.group(1)
+            elif pending_margin_annotation:
+                for suffix_word_count in range(1, 4):
+                    suffix_match = re.search(
+                        rf"(?:[ \t]+[A-Za-z-]+){{{suffix_word_count}}}$",
+                        line,
+                    )
+                    if suffix_match is None:
+                        continue
+                    suffix = " ".join(suffix_match.group(0).split())
+                    line_without_suffix = line[: suffix_match.start()]
+                    label = _normalized_text(f"{pending_margin_annotation} {suffix}").lower()
+                    prose_context = _normalized_text(
+                        "\n".join((*kept[-2:], line_without_suffix))
+                    ).lower()
+                    if label in prose_context:
+                        line = line_without_suffix
+                        break
+        kept.append(line)
+        pending_margin_annotation = None
+    return "\n".join(kept)

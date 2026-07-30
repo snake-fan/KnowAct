@@ -4,9 +4,9 @@
 
 KnowAct should not adopt a free-form autonomous multi-agent system. It should use a deterministic, staged authoring workflow with logically independent proposal and verification roles.
 
-There is no universal best LLM-KG agent. The defensible synthesis of prior work is: define the target schema and guidelines, retain exact evidence, extract locally for recall, normalize globally, verify independently, repair with bounded actions, and escalate uncertainty to humans.
+There is no universal best LLM-KG agent. The defensible synthesis of prior work is: define the target schema and guidelines, retain exact evidence, extract locally, normalize globally, verify independently, fail visibly on invalid output, and escalate semantic judgment to humans.
 
-The design is called **Evidence-Grounded Diagnostic Graph Authoring (EDGA)**. Its novelty is intentionally modest: it adapts reliable components from KGC, ontology engineering, and educational assessment to the special graph KnowAct needs.
+The design is called **Evidence-Grounded Diagnostic Graph Authoring (EDGA)**. Its novelty is intentionally modest: it adapts reliable components from KGC, ontology engineering, and educational assessment to the special graph KnowAct needs. The runnable v1 implements a deliberately narrow subset; later sections that describe repair, retrieval, or coverage recovery are research directions, not current system claims.
 
 ## Why KnowAct is a special KGC problem
 
@@ -21,25 +21,24 @@ A concept can be factually correct yet unusable as a benchmark node. Conversely,
 
 ## Current KnowAct workflow and its limitations
 
-The implemented reusable workflow is:
+As of the scoped Markdown v1, the implemented reusable workflow is:
 
-`PDF/Markdown → deterministic non-overlapping segments → local node extraction → global reconciliation → batched rubric authoring → one global edge call → structural validation → manual promotion`.
+`uploaded Markdown + explicit aspect scope → deterministic non-overlapping segments → local extraction with exact evidence → mechanical evidence check → global reconciliation/selection under a soft target and hard maximum → independent skeleton verification → rubric authoring → precision-first edge proposal → structural validation → manual promotion`.
 
 This is already better than a single prompt because it separates local extraction, reconciliation, and enrichment. It is not demonstrably the best method.
 
 Key limitations are:
 
 1. segments have no overlap, so cross-boundary concepts can be omitted;
-2. downstream steps receive compressed grounding notes rather than exact source spans;
-3. validation is mainly structural and does not establish semantic entailment;
-4. there is no independent verifier, typed semantic repair, or calibrated abstention;
-5. canonicalization and edge proposal each create a global context bottleneck;
-6. the review gate lacks item-level reviewer identity, rationale, agreement, and edit history;
-7. source checksums and complete inference configuration are not always bound to artifacts.
+2. exact excerpts prove source membership but an LLM verifier, not code, judges semantic support;
+3. the verifier filters weak candidates but does not repair them or estimate coverage;
+4. reconciliation and edge proposal each create a global context bottleneck;
+5. the review gate lacks item-level reviewer identity, rationale, agreement, and edit history;
+6. no experiment yet establishes superiority over a simpler one-shot baseline.
 
 The three current reviewed v1.2 graphs require a separate caveat. Their manifests identify a direct prompt-guided authoring run rather than the reusable four-stage workflow, and candidate/reviewed snapshots are byte-identical. They must be treated as development artifacts until complete extraction and expert-review evidence is recorded.
 
-## The EDGA workflow
+## Full EDGA research direction beyond runnable v1
 
 ### Stage 0 — Freeze the graph specification
 

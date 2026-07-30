@@ -23,6 +23,8 @@ from backend.knowact.authoring.segments import (
 )
 from backend.knowact.authoring.schemas import (
     EdgeProposalInput,
+    NodeSkeletonReconciliationRecord,
+    NodeSkeletonReconciliationResult,
     NodeRubricAuthoringInput,
     NodeRubricAuthoringResult,
     NodeRubricPatch,
@@ -39,6 +41,10 @@ from backend.knowact.authoring.templates.node_skeleton_reconciliation import (
 from backend.knowact.authoring.templates.node_rubric_authoring import build_node_rubric_authoring_messages
 from backend.knowact.authoring.steps import LLMSegmentNodeExtractionStep
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
+from backend.knowact.authoring.validation import (
+    validate_node_skeleton_reconciliation_result,
+    validate_segment_node_extraction_drafts,
+)
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeGraph, KnowledgeNode, SourceLocator
 from backend.knowact.core.map import MasteryLevel
 from backend.knowact.llm.messages import DEEPSEEK_MESSAGE_PROFILE
@@ -47,6 +53,125 @@ from backend.knowact.validation.graph import validate_knowledge_graph
 
 
 class V1GraphAuthoringWorkflowTest(unittest.TestCase):
+    def test_segment_evidence_accepts_pdf_word_hyphenation_at_line_wrap(self):
+        segment = _evidence_segment(
+            "Non-parametric methods do not make explicit assumptions about the func-\ntional form of f."
+        )
+        draft = _segment_draft(
+            "draft_000001",
+            segment.segment_id,
+            "Non-parametric methods do not make explicit assumptions about the functional form of f.",
+        )
+
+        validate_segment_node_extraction_drafts((draft,), (segment,))
+
+    def test_segment_evidence_accepts_wrapped_genuine_hyphenated_compound(self):
+        segment = _evidence_segment("A non-\nparametric method can be flexible.")
+        draft = _segment_draft(
+            "draft_000001",
+            segment.segment_id,
+            "A non-parametric method can be flexible.",
+        )
+
+        validate_segment_node_extraction_drafts((draft,), (segment,))
+
+    def test_segment_evidence_accepts_pdf_margin_glossary_intrusion(self):
+        segment = _evidence_segment(
+            "Simple linear regression is a very straightforward\n"
+            + (" " * 45)
+            + "simple linear\n"
+            + "approach using a sin- regression\n"
+            + "gle predictor variable X."
+        )
+        draft = _segment_draft(
+            "draft_000001",
+            segment.segment_id,
+            (
+                "Simple linear regression is a very straightforward\n"
+                "approach using a sin-\n"
+                "gle predictor variable X."
+            ),
+        )
+
+        validate_segment_node_extraction_drafts((draft,), (segment,))
+
+    def test_segment_evidence_accepts_split_pdf_margin_glossary_label(self):
+        segment = _evidence_segment(
+            "Standard errors can be used to compute confidence intervals. A 95 %\n"
+            + (" " * 45)
+            + "confidence\n"
+            + "confidence interval is defined as a range of values such that with 95 % interval\n"
+            + "probability, the range will contain the true unknown value of the parameter."
+        )
+        draft = _segment_draft(
+            "draft_000001",
+            segment.segment_id,
+            (
+                "A 95 % confidence interval is defined as a range of values such that with 95 % "
+                "probability, the range will contain the true unknown value of the parameter."
+            ),
+        )
+
+        validate_segment_node_extraction_drafts((draft,), (segment,))
+
+    def test_complete_pdf_margin_label_does_not_remove_prose(self):
+        segment = _evidence_segment(
+            "We interpret the p-value as follows: a small\n"
+            + (" " * 45)
+            + "p-value\n"
+            + "p-value indicates that it is unlikely to observe such a substantial association\n"
+            + "between the predictor and the response due to chance."
+        )
+        draft = _segment_draft(
+            "draft_000001",
+            segment.segment_id,
+            (
+                "a small p-value indicates that it is unlikely to observe such a substantial association "
+                "between the predictor and the response due to chance"
+            ),
+        )
+
+        validate_segment_node_extraction_drafts((draft,), (segment,))
+
+    def test_segment_evidence_still_rejects_paraphrase(self):
+        segment = _evidence_segment("A flexible method may overfit the training observations.")
+        draft = _segment_draft(
+            "draft_000001",
+            segment.segment_id,
+            "Flexible models always generalize poorly.",
+        )
+
+        with self.assertRaisesRegex(KnowActValidationError, "evidence excerpt was not found"):
+            validate_segment_node_extraction_drafts((draft,), (segment,))
+
+    def test_reconciliation_evidence_must_belong_to_declared_supporting_drafts(self):
+        drafts = (
+            _segment_draft("draft_000001", "seg_000001", "Evidence from draft one."),
+            _segment_draft("draft_000002", "seg_000002", "Evidence from draft two."),
+        )
+        result = _reconciliation_result(
+            evidence_excerpts=(drafts[1].evidence_excerpt,),
+            supporting_draft_ids=(drafts[0].draft_id,),
+            supporting_segment_ids=(drafts[0].segment_id,),
+        )
+
+        with self.assertRaisesRegex(KnowActValidationError, "not present in its supporting drafts"):
+            validate_node_skeleton_reconciliation_result(result, drafts)
+
+    def test_reconciliation_segments_must_match_declared_supporting_drafts(self):
+        drafts = (
+            _segment_draft("draft_000001", "seg_000001", "Evidence from draft one."),
+            _segment_draft("draft_000002", "seg_000002", "Evidence from draft two."),
+        )
+        result = _reconciliation_result(
+            evidence_excerpts=(drafts[0].evidence_excerpt,),
+            supporting_draft_ids=(drafts[0].draft_id,),
+            supporting_segment_ids=(drafts[1].segment_id,),
+        )
+
+        with self.assertRaisesRegex(KnowActValidationError, "segment provenance does not match"):
+            validate_node_skeleton_reconciliation_result(result, drafts)
+
     def test_graph_authoring_workflow_writes_exactly_candidate_node_and_edge_lists(self):
         workflow = GraphAuthoringAgentWorkflow(
             node_extraction_step=FixtureNodeExtractionStep(),
@@ -372,6 +497,7 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
             [
                 "Node Extraction Agent Step",
                 "Node Skeleton Reconciliation Agent Step",
+                "Node Skeleton Verification Agent Step",
                 "Node Rubric Authoring Agent Step",
                 "Edge Proposal Agent Step",
             ],
@@ -594,7 +720,8 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
       "source_locator": {
         "locator": "3. Which media are associated with sales?"
       },
-      "grounding_note": "The standard error of $\hat{\beta}_j$ constructs intervals for $\beta_j$."
+      "grounding_note": "The standard error of $\hat{\beta}_j$ constructs intervals for $\beta_j$.",
+      "evidence_excerpt": "standard error constructs intervals"
     }
   ]
 }'''
@@ -616,7 +743,8 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
       "source_locator": {
         "locator": "chapter_3"
       },
-      "grounding_note": "The coefficient $\beta_j$ is tested against zero."
+      "grounding_note": "The coefficient $\beta_j$ is tested against zero.",
+      "evidence_excerpt": "coefficient is tested against zero"
     }
   ]
 }'''
@@ -637,6 +765,7 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
                         "definition": 'A definition with an escaped "quote" and newline.',
                         "source_locator": {"locator": "chapter_3"},
                         "grounding_note": "Line one\nLine two with a quoted term.",
+                        "evidence_excerpt": "A short exact excerpt.",
                     }
                 ]
             }
@@ -653,9 +782,11 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
         extraction_prompt = _render_prompt(build_node_extraction_messages(segments[0]))
         self.assertIn("Segment Node Extraction Drafts", extraction_prompt)
         self.assertIn("roughly 1-3 focused diagnostic questions", extraction_prompt)
-        self.assertIn("no more than 100 Knowledge Nodes", extraction_prompt)
-        self.assertIn("3-8 drafts", extraction_prompt)
-        self.assertIn("Treat 12 drafts as an exceptional upper bound", extraction_prompt)
+        self.assertIn("Graph Authoring Scope", extraction_prompt)
+        self.assertIn("2-6 drafts", extraction_prompt)
+        self.assertIn("may justify 8-12 drafts", extraction_prompt)
+        self.assertIn("Treat 12 as an upper bound, not a quota", extraction_prompt)
+        self.assertIn("evidence_excerpt", extraction_prompt)
         self.assertIn("Do not output id, draft_id, segment_id", extraction_prompt)
         self.assertIn("Do not output source_id", extraction_prompt)
         self.assertIn("Parsed Source Segment", extraction_prompt)
@@ -677,6 +808,7 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
                                     "locator": "chapter_2",
                                 },
                                 "grounding_note": "Grounded by the fixture source.",
+                                "evidence_excerpt": "Chapter 2 introduces train/test split",
                             }
                         ]
                     }
@@ -701,6 +833,7 @@ class V1GraphAuthoringWorkflowTest(unittest.TestCase):
                             note=drafts[0].source_locator.note,
                         ),
                         grounding_note=drafts[0].grounding_note,
+                        evidence_excerpt=drafts[0].evidence_excerpt,
                     ),
                 )
             )
@@ -941,6 +1074,7 @@ class FakeRawJSONWorkflowModelClient:
                             "definition": self._skeleton.definition,
                             "source_locator": self._skeleton.source_locators[0].model_dump(mode="json"),
                             "grounding_note": self._skeleton.source_grounding_notes[0],
+                            "evidence_excerpt": "Chapter 2 introduces train/test split and the bias-variance tradeoff.",
                         }
                     ]
                 }
@@ -958,9 +1092,28 @@ class FakeRawJSONWorkflowModelClient:
                                 for locator in self._skeleton.source_locators
                             ],
                             "grounding_notes": list(self._skeleton.source_grounding_notes),
+                            "evidence_excerpts": [
+                                "Chapter 2 introduces train/test split and the bias-variance tradeoff."
+                            ],
                             "supporting_draft_ids": ["draft_000001"],
                             "supporting_segment_ids": ["seg_000001"],
                             "merge_split_note": "Single draft kept as canonical skeleton.",
+                        }
+                    ]
+                }
+            )
+        if "Node Skeleton Verification Agent Step" in developer_prompt:
+            self.prompt_markers.append("Node Skeleton Verification Agent Step")
+            return json.dumps(
+                {
+                    "decisions": [
+                        {
+                            "id": self._skeleton.id,
+                            "decision": "keep",
+                            "grounding_status": "supported",
+                            "scope_status": "in_scope",
+                            "diagnostic_value": "high",
+                            "rationale": "Directly supported and diagnostically useful.",
                         }
                     ]
                 }
@@ -992,6 +1145,7 @@ class WrongSourceIdGraphModelClient(FakeRawJSONWorkflowModelClient):
                                 "note": self._skeleton.source_locators[0].note,
                             },
                             "grounding_note": self._skeleton.source_grounding_notes[0],
+                            "evidence_excerpt": "Chapter 2 introduces train/test split and the bias-variance tradeoff.",
                         }
                     ]
                 }
@@ -1047,10 +1201,72 @@ class BlockingNodeExtractionModelClient:
                             "note": "Concurrent extraction test locator.",
                         },
                         "grounding_note": f"Grounded in {location}.",
+                        "evidence_excerpt": f"{location} introduces a diagnosable statistical learning concept.",
                     }
                 ]
             }
         )
+
+
+def _segment_draft(
+    draft_id: str,
+    segment_id: str,
+    evidence_excerpt: str,
+) -> SegmentNodeExtractionDraft:
+    return SegmentNodeExtractionDraft(
+        draft_id=draft_id,
+        segment_id=segment_id,
+        name=f"Concept {draft_id}",
+        definition=f"Definition for {draft_id}.",
+        source_locator=SourceLocator(source_id="isl_python", locator=segment_id),
+        grounding_note=f"Grounding note for {draft_id}.",
+        evidence_excerpt=evidence_excerpt,
+    )
+
+
+def _evidence_segment(text: str) -> ParsedSourceSegment:
+    return ParsedSourceSegment(
+        segment_id="seg_000001",
+        source_id="isl_python",
+        source_title="ISLP",
+        location="Chapter 2",
+        heading_path=("2 Statistical Learning",),
+        source_locator=SourceLocator(source_id="isl_python", locator="chapter_2"),
+        text=text,
+        char_count=len(text),
+    )
+
+
+def _reconciliation_result(
+    *,
+    evidence_excerpts: tuple[str, ...],
+    supporting_draft_ids: tuple[str, ...],
+    supporting_segment_ids: tuple[str, ...],
+) -> NodeSkeletonReconciliationResult:
+    locator = SourceLocator(source_id="isl_python", locator="chapter_2")
+    record = NodeSkeletonReconciliationRecord(
+        id="representative_concept",
+        name="Representative Concept",
+        definition="A representative reconciled concept.",
+        source_locators=(locator,),
+        grounding_notes=("Grounded by declared supporting drafts.",),
+        evidence_excerpts=evidence_excerpts,
+        supporting_draft_ids=supporting_draft_ids,
+        supporting_segment_ids=supporting_segment_ids,
+        merge_split_note="Kept for provenance validation.",
+    )
+    skeleton = SourceGroundedNodeSkeleton(
+        id=record.id,
+        name=record.name,
+        definition=record.definition,
+        source_locators=record.source_locators,
+        source_grounding_notes=record.grounding_notes,
+        source_evidence_excerpts=evidence_excerpts,
+    )
+    return NodeSkeletonReconciliationResult(
+        records=(record,),
+        source_grounded_node_skeletons=(skeleton,),
+    )
 
 
 def _complete_candidate_node(

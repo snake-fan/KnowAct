@@ -2,7 +2,6 @@ from collections.abc import Callable
 import json
 from pathlib import Path
 import re
-import shutil
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -66,19 +65,12 @@ from backend.knowact.authoring.schemas import (
     CandidateProfileContext,
     ConfirmedProfileContext,
     GeneratedProfileContext,
+    GraphAuthoringScope,
     GraphAuthoringWorkflowResult,
     MapEdgeConsistencyWarningList,
     ProfileContextAuthoringInput,
     SourceGroundedNodeSkeleton,
     SourceMaterial,
-)
-from backend.knowact.authoring.sources import (
-    ParsedMarkdownMaterial,
-    ParsedMarkdownEmptyError,
-    ParsedMarkdownWriteError,
-    SourceParser,
-    SourcePreparationError,
-    resolve_or_create_parsed_markdown,
 )
 from backend.knowact.authoring.validation import validate_candidate_edges, validate_complete_candidate_nodes
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
@@ -86,19 +78,16 @@ from backend.knowact.core.graph import GraphManifest, KnowledgeEdge, KnowledgeNo
 from backend.knowact.core.map import KnowledgeMap, MapManifest
 from backend.knowact.llm.client import ModelClientError
 from backend.knowact.logging_config import get_knowact_logger
-from backend.knowact.storage.materials import (
-    LocalPDFMaterial,
+from backend.knowact.storage.source_material_catalog import (
+    LocalMarkdownMaterial,
     MaterialFileError,
     MaterialFileNotFoundError,
     MaterialFileSizeError,
     MaterialFileTypeError,
-    resolve_pdf_material,
-)
-from backend.knowact.storage.source_material_catalog import (
     SourceMaterialRecord,
-    get_source_material,
     list_source_materials,
-    save_pdf_source_material,
+    load_markdown_source_material,
+    save_markdown_source_material,
 )
 from backend.knowact.storage.reviewed_graphs import (
     AUTHORED_EDGES_FILENAME,
@@ -130,9 +119,6 @@ from backend.knowact.validation.exceptions import KnowActValidationError
 
 
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
-_DEFAULT_BENCHMARK_DOMAIN = "classical_supervised_ml_algorithms"
-_DEFAULT_SOURCE_ID = "isl_python"
-_DEFAULT_SOURCE_TITLE = "An Introduction to Statistical Learning with Applications in Python"
 GraphAuthoringWorkflowFactory = Callable[[GraphAuthoringClientProvider], GraphAuthoringAgentWorkflow]
 ProfileContextAuthoringWorkflowFactory = Callable[
     [GraphAuthoringClientProvider],
@@ -146,34 +132,14 @@ _LOGGER = get_knowact_logger("api.authoring")
 
 
 class GraphCandidateAuthoringRequest(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    pdf_path: str | None = Field(
-        default=None,
-        description="Relative path under storage/, for example books/isl_python.pdf.",
-    )
-    benchmark_domain: str = _DEFAULT_BENCHMARK_DOMAIN
-    source_id: str = _DEFAULT_SOURCE_ID
-    source_title: str = _DEFAULT_SOURCE_TITLE
-    citation: str | None = None
-    force_reparse: bool = False
+    benchmark_domain: str
+    source_id: str
+    scope: GraphAuthoringScope
     write_artifacts: bool = True
     run_id: str | None = None
     client_provider: GraphAuthoringClientProvider = DEFAULT_GRAPH_AUTHORING_CLIENT_PROVIDER
-
-    @field_validator("pdf_path")
-    @classmethod
-    def _pdf_path_must_not_be_blank(cls, value: str | None) -> str | None:
-        if value is not None and not value.strip():
-            raise ValueError("must not be blank")
-        return value
-
-    @field_validator("source_title")
-    @classmethod
-    def _must_not_be_blank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("must not be blank")
-        return value
 
     @field_validator("benchmark_domain", "source_id")
     @classmethod
@@ -424,12 +390,10 @@ class SourceMaterialInfo(BaseModel):
     storage_uri: str
     filename: str
     size_bytes: int
-    markdown_storage_uri: str
-    markdown_filename: str
-    markdown_size_bytes: int
-    markdown_cache_status: str
+    content_sha256: str
     source_id: str
     title: str
+    citation: str | None = None
 
 
 class SourceMaterialListResponse(BaseModel):
@@ -452,6 +416,7 @@ class GraphCandidateAuthoringResponse(BaseModel):
 
     workflow: str
     material: SourceMaterialInfo
+    scope: GraphAuthoringScope
     run_log_summary: GraphAuthoringRunLogSummary
     source_grounded_node_skeletons: tuple[SourceGroundedNodeSkeleton, ...]
     candidate_nodes: tuple[KnowledgeNode, ...]
@@ -514,7 +479,6 @@ def build_authoring_router(
     graph_authoring_workflow_factory: GraphAuthoringWorkflowFactory,
     profile_context_authoring_workflow_factory: ProfileContextAuthoringWorkflowFactory,
     candidate_map_authoring_workflow_factory: CandidateMapAuthoringWorkflowFactory,
-    source_parser: SourceParser,
     workspace_root: Path | None = None,
 ) -> APIRouter:
     root = workspace_root or _default_workspace_root()
@@ -912,7 +876,7 @@ def build_authoring_router(
     @router.post(
         "/source-materials",
         response_model=SourceMaterialRecord,
-        summary="Upload one PDF source material for graph authoring.",
+        summary="Upload one UTF-8 Markdown source material for graph authoring.",
     )
     def upload_source_material(
         file: UploadFile = File(...),
@@ -922,7 +886,7 @@ def build_authoring_router(
     ) -> SourceMaterialRecord:
         try:
             safe_source_id = _validate_safe_id_or_422(source_id, "source_id")
-            return save_pdf_source_material(
+            return save_markdown_source_material(
                 storage_root=storage_root,
                 source_id=safe_source_id,
                 title=title,
@@ -1264,7 +1228,7 @@ def build_authoring_router(
     @router.post(
         "/graph-candidates",
         response_model=GraphCandidateAuthoringResponse,
-        summary="Run the Graph Authoring Agent Workflow from one local PDF source material.",
+        summary="Run scoped Graph Authoring from one uploaded Markdown source material.",
     )
     def create_graph_candidates(
         request: GraphCandidateAuthoringRequest,
@@ -1272,22 +1236,23 @@ def build_authoring_router(
         run_id = request.run_id or default_graph_authoring_run_id()
         output_dir = _candidate_graph_output_dir(root, request.benchmark_domain, run_id)
         _LOGGER.info(
-            "Graph candidate authoring request received run_id=%s benchmark_domain=%s pdf_path=%s source_id=%s client_provider=%s write_artifacts=%s",
+            "Graph candidate authoring request received run_id=%s benchmark_domain=%s source_id=%s aspect=%s target_nodes=%d max_nodes=%d client_provider=%s write_artifacts=%s",
             run_id,
             request.benchmark_domain,
-            request.pdf_path,
             request.source_id,
+            request.scope.aspect_name,
+            request.scope.target_node_count,
+            request.scope.max_node_count,
             request.client_provider,
             request.write_artifacts,
         )
 
         try:
-            material_record = None
-            if request.pdf_path is None:
-                material_record = get_source_material(storage_root=storage_root, source_id=request.source_id)
-                material = resolve_pdf_material(storage_root=storage_root, storage_path=material_record.storage_path)
-            else:
-                material = resolve_pdf_material(storage_root=storage_root, storage_path=request.pdf_path)
+            material = load_markdown_source_material(
+                storage_root=storage_root,
+                source_id=request.source_id,
+            )
+            material_record = material.record
             _LOGGER.info(
                 "Graph candidate authoring source resolved run_id=%s storage_uri=%s filename=%s size_bytes=%d",
                 run_id,
@@ -1295,41 +1260,16 @@ def build_authoring_router(
                 material.filename,
                 material.size_bytes,
             )
-            parsed_markdown = resolve_or_create_parsed_markdown(
-                pdf_path=material.path,
-                storage_root=storage_root,
-                parser=source_parser,
-                force_reparse=request.force_reparse,
-                run_id=run_id,
-                storage_uri=material.storage_uri,
-            )
-            _LOGGER.info(
-                "Graph candidate authoring markdown resolved run_id=%s markdown_uri=%s cache_status=%s size_bytes=%d",
-                run_id,
-                parsed_markdown.storage_uri,
-                parsed_markdown.cache_status,
-                parsed_markdown.size_bytes,
-            )
-            sources_md_path = _copy_markdown_to_domain_sources(
-                markdown_text=parsed_markdown.text,
-                root=root,
-                benchmark_domain=request.benchmark_domain,
-                source_filename=material.filename,
-            )
-            _LOGGER.info(
-                "Markdown copied to domain sources run_id=%s path=%s",
-                run_id,
-                _relative_uri(sources_md_path, root),
-            )
             workflow = _build_graph_authoring_workflow(
                 graph_authoring_workflow_factory,
                 client_provider=request.client_provider,
             )
-            source_material = _source_material_from_markdown(parsed_markdown, request, material_record)
+            source_material = _source_material_from_markdown(material)
             run_result = workflow.run_with_log(
                 (source_material,),
                 run_id=run_id,
-                source_metadata=(_run_log_source_material(material, parsed_markdown, request, material_record),),
+                scope=request.scope,
+                source_metadata=(_run_log_source_material(material),),
                 intermediate_artifact_writer=(
                     GraphAuthoringIntermediateArtifactWriter(output_dir)
                     if request.write_artifacts
@@ -1344,12 +1284,6 @@ def build_authoring_router(
             raise HTTPException(status_code=413, detail=str(exc)) from exc
         except MaterialFileError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except ParsedMarkdownEmptyError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except ParsedMarkdownWriteError as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
-        except SourcePreparationError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
         except GraphAuthoringWorkflowRunError as exc:
             workflow_log_uri = None
             if request.write_artifacts:
@@ -1414,13 +1348,12 @@ def build_authoring_router(
                 storage_uri=material.storage_uri,
                 filename=material.filename,
                 size_bytes=material.size_bytes,
-                markdown_storage_uri=parsed_markdown.storage_uri,
-                markdown_filename=parsed_markdown.filename,
-                markdown_size_bytes=parsed_markdown.size_bytes,
-                markdown_cache_status=parsed_markdown.cache_status,
-                source_id=request.source_id,
-                title=_effective_source_title(request, material_record),
+                content_sha256=material_record.content_sha256 or "",
+                source_id=material_record.source_id,
+                title=material_record.title,
+                citation=material_record.citation,
             ),
+            scope=request.scope,
             run_log_summary=summarize_run_log(run_log),
             source_grounded_node_skeletons=result.source_grounded_node_skeletons,
             candidate_nodes=result.candidate_nodes,
@@ -1556,52 +1489,27 @@ def _build_candidate_map_authoring_workflow(
 
 
 def _source_material_from_markdown(
-    parsed_markdown: ParsedMarkdownMaterial,
-    request: GraphCandidateAuthoringRequest,
-    material_record: SourceMaterialRecord | None = None,
+    material: LocalMarkdownMaterial,
 ) -> SourceMaterial:
     return SourceMaterial(
-        source_id=request.source_id,
-        title=_effective_source_title(request, material_record),
-        citation=_effective_citation(request, material_record, parsed_markdown),
-        text=parsed_markdown.text,
+        source_id=material.record.source_id,
+        title=material.record.title,
+        citation=material.record.citation or material.record.storage_uri,
+        text=material.text,
     )
 
 
 def _run_log_source_material(
-    material: LocalPDFMaterial,
-    parsed_markdown: ParsedMarkdownMaterial,
-    request: GraphCandidateAuthoringRequest,
-    material_record: SourceMaterialRecord | None = None,
+    material: LocalMarkdownMaterial,
 ) -> RunLogSourceMaterial:
     return RunLogSourceMaterial(
-        source_id=request.source_id,
-        title=_effective_source_title(request, material_record),
-        citation=_effective_citation(request, material_record, parsed_markdown),
+        source_id=material.record.source_id,
+        title=material.record.title,
+        citation=material.record.citation or material.record.storage_uri,
         storage_uri=material.storage_uri,
         filename=material.filename,
         size_bytes=material.size_bytes,
-        parsed_markdown_uri=parsed_markdown.storage_uri,
-        parsed_markdown_cache_status=parsed_markdown.cache_status,
-        parsed_markdown_size_bytes=parsed_markdown.size_bytes,
     )
-
-
-def _effective_source_title(
-    request: GraphCandidateAuthoringRequest,
-    material_record: SourceMaterialRecord | None,
-) -> str:
-    if material_record is not None and request.source_title == _DEFAULT_SOURCE_TITLE:
-        return material_record.title
-    return request.source_title
-
-
-def _effective_citation(
-    request: GraphCandidateAuthoringRequest,
-    material_record: SourceMaterialRecord | None,
-    parsed_markdown: ParsedMarkdownMaterial,
-) -> str:
-    return request.citation or (material_record.citation if material_record is not None else None) or parsed_markdown.storage_uri
 
 
 def _default_workspace_root() -> Path:
@@ -1627,25 +1535,6 @@ def _candidate_graph_artifact_paths(
         candidate_edges_uri=_relative_uri(output_dir / CANDIDATE_EDGES_FILENAME, root),
         workflow_log_uri=_relative_uri(output_dir / WORKFLOW_LOG_FILENAME, root),
     )
-
-
-def _copy_markdown_to_domain_sources(
-    *,
-    markdown_text: str,
-    root: Path,
-    benchmark_domain: str,
-    source_filename: str,
-) -> Path:
-    """Copy parsed markdown to the domain's sources/ directory, backing up any existing copy."""
-    sources_dir = root / "benchmark" / "domains" / benchmark_domain / "sources"
-    sources_dir.mkdir(parents=True, exist_ok=True)
-    md_filename = Path(source_filename).stem + ".md"
-    target_path = sources_dir / md_filename
-    if target_path.exists():
-        backup_path = sources_dir / (md_filename + ".bak")
-        shutil.copy2(target_path, backup_path)
-    target_path.write_text(markdown_text, encoding="utf-8")
-    return target_path
 
 
 def _write_failed_workflow_log(

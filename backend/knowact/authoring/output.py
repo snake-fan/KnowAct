@@ -15,9 +15,12 @@ INTERMEDIATE_DIRNAME = "intermediate"
 MODEL_RAW_OUTPUT_FILENAME = "model_raw_output.txt"
 PARSER_OUTPUT_FILENAME = "parser_output.json"
 PARSED_SOURCE_SEGMENTS_FILENAME = "parsed_source_segments.json"
+GRAPH_AUTHORING_SCOPE_FILENAME = "graph_authoring_scope.json"
 SEGMENT_NODE_EXTRACTION_DRAFTS_FILENAME = "segment_node_extraction_drafts.json"
 NODE_SKELETON_RECONCILIATION_FILENAME = "node_skeleton_reconciliation.json"
 SOURCE_GROUNDED_NODE_SKELETONS_FILENAME = "source_grounded_node_skeletons.json"
+NODE_SKELETON_VERIFICATION_DECISIONS_FILENAME = "node_skeleton_verification_decisions.json"
+VERIFIED_NODE_SKELETONS_FILENAME = "verified_node_skeletons.json"
 NODE_RUBRIC_PATCHES_FILENAME = "node_rubric_patches.json"
 CANDIDATE_NODES_PRE_EDGE_FILENAME = "candidate_nodes_pre_edge.json"
 CANDIDATE_EDGES_CANONICAL_FILENAME = "candidate_edges_canonical.json"
@@ -31,6 +34,13 @@ class GraphAuthoringIntermediateArtifactWriter:
     def write_parsed_source_segments(self, items: tuple[BaseModel, ...]) -> str:
         return self._write_json_list(PARSED_SOURCE_SEGMENTS_FILENAME, items)
 
+    def write_graph_authoring_scope(self, item: BaseModel) -> str:
+        artifact_uri = f"{INTERMEDIATE_DIRNAME}/{GRAPH_AUTHORING_SCOPE_FILENAME}"
+        path = self._output_dir / artifact_uri
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_model(path, item)
+        return artifact_uri
+
     def write_segment_node_extraction_drafts(self, items: tuple[BaseModel, ...]) -> str:
         return self._write_json_list(SEGMENT_NODE_EXTRACTION_DRAFTS_FILENAME, items)
 
@@ -39,6 +49,12 @@ class GraphAuthoringIntermediateArtifactWriter:
 
     def write_source_grounded_node_skeletons(self, items: tuple[BaseModel, ...]) -> str:
         return self._write_json_list(SOURCE_GROUNDED_NODE_SKELETONS_FILENAME, items)
+
+    def write_node_skeleton_verification_decisions(self, items: tuple[BaseModel, ...]) -> str:
+        return self._write_json_list(NODE_SKELETON_VERIFICATION_DECISIONS_FILENAME, items)
+
+    def write_verified_node_skeletons(self, items: tuple[BaseModel, ...]) -> str:
+        return self._write_json_list(VERIFIED_NODE_SKELETONS_FILENAME, items)
 
     def write_node_rubric_patches(self, items: tuple[BaseModel, ...]) -> str:
         return self._write_json_list(NODE_RUBRIC_PATCHES_FILENAME, items)

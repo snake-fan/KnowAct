@@ -26,7 +26,6 @@ from backend.knowact.authoring.profile_context import (
     ProfileContextAuthoringWorkflow,
     build_profile_context_authoring_workflow_for_provider,
 )
-from backend.knowact.authoring.sources import MinerUHTTPSourceParser, SourceParser
 from backend.knowact.authoring.workflow import GraphAuthoringAgentWorkflow
 
 
@@ -55,7 +54,6 @@ def create_app(
     candidate_map_authoring_workflow_factory: CandidateMapAuthoringWorkflowFactory | None = None,
     simulator_service_factory: SimulatorServiceFactory | None = None,
     simple_llm_tested_agent_factory: SimpleLLMTestedAgentFactory | None = None,
-    source_parser: SourceParser | None = None,
     workspace_root: Path | None = None,
 ) -> FastAPI:
     app = FastAPI(
@@ -77,7 +75,6 @@ def create_app(
                     client_provider=client_provider,
                 )
             ),
-            source_parser=source_parser or MinerUHTTPSourceParser(),
             workspace_root=workspace_root,
         ),
         prefix="/api/authoring",

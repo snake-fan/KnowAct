@@ -1,4 +1,8 @@
-from backend.knowact.authoring.schemas import ParsedSourceSegment
+from backend.knowact.authoring.schemas import (
+    DEFAULT_GRAPH_AUTHORING_SCOPE,
+    GraphAuthoringScope,
+    ParsedSourceSegment,
+)
 from backend.knowact.authoring.templates.common import (
     AUTHORING_CONTEXT,
     JSON_ONLY_RULES,
@@ -6,6 +10,7 @@ from backend.knowact.authoring.templates.common import (
     SOURCE_READING_RULES,
     STOP_AFTER_JSON_RULES,
     TASK_DATA_BOUNDARY_RULES,
+    dump_model,
     render_sections,
 )
 from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage, ModelMessageProfile
@@ -14,8 +19,10 @@ from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage, M
 def build_node_extraction_messages(
     segment: ParsedSourceSegment,
     *,
+    scope: GraphAuthoringScope | None = None,
     message_profile: ModelMessageProfile = OPENAI_MESSAGE_PROFILE,
 ) -> tuple[ModelMessage, ...]:
+    scope = scope or DEFAULT_GRAPH_AUTHORING_SCOPE
     return (
         ModelMessage(
             role=message_profile.high_priority_instruction_role,
@@ -27,7 +34,7 @@ You are the KnowAct Node Extraction Agent Step.
                 """
 Objective:
 Extract thin Segment Node Extraction Drafts from one bounded Parsed Source Segment.
-Success means every returned draft is source-grounded, diagnosable, moderately granular, likely to survive whole-book reconciliation, and parseable by the exact JSON contract.
+Success means every returned draft is in the declared aspect, source-grounded, useful for representative diagnostic tasks, moderately granular, and parseable by the exact JSON contract.
 """.strip(),
                 AUTHORING_CONTEXT,
                 TASK_DATA_BOUNDARY_RULES,
@@ -41,10 +48,10 @@ The segment text is the only source-material text available to this call.
 """.strip(),
                 """
 Process:
-1. Read the segment text as part of a whole-book graph whose final reviewed graph should usually contain no more than 100 Knowledge Nodes.
-2. Identify only stable, canonical concepts that matter for active knowledge-state diagnosis and are likely to become standalone nodes after global reconciliation.
+1. Read the segment only through the declared Graph Authoring Scope.
+2. Identify stable concepts needed to answer the representative tasks; ignore unrelated book content even when it is important in the wider field.
 3. Return only concepts grounded in this segment.
-4. Keep drafts thin: name, definition, source_locator, and grounding_note only.
+4. Keep drafts thin: name, definition, source_locator, grounding_note, and one short verbatim evidence_excerpt only.
 5. Prefer source-grounded definitions, boundaries, contrasts, dependencies, examples, and diagnostic clues over broad headings or isolated notation.
 6. Remove anything that belongs to reconciliation, rubric authoring, edge proposal, user-state authoring, or evidence authoring.
 """.strip(),
@@ -54,10 +61,11 @@ Decision rules:
 - Prefer stable domain concepts over section headings, implementation details, exercises, examples, named one-off results, proof maneuvers, or isolated formula notation.
 - Do not mine every theorem, lemma, proposition, example, exercise, equation, symbol, named algorithm step, or local variation as a separate node.
 - Use examples, exercises, formulas, and local results as grounding for broader concepts unless the passage clearly introduces a central domain concept that can support several diagnostic questions.
-- A normal textbook-scale segment should usually return 3-8 drafts, and may return zero drafts when it contains mostly examples, exercises, proofs, front matter, or repeated material.
-- Treat 12 drafts as an exceptional upper bound for unusually dense segments. If more than 12 candidates seem possible, keep only the highest-value concepts that would still belong in a whole-book graph with at most 100 final nodes.
+- A compact relevant segment should usually return 2-6 drafts, and may return zero drafts when it is outside the scope or contains mostly examples, exercises, proofs, front matter, or repeated material.
+- A long segment spanning several major in-scope subsections may justify 8-12 drafts so the later graph-wide reconciliation can choose representative coverage. Treat 12 as an upper bound, not a quota: never add incidental concepts merely to approach target_node_count.
 - Write definitions from the provided segment text, not from outside memory.
 - Write concise grounding_note values that preserve the source-grounded facts later workflow steps need without copying long source passages.
+- Copy evidence_excerpt exactly from the segment text. Keep it short but sufficient to support the concept; do not paraphrase or add ellipses.
 - If a concept cannot be grounded in the segment text, omit it.
 - If the segment contains no sufficiently grounded diagnosable concept, return {"drafts": []}.
 - Do not output id, draft_id, segment_id, diagnostic_goal, levels, diagnostic_signals, simulator_behavior, edges, user states, or evidence.
@@ -75,7 +83,8 @@ Return JSON with this exact top-level shape:
       "source_locator": {
         "locator": "same_or_more_precise_location_as_input"
       },
-      "grounding_note": "Concise paraphrased source-grounding note."
+      "grounding_note": "Concise paraphrased source-grounding note.",
+      "evidence_excerpt": "Short exact excerpt copied from the segment text."
     }
   ]
 }
@@ -86,7 +95,8 @@ source_locator.note is optional. Include it only when it is a nonblank reviewer 
 """.strip(),
                 """
 Final check before output:
-- Each draft has nonblank name, definition, source_locator, and grounding_note.
+- Each draft has nonblank name, definition, source_locator, grounding_note, and evidence_excerpt.
+- Every evidence_excerpt is copied exactly from the provided segment text.
 - Each source_locator contains a reviewer-usable locator and does not contain source_id.
 - No source_locator contains a blank note.
 - No draft relies on outside memory or invented source metadata.
@@ -100,6 +110,7 @@ Final check before output:
             role="user",
             content=render_sections(
                 "Extract reviewable Segment Node Extraction Drafts from this Parsed Source Segment.",
+                f"Graph Authoring Scope:\n\n{dump_model(scope)}",
                 f"Source ID (workflow-supplied; do not output): {segment.source_id}",
                 f"Source title: {segment.source_title}",
                 f"Location: {segment.location}",

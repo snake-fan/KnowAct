@@ -19,14 +19,19 @@ from backend.knowact.authoring.parsers.graph_authoring import (
     AuthoringOutputParseError,
     parse_edge_proposal_output,
     parse_node_skeleton_reconciliation_output,
+    parse_node_skeleton_verification_output,
     parse_node_rubric_authoring_output,
     parse_segment_node_extraction_output,
 )
 from backend.knowact.authoring.segments import derive_parsed_source_segments
 from backend.knowact.authoring.schemas import (
+    DEFAULT_GRAPH_AUTHORING_SCOPE,
     EdgeProposalInput,
+    GraphAuthoringScope,
     NodeSkeletonReconciliationRecord,
     NodeSkeletonReconciliationResult,
+    NodeSkeletonVerificationInput,
+    NodeSkeletonVerificationResult,
     NodeRubricAuthoringInput,
     NodeRubricAuthoringResult,
     NodeRubricPatch,
@@ -41,6 +46,9 @@ from backend.knowact.authoring.templates.edge_proposal import build_edge_proposa
 from backend.knowact.authoring.templates.node_extraction import build_node_extraction_messages
 from backend.knowact.authoring.templates.node_skeleton_reconciliation import (
     build_node_skeleton_reconciliation_messages,
+)
+from backend.knowact.authoring.templates.node_skeleton_verification import (
+    build_node_skeleton_verification_messages,
 )
 from backend.knowact.authoring.templates.node_rubric_authoring import (
     build_node_rubric_authoring_messages,
@@ -64,7 +72,11 @@ class NodeExtractionStep(Protocol):
 
 
 class SegmentNodeExtractionStep(Protocol):
-    def run(self, segments: Sequence[ParsedSourceSegment]) -> tuple[SegmentNodeExtractionDraft, ...]:
+    def run(
+        self,
+        segments: Sequence[ParsedSourceSegment],
+        scope: GraphAuthoringScope = DEFAULT_GRAPH_AUTHORING_SCOPE,
+    ) -> tuple[SegmentNodeExtractionDraft, ...]:
         """Extract thin node drafts from parsed source segments."""
 
 
@@ -72,8 +84,17 @@ class NodeSkeletonReconciliationStep(Protocol):
     def run(
         self,
         drafts: Sequence[SegmentNodeExtractionDraft],
+        scope: GraphAuthoringScope = DEFAULT_GRAPH_AUTHORING_SCOPE,
     ) -> NodeSkeletonReconciliationResult:
         """Reconcile segment-level node drafts into source-grounded node skeletons."""
+
+
+class NodeSkeletonVerificationStep(Protocol):
+    def run(
+        self,
+        input_data: NodeSkeletonVerificationInput,
+    ) -> NodeSkeletonVerificationResult:
+        """Independently audit grounding, scope fit, and diagnostic value."""
 
 
 class NodeRubricAuthoringStep(Protocol):
@@ -135,13 +156,18 @@ class LLMSegmentNodeExtractionStep:
         )
         self.last_trace: WorkflowRunAgentTrace | None = None
 
-    def run(self, segments: Sequence[ParsedSourceSegment]) -> tuple[SegmentNodeExtractionDraft, ...]:
+    def run(
+        self,
+        segments: Sequence[ParsedSourceSegment],
+        scope: GraphAuthoringScope = DEFAULT_GRAPH_AUTHORING_SCOPE,
+    ) -> tuple[SegmentNodeExtractionDraft, ...]:
         return _run_traced_segment_node_extraction_step(
             model_client=self._model_client,
             segments=tuple(segments),
             trace_setter=self._set_last_trace,
             message_profile=_message_profile_for(self._model_client),
             max_concurrent_requests=self._max_concurrent_requests,
+            scope=scope,
         )
 
     def _set_last_trace(self, trace: WorkflowRunAgentTrace | None) -> None:
@@ -156,11 +182,13 @@ class LLMNodeSkeletonReconciliationStep:
     def run(
         self,
         drafts: Sequence[SegmentNodeExtractionDraft],
+        scope: GraphAuthoringScope = DEFAULT_GRAPH_AUTHORING_SCOPE,
     ) -> NodeSkeletonReconciliationResult:
         reconciled_drafts = _run_traced_llm_step(
             model_client=self._model_client,
             messages=build_node_skeleton_reconciliation_messages(
                 drafts,
+                scope=scope,
                 message_profile=_message_profile_for(self._model_client),
             ),
             parser=parse_node_skeleton_reconciliation_output,
@@ -171,6 +199,38 @@ class LLMNodeSkeletonReconciliationStep:
             trace_setter=self._set_last_trace,
         )
         return _build_node_skeleton_reconciliation_result(reconciled_drafts)
+
+    def _set_last_trace(self, trace: WorkflowRunAgentTrace | None) -> None:
+        self.last_trace = trace
+
+
+class LLMNodeSkeletonVerificationStep:
+    def __init__(self, model_client: ModelClient) -> None:
+        self._model_client = model_client
+        self.last_trace: WorkflowRunAgentTrace | None = None
+
+    def run(
+        self,
+        input_data: NodeSkeletonVerificationInput,
+    ) -> NodeSkeletonVerificationResult:
+        decisions = _run_traced_llm_step(
+            model_client=self._model_client,
+            messages=build_node_skeleton_verification_messages(
+                input_data,
+                message_profile=_message_profile_for(self._model_client),
+            ),
+            parser=parse_node_skeleton_verification_output,
+            output_serializer=lambda items: {"decisions": _dump_models(items)},
+            step_name="node_skeleton_verification",
+            trace_setter=self._set_last_trace,
+        )
+        kept_ids = {decision.id for decision in decisions if decision.decision == "keep"}
+        return NodeSkeletonVerificationResult(
+            decisions=tuple(decisions),
+            verified_skeletons=tuple(
+                skeleton for skeleton in input_data.skeletons if skeleton.id in kept_ids
+            ),
+        )
 
     def _set_last_trace(self, trace: WorkflowRunAgentTrace | None) -> None:
         self.last_trace = trace
@@ -298,6 +358,7 @@ def _run_traced_segment_node_extraction_step(
     trace_setter: Callable[[WorkflowRunAgentTrace | None], None],
     message_profile: ModelMessageProfile,
     max_concurrent_requests: int,
+    scope: GraphAuthoringScope,
 ) -> tuple[SegmentNodeExtractionDraft, ...]:
     trace_setter(None)
     total_segments = len(segments)
@@ -323,6 +384,7 @@ def _run_traced_segment_node_extraction_step(
                 segment=segment,
                 segment_index=segment_index,
                 total_segments=total_segments,
+                scope=scope,
             ): segment_index
             for segment_index, segment in enumerate(segments, start=1)
         }
@@ -479,6 +541,7 @@ def _extract_segment_node_patches(
     segment: ParsedSourceSegment,
     segment_index: int,
     total_segments: int,
+    scope: GraphAuthoringScope,
 ) -> _SegmentNodeExtractionResult:
     segment_started_at = monotonic()
     _LOGGER.info(
@@ -496,6 +559,7 @@ def _extract_segment_node_patches(
         raw_output = model_client.complete(
             messages=build_node_extraction_messages(
                 segment,
+                scope=scope,
                 message_profile=message_profile,
             )
         )
@@ -603,6 +667,7 @@ def _segment_drafts_from_patches(
                 note=patch.source_locator.note,
             ),
             grounding_note=patch.grounding_note,
+            evidence_excerpt=patch.evidence_excerpt,
         )
         for index, patch in enumerate(patches, start=start_index)
     )
@@ -622,6 +687,7 @@ def _build_node_skeleton_reconciliation_result(
                 definition=draft.definition,
                 source_locators=draft.source_locators,
                 grounding_notes=draft.grounding_notes,
+                evidence_excerpts=draft.evidence_excerpts,
                 supporting_draft_ids=draft.supporting_draft_ids,
                 supporting_segment_ids=draft.supporting_segment_ids,
                 merge_split_note=draft.merge_split_note,
@@ -634,6 +700,7 @@ def _build_node_skeleton_reconciliation_result(
                 definition=draft.definition,
                 source_locators=draft.source_locators,
                 source_grounding_notes=draft.grounding_notes,
+                source_evidence_excerpts=draft.evidence_excerpts,
             )
         )
     return NodeSkeletonReconciliationResult(

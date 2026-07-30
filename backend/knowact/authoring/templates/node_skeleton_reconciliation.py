@@ -1,6 +1,10 @@
 from collections.abc import Sequence
 
-from backend.knowact.authoring.schemas import SegmentNodeExtractionDraft
+from backend.knowact.authoring.schemas import (
+    DEFAULT_GRAPH_AUTHORING_SCOPE,
+    GraphAuthoringScope,
+    SegmentNodeExtractionDraft,
+)
 from backend.knowact.authoring.templates.common import (
     AUTHORING_CONTEXT,
     INTERMEDIATE_SOURCE_GROUNDING_RULES,
@@ -8,6 +12,7 @@ from backend.knowact.authoring.templates.common import (
     NODE_DESIGN_RULES,
     STOP_AFTER_JSON_RULES,
     TASK_DATA_BOUNDARY_RULES,
+    dump_model,
     dump_model_list,
     render_sections,
 )
@@ -17,8 +22,10 @@ from backend.knowact.llm.messages import OPENAI_MESSAGE_PROFILE, ModelMessage, M
 def build_node_skeleton_reconciliation_messages(
     drafts: Sequence[SegmentNodeExtractionDraft],
     *,
+    scope: GraphAuthoringScope | None = None,
     message_profile: ModelMessageProfile = OPENAI_MESSAGE_PROFILE,
 ) -> tuple[ModelMessage, ...]:
+    scope = scope or DEFAULT_GRAPH_AUTHORING_SCOPE
     return (
         ModelMessage(
             role=message_profile.high_priority_instruction_role,
@@ -29,8 +36,8 @@ You are the KnowAct Node Skeleton Reconciliation Agent Step.
 """.strip(),
                 """
 Objective:
-Deduplicate, merge, and lightly split Segment Node Extraction Drafts into reviewable source-grounded node skeleton drafts.
-Success means the output contains one canonical object per diagnosable concept, with preserved source locators and draft provenance.
+Select, deduplicate, merge, and lightly split Segment Node Extraction Drafts into a small aspect-specific set of representative source-grounded node skeletons.
+Success means the set covers the representative tasks with minimal redundancy, stays within the node budget, and preserves source evidence and draft provenance.
 """.strip(),
                 AUTHORING_CONTEXT,
                 TASK_DATA_BOUNDARY_RULES,
@@ -49,14 +56,18 @@ Process:
 3. Preserve all useful source locators and enough grounding notes for downstream rubric authoring.
 4. Split an obviously compound draft only when the resulting concepts are already supported by draft notes and locators.
 5. Remove weak, duplicate, ungrounded, too broad, or too tiny drafts.
+6. Select a graph-wide set near target_node_count but never exceed max_node_count. Do not keep a weak node merely to hit the target.
 """.strip(),
                 """
 Decision rules:
 - Do not invent a skeleton without support from at least one input draft.
 - Do not use outside memory or infer from original book text that is not present in draft definitions, locators, or grounding notes.
+- Keep only concepts inside aspect_name and aspect_description, useful to at least one representative task, and outside excluded_topics.
+- Prefer a compact prerequisite/core/boundary/application coverage set over many near-synonyms.
+- Preserve exact evidence excerpts from supporting drafts; do not edit, concatenate, or invent them.
 - Keep names stable and human-readable. The workflow will derive final node ids from these names.
 - supporting_draft_ids must reference existing draft ids.
-- supporting_segment_ids must reference segment ids present in supporting drafts.
+- supporting_segment_ids must be exactly the unique segment ids represented by supporting_draft_ids.
 - merge_split_note should briefly explain whether the output is unchanged, merged, split, or discarded from related drafts.
 - Do not output id, diagnostic_goal, levels, diagnostic_signals, simulator_behavior, edges, user states, or evidence.
 """.strip(),
@@ -78,6 +89,9 @@ Return JSON with this exact top-level shape:
       "grounding_notes": [
         "Concise paraphrased source-grounding note for downstream rubric and edge steps."
       ],
+      "evidence_excerpts": [
+        "Exact evidence excerpt copied from a supporting draft."
+      ],
       "supporting_draft_ids": ["draft_000001"],
       "supporting_segment_ids": ["seg_000001"],
       "merge_split_note": "Short provenance note."
@@ -92,6 +106,8 @@ The complete response must be a JSON object with exactly one top-level key: "ske
 Final check before output:
 - Every output skeleton has at least one supporting draft id and segment id.
 - Every output skeleton has at least one source locator and grounding note.
+- Every output skeleton has at least one unchanged evidence excerpt from a supporting draft.
+- The output count does not exceed max_node_count; target_node_count is a quality-oriented target, not a quota.
 - No output object includes id, rubric fields, edge fields, user-state fields, evidence, or candidate status.
 """.strip(),
                 STOP_AFTER_JSON_RULES,
@@ -102,6 +118,7 @@ Final check before output:
             role="user",
             content=render_sections(
                 "Reconcile these Segment Node Extraction Drafts into canonical source-grounded node skeleton drafts.",
+                f"Graph Authoring Scope:\n\n{dump_model(scope)}",
                 f"Segment Node Extraction Drafts:\n\n{dump_model_list(drafts)}",
             ),
         ),

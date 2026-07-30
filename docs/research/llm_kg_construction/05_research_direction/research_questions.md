@@ -1,5 +1,7 @@
 # Research Questions and Hypotheses
 
+These are optional graph-construction research questions for a future dedicated study. They are not all part of the current KnowAct paper. The paper treats graph quality as a supporting check: full expert review of the approximately 20-node scoped graph plus one small one-shot-versus-staged comparison.
+
 ## RQ-KG1: Construction quality
 
 Does evidence-grounded staged authoring improve node and edge quality over one-shot and unverified staged LLM baselines under matched budgets?
@@ -42,4 +44,3 @@ Does checkpointed, bounded repair reduce silent corruption and improve resume co
 Do graph construction choices materially change simulator fidelity or tested-agent rankings?
 
 - **H7:** graph variants with lower intrinsic validity produce larger ranking variance and more unsupported propagation errors.
-

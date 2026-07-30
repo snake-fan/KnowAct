@@ -80,7 +80,7 @@ KnowAct 构造受控的用户画像，并测试 agent 能否通过对话恢复�
 make setup
 ```
 
-只有在运行需要外部服务的流程时才需要填写 `.env`，例如 LLM-backed graph authoring、simulator turn、MinerU 解析或阿里云 OSS staging。仅启动后端健康检查和本地 UI/API 联调时，可以先不填真实密钥。
+只有在运行需要外部模型服务的流程时才需要填写 `.env`，例如 LLM-backed graph authoring 或 simulator turn。仅启动后端健康检查和本地 UI/API 联调时，可以先不填真实密钥。Graph authoring 只接收人工预处理的 UTF-8 Markdown，并要求显式填写抽取方面；默认设计目标约为 20 个代表性节点、最多 24 个，但目标不是必须凑满的配额。
 
 Episode 注册界面从 `KNOWACT_OPENAI_MODELS` 和 `KNOWACT_DEEPSEEK_MODELS`（逗号分隔）加载 provider-scoped model 下拉选项，并分别使用 `KNOWACT_OPENAI_MODEL` 和 `KNOWACT_DEEPSEEK_MODEL` 作为默认值。只有已配置 API key 的 provider 可用。当前持久化 Episode Run Queue 是单进程实现，不要用多个 Uvicorn workers 启动后端。
 

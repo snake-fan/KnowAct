@@ -31,7 +31,7 @@
 
 - `frontend/`：React 前端，用于 benchmark 配置、交互界面、实验结果查看和知识地图可视化；当前包含 Knowledge Graph、User Profile、User Map、Simulator、Episodes 和 Run Queue workbench modules。Knowledge Graph workbench 可按 domain/version 加载 reviewed graph snapshot 进行只读预览；该功能不编辑 candidate artifacts，也不执行 promotion。
 - `backend/`：FastAPI 后端，用于 profile generation、user simulator、agent loop、evaluation API 和实验任务编排。
-- `backend/knowact/api/`：FastAPI routers；当前包含 `/api/authoring` surface，用于从本地教材 PDF 运行真实 graph authoring workflow、生成 reviewable candidate graph artifacts、通过显式 review confirmation 将校验后的 candidate snapshot promote 为 reviewed authored graph version，并从 reviewed graph 与 confirmed Profile Context snapshot 生成可检查的 single-batch Candidate Knowledge Map。
+- `backend/knowact/api/`：FastAPI routers；当前包含 `/api/authoring` surface，用于上传人工预处理的教材 Markdown、按显式方面范围运行真实 graph authoring workflow、生成 reviewable candidate graph artifacts、通过显式 review confirmation 将校验后的 candidate snapshot promote 为 reviewed authored graph version，并从 reviewed graph 与 confirmed Profile Context snapshot 生成可检查的 single-batch Candidate Knowledge Map。
 - `backend/knowact/core/` 和 `backend/knowact/validation/`：当前 V1 已开始实现的 schema 与 validation spine。
 - `backend/knowact/simulator/`：Phase 5 user simulator contracts；当前包含 usable stateless single-turn DTO/API boundary，用于建立 tested-agent-visible request/response 边界。
 - `backend/knowact/runtime/`：Episode manifest registry、tested-agent visibility boundary、turn runner、持久化 FIFO Episode Run Queue、turn-level checkpoint 和单进程并发调度。

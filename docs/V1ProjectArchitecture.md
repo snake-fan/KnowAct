@@ -168,17 +168,17 @@ core
 
 建议模块：
 
-- `schemas.py`: authoring-only schemas, including `SourceMaterial`, `Parsed Source Segment`, `Segment Node Extraction Draft`, `Source-Grounded Node Skeleton` with concise source grounding notes, step input/result DTOs, list wrappers, and workflow result objects.
+- `schemas.py`: authoring-only schemas, including the explicit `Graph Authoring Scope`, `SourceMaterial`, `Parsed Source Segment`, evidence-bearing `Segment Node Extraction Draft`, `Source-Grounded Node Skeleton`, independent verification decisions, step input/result DTOs, list wrappers, and workflow result objects.
 - `workflow.py`: `GraphAuthoringAgentWorkflow` orchestration, including step order, dependency direction, and validation checkpoints.
-- `steps.py`: graph authoring step protocols and concrete step implementations. `Node Extraction Agent Step`, `Node Skeleton Reconciliation Agent Step`, `Node Rubric Authoring Agent Step`, and `Edge Proposal Agent Step` can live in this single module; they are workflow responsibilities, not required one-file-per-step modules.
+- `steps.py`: graph authoring step protocols and concrete step implementations. `Node Extraction Agent Step`, `Node Skeleton Reconciliation Agent Step`, independent `Node Skeleton Verification Agent Step`, `Node Rubric Authoring Agent Step`, and `Edge Proposal Agent Step` can live in this single module; they are workflow responsibilities, not required one-file-per-step modules.
 - `templates/common.py`: shared graph-authoring prompt components such as source-grounding rules, node design rules, MasteryScale guidance, edge type definitions, schema/output contracts, and JSON serialization helpers.
-- `templates/node_extraction.py`, `templates/node_skeleton_reconciliation.py`, `templates/node_rubric_authoring.py`, `templates/edge_proposal.py`: prompt/message builders for each Graph Authoring Agent Workflow step. Step-specific prompt content should live in the step-specific template file; do not add compatibility re-export modules for old aggregate template names.
+- `templates/node_extraction.py`, `templates/node_skeleton_reconciliation.py`, `templates/node_skeleton_verification.py`, `templates/node_rubric_authoring.py`, `templates/edge_proposal.py`: prompt/message builders for each Graph Authoring Agent Workflow step. Step-specific prompt content should live in the step-specific template file; do not add compatibility re-export modules for old aggregate template names.
 - `parsers/graph_authoring.py`: raw model-output parsers that turn JSON text into segment node drafts, reconciled source skeletons, candidate nodes, and candidate edges.
-- `validation.py`: authoring-specific validation around parsed source segments, segment grounding, skeleton reconciliation provenance, complete candidate node rubrics, and candidate edge graph validity.
+- `validation.py`: authoring-specific validation around parsed source segments, exact excerpt membership, skeleton reconciliation provenance and node budget, independent verification decisions, complete candidate node rubrics, and candidate edge graph validity.
 - `logging.py`: authoring run log schemas and helpers for structured, redacted `Graph Authoring Run Log` records, including links to external agent-step raw model outputs and parser outputs for local debugging.
 - `output.py`: candidate graph file export, especially `candidate_nodes.json` and `candidate_edges.json`, plus sidecar `workflow_log.json` export.
-- `sources.py`: authoring source preparation, including resolving cached `Parsed Source Markdown`, splitting PDFs that exceed MinerU's per-task page limit into local chunks, temporarily publishing local PDFs or PDF chunks through private Aliyun OSS signed URLs for MinerU standard-mode parsing, joining chunk Markdown in page order, and calling MinerU when a same-directory same-stem Markdown file is missing or explicitly regenerated.
-- `segments.py`: deterministic `Parsed Source Markdown` to `Parsed Source Segments` derivation, including shallow heading-path parsing, adjacent-section packing into large context windows, paragraph-level splitting for oversized sections, `char_count`, and source locator preservation. Source parsing and segmentation both stay outside the `llm/` completion boundary.
+- `storage/source_material_catalog.py`: Markdown-only upload catalog. It validates UTF-8 content, records a SHA-256 digest, rejects non-Markdown sources, and verifies size and hash before an authoring run.
+- `segments.py`: deterministic uploaded Markdown to `Parsed Source Segments` derivation, including shallow heading-path parsing, adjacent-section packing into bounded context windows, paragraph-level splitting for oversized sections, `char_count`, and source locator preservation. Segmentation stays outside the `llm/` completion boundary.
 - `openai_workflow.py`: shared graph authoring workflow wiring behind the `ModelClient` interface, with provider selection for OpenAI and DeepSeek clients.
 - `map_authoring.py` and `map_authoring_output.py`: initial Candidate Knowledge Map generation workflow, deterministic assembly, blocking validation, and debug artifact export. Reviewed-map promotion support lives with the shared `review_promotion.py` promotion orchestration and reviewed-map storage helpers. The initial map-authoring contract is intentionally single-map: one generation run receives `benchmark_domain`, one reviewed `graph_version`, one confirmed `user_id`, optional `run_id`, and `client_provider`. `map_id` is assigned only during reviewed-map promotion. The normal orchestration starts from a benchmark-author supplied rough user description, generates a reviewable `Profile Context`, and applies separate `Profile Context Validation` and explicit benchmark-author `Profile Context Confirmation` gates before invoking candidate-map generation. Candidate-map generation remains an independently callable authoring capability for focused debugging. Cohort generation remains an outer orchestration concern that can repeat the single-map contract.
 - Candidate Knowledge Map generation now supports reviewed-graph scale through contiguous evidence-authoring batches in stable reviewed-node order. It exposes identity-based generation, artifact inspection, and explicit promotion, defaults to `evidence_batch_size = 5` with a positive request-level override, applies one request-level `sampling_temperature` to the outline step and every evidence batch, and writes generation-time edge-consistency warnings. Candidate-map run ids do not overwrite existing run directories; retry creates a new run id.
@@ -280,9 +280,9 @@ core
 - model client 返回原始模型文本；workflow-specific parser 负责把输出解析成 domain schema。
 - hidden map、hidden evidence、visible transcript 的边界在调用前显式构造。
 - Phase 2 初始实现使用 OpenAI Python SDK-compatible adapters，通过 `.env.example` 中记录的环境变量配置 OpenAI 或 DeepSeek API key、model、base URL 和 timeout；`POST /api/authoring/graph-candidates`、`POST /api/simulator/turn` 和 `POST /api/tested-agents/simple-llm/turn-test` 通过 `client_provider` 在请求级选择 provider，默认 `openai`。
-- 测试阶段的 PDF source material 可以放在仓库根目录 `storage/` 下，由 `/api/authoring` 按相对路径选择；authoring source preparation 先复用或生成同目录同 stem 的 `Parsed Source Markdown`，再派生 `Parsed Source Segments`，由后续 LLM steps 通过普通 text `ModelClient` 消费 segment 或结构化 intermediate artifacts。
-- v1 graph authoring 不使用 PDF base64 `input_file`、OpenAI Files API `file_id` 或 PDF-specific LLM client path；MinerU 解析属于 `authoring/sources.py` 的 source preparation，Markdown segmentation 属于 `authoring/segments.py`。
-- MinerU standard mode 通过私有阿里云 OSS bucket 的临时 staging object 生成短期 signed URL，再将 URL 提交给 MinerU v4；超过 `KNOWACT_MINERU_MAX_PAGES_PER_TASK` 的 PDF 会先在本地拆分为多个 chunk，逐块解析后按页码顺序拼接为一个 `Parsed Source Markdown`；OSS object 默认 best-effort 删除，signed URL 不进入 API response、workflow log 或 candidate graph artifacts。
+- v1 graph authoring 只接受通过 `/api/authoring/source-materials` 上传的 UTF-8 Markdown。三本书的格式转换由 benchmark author 在项目外手动完成；KnowAct 不实现文档转换或临时对象存储链路。
+- 每次 candidate graph run 必须提供 aspect name/description、representative tasks、optional exclusions、target node count 和 maximum node count。默认研究设计以约 20 个节点为目标、24 个为上限；目标不是配额，不允许用弱节点凑数。
+- Node extraction 必须返回可在 source segment 中机械核对的短 `evidence_excerpt`。Reconciliation 在全局预算下选择代表性节点，独立 verifier 再检查 source support、scope fit 与 diagnostic value，之后才进入 rubric 和 edge authoring。
 - 测试和 development fixture 默认使用 fake 或 deterministic model clients，不应在普通 validation checks 中调用真实 OpenAI API。
 
 ### `simulator/`
@@ -500,6 +500,7 @@ The initial scheduler runs in one FastAPI process with a thread pool capped at 8
 
 - `GET /health`
 - `GET /api/authoring/benchmark-domains`
+- `POST /api/authoring/source-materials`
 - `GET /api/authoring/graphs/{benchmark_domain}`
 - `GET /api/authoring/graphs/{benchmark_domain}/{version}`
 - `POST /api/authoring/graph-candidates`
@@ -643,7 +644,7 @@ Artifact policy:
 - `checkpoint.json` 是 resume-only transient state；它保存 visible context、working map、runner phase、remaining turn budget、trace progress 和 immutable execution configuration。中断在 turn 中间时丢弃未 commit turn，从上一个 checkpoint 重放，因此 provider call 是 at-least-once，不保证 exactly-once。
 - Latest valid `checkpoint.json` 是 resumable progress 的 authoritative commit marker。Crash 若留下超前于 checkpoint 的 turn、working-map 或 trace 内容，这些内容属于 uncommitted progress，resume 时必须忽略或确定性覆盖。
 - `failed` 和 `cancelled` 保留 checkpoint 以便同一 run id 续跑。`completed` 先写完 transcript、tool trace、agent output 和 scoring report，再删除 `checkpoint.json` 与该 run 的 resume-only scheduling state；formal audit artifacts 继续保留。
-- 大型 source PDFs 可以本地保存，正式数据只引用 source metadata 和 `Source Locator`。
+- 原始书籍文件可以由 benchmark author 在项目外保存；KnowAct authoring catalog 只保存人工预处理的 Markdown，正式数据通过 source metadata、内容哈希和 `Source Locator` 保持可审计。
 
 ## Frontend Architecture
 
@@ -737,7 +738,7 @@ make check
    - 推荐：接受，但默认不要提交大体积 run outputs；只提交精选 reports 或小型 fixture outputs。
 
 4. authoring workflow 是否应该通过 API 暴露？
-   - 推荐：暴露一条窄的 source-backed candidate graph run API，用于真实运行和人工检查生成质量；它以本地 PDF 为入口，先解析或复用同目录 Markdown，再派生 Parsed Source Segments，并让 LLM steps 只消费 bounded segment text 或 structured intermediate artifacts。它只能写 candidate artifacts，不能 promote reviewed graph data。review workflow 稳定后再扩展 UI/API。
+   - 推荐：暴露一条窄的 source-backed candidate graph run API，用于真实运行和人工检查生成质量；它从已上传 Markdown 和显式 Graph Authoring Scope 派生 Parsed Source Segments，让 LLM steps 只消费 bounded segment text 或 structured intermediate artifacts，并将 scope、evidence、verification decisions 和 traces 写入 candidate run。它只能写 candidate artifacts，不能自动 promote reviewed graph data。
 
 5. frontend 是否进入 v1 必需路径？
    - 推荐：不是 M1-M8 的必需路径。M10 再扩展 research workbench；早期可只做最小 inspection。

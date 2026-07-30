@@ -13,16 +13,24 @@ A selected textbook, course material, paper, or reference used as the source bas
 _Avoid_: general knowledge, model memory, unsourced topic list
 
 **Source Material Catalog**:
-An authoring-only registry that gives uploaded or local source materials stable identities and storage paths.
+A Markdown-only authoring registry that gives uploaded source materials stable identities, storage paths, sizes, and content hashes.
 _Avoid_: benchmark graph manifest, reviewed graph data, book-only library
 
 **Parsed Source Markdown**:
-A Markdown representation of an **Authoritative Source** used as source material during graph authoring.
-_Avoid_: PDF input_file, OpenAI file_id, raw PDF prompt payload
+The manually prepared UTF-8 Markdown representation of an **Authoritative Source** used directly during graph authoring.
+_Avoid_: in-project document conversion, remote file id, raw PDF prompt payload
 
 **Parsed Source Segment**:
 An authoring-only semantic slice of **Parsed Source Markdown** that preserves its source path and reviewable source location for source-grounded graph authoring. Its `segment_id` is a run-local sequential debug/replay id such as `seg_000001`, not a **Source Locator** or stable reviewed identifier.
 _Avoid_: chunk, PDF chunk, raw paragraph chunk
+
+**Graph Authoring Scope**:
+An author-declared aspect boundary containing a name, description, representative user tasks, exclusions, a soft target node count, and a hard maximum node count.
+_Avoid_: whole-book extraction, keyword-only filter, mandatory node quota
+
+**Source Evidence Excerpt**:
+A short exact excerpt carried from a **Parsed Source Segment** through node reconciliation so code can verify source membership and a later verifier can judge semantic support.
+_Avoid_: invented quotation, source locator alone, hidden chain-of-thought
 
 **Source Locator**:
 A minimal structured reference that identifies where a **Knowledge Node** is mentioned in an **Authoritative Source**.
@@ -1012,13 +1020,13 @@ _Avoid_: ground-truth edge, authored edge
 - "graph manifest" can sound like the graph data itself; resolved: a **Graph Manifest** is optional metadata that references separate graph data files.
 - "graph file layout" can sound like part of the v1 schema; resolved: v1 fixes file contents and split storage, while directory layout is deferred.
 - "graph authoring agent" can sound like it bypasses review; resolved: the **Graph Authoring Agent Workflow** produces **Graph Authoring Output Files** for benchmark-author review.
-- "graph authoring workflow" can be split into separate tasks; resolved: v1 uses one **Graph Authoring Agent Workflow** with node extraction, node skeleton reconciliation, node rubric authoring, and edge proposal steps.
+- "graph authoring workflow" can be split into separate tasks; resolved: v1 uses one **Graph Authoring Agent Workflow** with scope-aware node extraction, node skeleton reconciliation and selection, independent skeleton verification, node rubric authoring, and edge proposal steps.
 - "node extraction" can sound like it produces final candidate nodes or reconciled skeletons; resolved: v1 node extraction produces **Segment Node Extraction Drafts**, then **Node Skeleton Reconciliation Agent Step** produces **Source-Grounded Node Skeletons**.
 - "node rubric context" can accidentally include unreviewed graph structure; resolved: v1 rubric authoring uses only **Node Rubric Input Scope**, not neighboring nodes or candidate edges.
 - "edge proposal context" can be confused with rubric context; resolved: v1 edge proposal may use complete candidate node rubrics because it runs after rubric authoring and remains subject to review.
 - "edge proposal" can become recall-first relatedness harvesting; resolved: v1 uses **Precision-First Edge Proposal** and omits weak or speculative relations.
 - "precision-first" can sound like a fixed confidence threshold; resolved: v1 has no fixed **Candidate Edge Confidence Threshold** and uses rationale quality instead.
-- "chunk" can mean either PDF parser transport or graph-authoring source context; resolved: use **Parsed Source Segment** for the graph-authoring source-reading unit.
+- "chunk" is ambiguous in graph authoring; resolved: use **Parsed Source Segment** for the deterministic source-reading unit.
 - "candidate artifact" can imply candidate fields inside every output object; resolved: candidate status belongs to the filename, directory, or review state, not to **Knowledge Node** or **Knowledge Edge** object contents.
 - "validation report" can sound like a required final graph-authoring output; resolved: v1 final graph-authoring output is only the node JSON list and edge JSON list.
 - "edge content" can be confused with node content; resolved: edge list items use the **Knowledge Edge** schema, not the **Knowledge Node** rubric schema.

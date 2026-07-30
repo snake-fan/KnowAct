@@ -455,9 +455,11 @@ A prerequisite_for C
 
 LLM workflow 可以用于从选定的权威教材、课程材料或论文中生成 `Candidate Knowledge Graph`，但 candidate graph 不能直接进入 v1 evaluation。benchmark author 必须审核 nodes、edges、rationales、weights、curation confidence 和 mastery rubrics 后，才能将其发布为 `Authored Knowledge Graph`。
 
-v1 的 source-grounded node skeleton list 必须先从 authoritative source 抽取。每个 node skeleton 都应带 source locator；不要在没有 source locator 的情况下凭常识现编 node 清单。后续 `Node Rubric Authoring Agent Step` 再把 skeleton 补全为完整 candidate node。
+v1 的 source-grounded node skeleton list 必须先从 authoritative source 抽取。每个 node skeleton 都应带 source locator 和从 source segment 继承的精确 evidence excerpt；不要在没有可核对证据的情况下凭常识现编 node 清单。后续 `Node Rubric Authoring Agent Step` 再把经独立 verifier 保留的 skeleton 补全为完整 candidate node。
 
-v1 的抽取过程不以手工编写 candidate node inventory 为主，而是先实现 `Graph Authoring Agent Workflow`。该 workflow 通过项目自写的轻量 agent frame 调用模型 API，直接读取 authoritative PDF 或 source material，分步骤执行知识点抽取、定位出处、node rubric 编写、合并和关系提议。
+v1 的抽取过程不以手工编写 candidate node inventory 为主，而是先实现 `Graph Authoring Agent Workflow`。benchmark author 先在项目外把三本 source material 手工转换为 Markdown，再上传选定的一本并声明 `Graph Authoring Scope`。workflow 通过项目自写的轻量 agent frame 调用模型 API，分步骤执行方面相关知识点抽取、精确证据核对、全局合并与代表性选择、独立 skeleton verification、node rubric 编写和关系提议。
+
+`Graph Authoring Scope` 由 aspect name/description、representative tasks、excluded topics、target node count 和 maximum node count 构成。初始窄切片以约 20 个节点为软目标、24 个为硬上限；target 不是 quota，来源证据或诊断价值不足时必须少取而不能补弱节点。
 
 workflow 的最终可审阅输出只包含两个 JSON list 文件：
 
@@ -521,16 +523,26 @@ Graph authoring 是一个 `Graph Authoring Agent Workflow`，其中包含多个 
 
 ``` text
 Node Extraction Agent Step
-= authoritative PDF / source material
-→ source reading
-→ source-grounded node skeleton extraction
-→ duplicate / merge pass
-→ source locator validation
-→ source grounding note extraction
-→ source-grounded node skeleton list
+= one uploaded Markdown segment
++ explicit Graph Authoring Scope
+→ aspect-relevant Segment Node Extraction Drafts
+→ exact evidence excerpt membership validation
+
+Node Skeleton Reconciliation Agent Step
+= all validated segment drafts
++ Graph Authoring Scope and global node budget
+→ duplicate / merge / granularity decisions
+→ representative-node selection near target and within maximum
+→ source-grounded node skeleton list with evidence provenance
+
+Node Skeleton Verification Agent Step
+= reconciled skeleton list
++ Graph Authoring Scope
+→ source support / scope fit / diagnostic value decisions
+→ verified source-grounded node skeleton list
 
 Node Rubric Authoring Agent Step
-= source-grounded node skeleton list
+= verified source-grounded node skeleton list
 + source locators and source grounding notes
 + global MasteryScale
 → diagnostic_goal drafting
@@ -567,7 +579,7 @@ v1 不为 `candidate_edges.json` 设置固定 `curation_confidence` 阈值。`cu
 
 这种方向不能反过来：node rubric 不由 candidate edge 生成，但 candidate edge 可以参考已经生成的 node rubric。edge proposal 仍然只是 candidate output，不能绕过 benchmark-author review。
 
-因此，node extraction、node rubric authoring 和 edge generation 可以由不同 agent step 分别完成，但它们属于同一个 graph authoring workflow，而不是多个互相独立的 workflow。该 workflow 的最终输出仍然是两个 JSON list 文件，不直接自动接受为 `Authored Knowledge Graph`。
+因此，node extraction、reconciliation、independent verification、node rubric authoring 和 edge generation 可以由不同 agent step 分别完成，但它们属于同一个 graph authoring workflow，而不是多个互相独立的 workflow。该 workflow 的最终输出仍然是两个 JSON list 文件，不直接自动接受为 `Authored Knowledge Graph`。
 
 benchmark author 完成人工 review 后，v1 仍然分别存储 graph data：
 

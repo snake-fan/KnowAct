@@ -33,8 +33,18 @@ export type SourceMaterialRecord = {
   storage_uri: string;
   filename: string;
   size_bytes: number;
+  content_sha256?: string | null;
   uploaded_at: string;
   citation?: string | null;
+};
+
+export type GraphAuthoringScope = {
+  aspect_name: string;
+  aspect_description: string;
+  representative_tasks: string[];
+  excluded_topics: string[];
+  target_node_count: number;
+  max_node_count: number;
 };
 
 export type GraphCandidateArtifactPaths = {
@@ -101,13 +111,12 @@ export type GraphCandidateResponse = {
     storage_uri: string;
     filename: string;
     size_bytes: number;
-    markdown_storage_uri: string;
-    markdown_filename: string;
-    markdown_size_bytes: number;
-    markdown_cache_status: string;
+    content_sha256: string;
     source_id: string;
     title: string;
+    citation?: string | null;
   };
+  scope: GraphAuthoringScope;
   run_log_summary: {
     run_id: string;
     workflow_name: string;
@@ -389,6 +398,7 @@ export async function generateCandidateGraph(input: {
   benchmarkDomain: string;
   runId?: string;
   clientProvider: "openai" | "deepseek";
+  scope: GraphAuthoringScope;
 }): Promise<GraphCandidateResponse> {
   return requestJson<GraphCandidateResponse>("/api/authoring/graph-candidates", {
     method: "POST",
@@ -398,6 +408,7 @@ export async function generateCandidateGraph(input: {
       benchmark_domain: input.benchmarkDomain,
       run_id: input.runId || null,
       client_provider: input.clientProvider,
+      scope: input.scope,
       write_artifacts: true
     })
   });

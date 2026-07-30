@@ -1,5 +1,7 @@
 # V1 domain covers the full ISL Python source
 
+> Superseded by ADR 0058. V1 graph authoring now selects one explicit aspect rather than treating the full book as the graph boundary.
+
 Accepted. This amends ADR-0025 and ADR-0027: KnowAct v1 keeps a single first benchmark domain, but the canonical domain is now `statistical_learning_with_python` and its source scope is the full *An Introduction to Statistical Learning with Applications in Python* book rather than the earlier `classical_supervised_ml_algorithms` slice. The project is close enough to experiment runs that the first benchmark graph should reflect the full selected authoritative source instead of a demo-sized supervised-only subset.
 
 **Considered Options**

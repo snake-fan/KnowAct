@@ -80,7 +80,7 @@ From the repository root, prepare `.env` and install backend/frontend dependenci
 make setup
 ```
 
-Fill in `.env` only for workflows that call external services, such as LLM-backed graph authoring, simulator turns, MinerU parsing, or Aliyun OSS staging. The backend can still be started for health checks and local UI/API wiring without real secrets.
+Fill in `.env` only for workflows that call an external model provider, such as LLM-backed graph authoring or simulator turns. The backend can still be started for health checks and local UI/API wiring without real secrets. Graph authoring accepts manually prepared UTF-8 Markdown and requires an explicit aspect scope; its default design target is about 20 representative nodes, with 24 as a non-binding maximum rather than a quota.
 
 Episode registration reads provider-scoped model dropdowns from `KNOWACT_OPENAI_MODELS` and `KNOWACT_DEEPSEEK_MODELS` (comma-separated), with `KNOWACT_OPENAI_MODEL` and `KNOWACT_DEEPSEEK_MODEL` as defaults. A provider is available only when its API key is configured. The initial persistent Episode Run Queue is single-process; do not start the backend with multiple Uvicorn workers.
 

@@ -3,6 +3,7 @@ from typing import Literal
 from backend.knowact.authoring.steps import (
     LLMEdgeProposalStep,
     LLMNodeSkeletonReconciliationStep,
+    LLMNodeSkeletonVerificationStep,
     LLMNodeRubricAuthoringStep,
     LLMSegmentNodeExtractionStep,
 )
@@ -28,6 +29,7 @@ def build_graph_authoring_workflow(
     return GraphAuthoringAgentWorkflow(
         segment_node_extraction_step=LLMSegmentNodeExtractionStep(model_client),
         node_skeleton_reconciliation_step=LLMNodeSkeletonReconciliationStep(model_client),
+        node_skeleton_verification_step=LLMNodeSkeletonVerificationStep(model_client),
         node_rubric_authoring_step=LLMNodeRubricAuthoringStep(model_client),
         edge_proposal_step=LLMEdgeProposalStep(model_client),
         model_metadata=getattr(model_client, "metadata", None),

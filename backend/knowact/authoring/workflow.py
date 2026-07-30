@@ -14,9 +14,13 @@ from backend.knowact.authoring.logging import (
     workflow_run_error_from_exception,
 )
 from backend.knowact.authoring.schemas import (
+    DEFAULT_GRAPH_AUTHORING_SCOPE,
     EdgeProposalInput,
+    GraphAuthoringScope,
     GraphAuthoringWorkflowResult,
     NodeSkeletonReconciliationResult,
+    NodeSkeletonVerificationInput,
+    NodeSkeletonVerificationResult,
     NodeRubricAuthoringInput,
     NodeRubricAuthoringResult,
     ParsedSourceSegment,
@@ -28,6 +32,7 @@ from backend.knowact.authoring.steps import (
     EdgeProposalStep,
     NodeExtractionStep,
     NodeSkeletonReconciliationStep,
+    NodeSkeletonVerificationStep,
     NodeRubricAuthoringStep,
     SegmentNodeExtractionStep,
     get_authoring_agent_step_trace,
@@ -37,6 +42,7 @@ from backend.knowact.authoring.validation import (
     validate_candidate_edges,
     validate_complete_candidate_nodes,
     validate_node_skeleton_reconciliation_result,
+    validate_node_skeleton_verification_result,
     validate_parsed_source_segments,
     validate_segment_node_extraction_drafts,
     validate_source_grounded_node_skeletons,
@@ -50,6 +56,9 @@ _LOGGER = get_knowact_logger("authoring.workflow")
 
 
 class IntermediateArtifactWriter(Protocol):
+    def write_graph_authoring_scope(self, item) -> str:
+        """Persist the explicit aspect scope and return a run-relative URI."""
+
     def write_parsed_source_segments(self, items) -> str:
         """Persist validated parsed source segments and return a run-relative URI."""
 
@@ -61,6 +70,12 @@ class IntermediateArtifactWriter(Protocol):
 
     def write_source_grounded_node_skeletons(self, items) -> str:
         """Persist validated source-grounded skeletons and return a run-relative URI."""
+
+    def write_node_skeleton_verification_decisions(self, items) -> str:
+        """Persist independent skeleton verification decisions."""
+
+    def write_verified_node_skeletons(self, items) -> str:
+        """Persist skeletons retained after independent verification."""
 
     def write_node_rubric_patches(self, items) -> str:
         """Persist validated node rubric patches and return a run-relative URI."""
@@ -79,6 +94,7 @@ class GraphAuthoringAgentWorkflow:
         node_extraction_step: NodeExtractionStep | None = None,
         segment_node_extraction_step: SegmentNodeExtractionStep | None = None,
         node_skeleton_reconciliation_step: NodeSkeletonReconciliationStep | None = None,
+        node_skeleton_verification_step: NodeSkeletonVerificationStep | None = None,
         node_rubric_authoring_step: NodeRubricAuthoringStep,
         edge_proposal_step: EdgeProposalStep,
         model_metadata: ModelClientMetadata | None = None,
@@ -93,14 +109,21 @@ class GraphAuthoringAgentWorkflow:
         self._node_extraction_step = node_extraction_step
         self._segment_node_extraction_step = segment_node_extraction_step
         self._node_skeleton_reconciliation_step = node_skeleton_reconciliation_step
+        self._node_skeleton_verification_step = node_skeleton_verification_step
         self._node_rubric_authoring_step = node_rubric_authoring_step
         self._edge_proposal_step = edge_proposal_step
         self._model_metadata = model_metadata
 
-    def run(self, source_materials: Sequence[SourceMaterial]) -> GraphAuthoringWorkflowResult:
+    def run(
+        self,
+        source_materials: Sequence[SourceMaterial],
+        *,
+        scope: GraphAuthoringScope = DEFAULT_GRAPH_AUTHORING_SCOPE,
+    ) -> GraphAuthoringWorkflowResult:
         return self.run_with_log(
             source_materials,
             run_id=default_graph_authoring_run_id(),
+            scope=scope,
         ).workflow_result
 
     def run_with_log(
@@ -108,6 +131,7 @@ class GraphAuthoringAgentWorkflow:
         source_materials: Sequence[SourceMaterial],
         *,
         run_id: str,
+        scope: GraphAuthoringScope = DEFAULT_GRAPH_AUTHORING_SCOPE,
         source_metadata: Sequence[RunLogSourceMaterial] | None = None,
         intermediate_artifact_writer: IntermediateArtifactWriter | None = None,
     ) -> GraphAuthoringWorkflowRunResult:
@@ -130,6 +154,7 @@ class GraphAuthoringAgentWorkflow:
             source_materials=source_materials,
             run_id=run_id,
             intermediate_artifact_writer=intermediate_artifact_writer,
+            scope=scope,
         )
 
         rubric_result = _run_logged_entry(
@@ -193,6 +218,7 @@ class GraphAuthoringAgentWorkflow:
         )
 
         workflow_result = GraphAuthoringWorkflowResult(
+            scope=scope,
             source_grounded_node_skeletons=tuple(skeletons),
             candidate_nodes=tuple(candidate_nodes),
             candidate_edges=tuple(candidate_edges),
@@ -216,6 +242,7 @@ class GraphAuthoringAgentWorkflow:
         source_materials: tuple[SourceMaterial, ...],
         run_id: str,
         intermediate_artifact_writer: IntermediateArtifactWriter | None,
+        scope: GraphAuthoringScope,
     ):
         if self._segment_node_extraction_step is None or self._node_skeleton_reconciliation_step is None:
             if self._node_extraction_step is None:
@@ -256,7 +283,7 @@ class GraphAuthoringAgentWorkflow:
             entry_type="agent_step",
             input_counts={"segments": len(segments)},
             run_id=run_id,
-            operation=lambda: self._segment_node_extraction_step.run(segments),
+            operation=lambda: self._segment_node_extraction_step.run(segments, scope),
             output_counts=lambda value: {"segment_node_extraction_drafts": len(value)},
             artifact_uris=lambda value: _write_segment_node_extraction_draft_artifacts(
                 intermediate_artifact_writer,
@@ -280,7 +307,7 @@ class GraphAuthoringAgentWorkflow:
             entry_type="agent_step",
             input_counts={"segment_node_extraction_drafts": len(drafts)},
             run_id=run_id,
-            operation=lambda: self._node_skeleton_reconciliation_step.run(drafts),
+            operation=lambda: self._node_skeleton_reconciliation_step.run(drafts, scope),
             output_counts=lambda value: {"skeletons": len(value.source_grounded_node_skeletons)},
             trace_getter=lambda: get_authoring_agent_step_trace(self._node_skeleton_reconciliation_step),
         )
@@ -294,14 +321,56 @@ class GraphAuthoringAgentWorkflow:
             operation=lambda: validate_node_skeleton_reconciliation_result(
                 reconciliation_result,
                 drafts,
+                scope,
             ),
             validation_result="passed",
             artifact_uris=lambda _: _write_reconciled_node_skeleton_artifacts(
                 intermediate_artifact_writer,
                 reconciliation_result,
+                scope,
             ),
         )
-        return skeletons
+        if self._node_skeleton_verification_step is None:
+            return skeletons
+
+        verification_result = _run_logged_entry(
+            builder,
+            entry_name="node_skeleton_verification",
+            entry_type="agent_step",
+            input_counts={"skeletons": len(skeletons)},
+            run_id=run_id,
+            operation=lambda: self._node_skeleton_verification_step.run(
+                NodeSkeletonVerificationInput(scope=scope, skeletons=tuple(skeletons))
+            ),
+            output_counts=lambda value: {
+                "verification_decisions": len(value.decisions),
+                "verified_skeletons": len(value.verified_skeletons),
+            },
+            trace_getter=lambda: get_authoring_agent_step_trace(
+                self._node_skeleton_verification_step
+            ),
+        )
+        _run_logged_entry(
+            builder,
+            entry_name="validate_node_skeleton_verification",
+            entry_type="validation_checkpoint",
+            input_counts={
+                "skeletons": len(skeletons),
+                "verification_decisions": len(verification_result.decisions),
+            },
+            run_id=run_id,
+            operation=lambda: validate_node_skeleton_verification_result(
+                verification_result,
+                skeletons,
+                scope,
+            ),
+            validation_result="passed",
+            artifact_uris=lambda _: _write_node_skeleton_verification_artifacts(
+                intermediate_artifact_writer,
+                verification_result,
+            ),
+        )
+        return verification_result.verified_skeletons
 
     def _run_legacy_node_extraction(
         self,
@@ -436,15 +505,33 @@ def _write_segment_node_extraction_draft_artifacts(
 def _write_reconciled_node_skeleton_artifacts(
     writer: IntermediateArtifactWriter | None,
     reconciliation_result: NodeSkeletonReconciliationResult,
+    scope: GraphAuthoringScope,
 ) -> dict[str, str]:
     if writer is None:
         return {}
     return {
+        "graph_authoring_scope": writer.write_graph_authoring_scope(scope),
         "node_skeleton_reconciliation": writer.write_node_skeleton_reconciliation(
             reconciliation_result.records
         ),
         "source_grounded_node_skeletons": writer.write_source_grounded_node_skeletons(
             reconciliation_result.source_grounded_node_skeletons
+        ),
+    }
+
+
+def _write_node_skeleton_verification_artifacts(
+    writer: IntermediateArtifactWriter | None,
+    result: NodeSkeletonVerificationResult,
+) -> dict[str, str]:
+    if writer is None:
+        return {}
+    return {
+        "node_skeleton_verification_decisions": writer.write_node_skeleton_verification_decisions(
+            result.decisions
+        ),
+        "verified_node_skeletons": writer.write_verified_node_skeletons(
+            result.verified_skeletons
         ),
     }
 

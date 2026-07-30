@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.knowact.core.evidence import EvidenceKind
 from backend.knowact.core.graph import KnowledgeEdge, KnowledgeNode, SourceLocator
@@ -21,6 +21,46 @@ class SourceMaterial(BaseModel):
         if not value.strip():
             raise ValueError("must not be blank")
         return value
+
+
+class GraphAuthoringScope(BaseModel):
+    """Explicit research scope for a small, diagnostically useful graph."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    aspect_name: str
+    aspect_description: str
+    representative_tasks: tuple[str, ...] = Field(min_length=1)
+    excluded_topics: tuple[str, ...] = ()
+    target_node_count: int = Field(default=20, ge=5, le=40)
+    max_node_count: int = Field(default=24, ge=5, le=50)
+
+    @field_validator("aspect_name", "aspect_description")
+    @classmethod
+    def _text_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("representative_tasks", "excluded_topics")
+    @classmethod
+    def _items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not item.strip() for item in value):
+            raise ValueError("must not contain blank items")
+        return value
+
+    @model_validator(mode="after")
+    def _maximum_must_cover_target(self) -> "GraphAuthoringScope":
+        if self.max_node_count < self.target_node_count:
+            raise ValueError("max_node_count must be greater than or equal to target_node_count")
+        return self
+
+
+DEFAULT_GRAPH_AUTHORING_SCOPE = GraphAuthoringScope(
+    aspect_name="Provided source scope",
+    aspect_description="Select stable concepts needed to answer questions about the provided source.",
+    representative_tasks=("Explain and apply the central concepts in the provided source.",),
+)
 
 
 class ParsedSourceSegment(BaseModel):
@@ -78,8 +118,9 @@ class SegmentNodeExtractionDraftPatch(BaseModel):
     definition: str
     source_locator: SegmentNodeExtractionSourceLocatorPatch
     grounding_note: str
+    evidence_excerpt: str
 
-    @field_validator("name", "definition", "grounding_note")
+    @field_validator("name", "definition", "grounding_note", "evidence_excerpt")
     @classmethod
     def _must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
@@ -102,8 +143,16 @@ class SegmentNodeExtractionDraft(BaseModel):
     definition: str
     source_locator: SourceLocator
     grounding_note: str
+    evidence_excerpt: str
 
-    @field_validator("draft_id", "segment_id", "name", "definition", "grounding_note")
+    @field_validator(
+        "draft_id",
+        "segment_id",
+        "name",
+        "definition",
+        "grounding_note",
+        "evidence_excerpt",
+    )
     @classmethod
     def _must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
@@ -118,6 +167,7 @@ class ReconciledNodeSkeletonDraft(BaseModel):
     definition: str
     source_locators: tuple[SourceLocator, ...] = Field(min_length=1)
     grounding_notes: tuple[str, ...] = Field(min_length=1)
+    evidence_excerpts: tuple[str, ...] = Field(min_length=1)
     supporting_draft_ids: tuple[str, ...] = Field(min_length=1)
     supporting_segment_ids: tuple[str, ...] = Field(min_length=1)
     merge_split_note: str
@@ -129,7 +179,12 @@ class ReconciledNodeSkeletonDraft(BaseModel):
             raise ValueError("must not be blank")
         return value
 
-    @field_validator("grounding_notes", "supporting_draft_ids", "supporting_segment_ids")
+    @field_validator(
+        "grounding_notes",
+        "evidence_excerpts",
+        "supporting_draft_ids",
+        "supporting_segment_ids",
+    )
     @classmethod
     def _items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         if any(not item.strip() for item in value):
@@ -152,6 +207,7 @@ class SourceGroundedNodeSkeleton(BaseModel):
     definition: str
     source_locators: tuple[SourceLocator, ...] = Field(min_length=1)
     source_grounding_notes: tuple[str, ...] = Field(min_length=1)
+    source_evidence_excerpts: tuple[str, ...] = ()
 
     @field_validator("id", "name", "type", "definition")
     @classmethod
@@ -160,7 +216,7 @@ class SourceGroundedNodeSkeleton(BaseModel):
             raise ValueError("must not be blank")
         return value
 
-    @field_validator("source_grounding_notes")
+    @field_validator("source_grounding_notes", "source_evidence_excerpts")
     @classmethod
     def _source_grounding_notes_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         if any(not note.strip() for note in value):
@@ -182,6 +238,7 @@ class NodeSkeletonReconciliationRecord(BaseModel):
     definition: str
     source_locators: tuple[SourceLocator, ...] = Field(min_length=1)
     grounding_notes: tuple[str, ...] = Field(min_length=1)
+    evidence_excerpts: tuple[str, ...] = Field(min_length=1)
     supporting_draft_ids: tuple[str, ...] = Field(min_length=1)
     supporting_segment_ids: tuple[str, ...] = Field(min_length=1)
     merge_split_note: str
@@ -193,7 +250,12 @@ class NodeSkeletonReconciliationRecord(BaseModel):
             raise ValueError("must not be blank")
         return value
 
-    @field_validator("grounding_notes", "supporting_draft_ids", "supporting_segment_ids")
+    @field_validator(
+        "grounding_notes",
+        "evidence_excerpts",
+        "supporting_draft_ids",
+        "supporting_segment_ids",
+    )
     @classmethod
     def _items_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         if any(not item.strip() for item in value):
@@ -206,6 +268,44 @@ class NodeSkeletonReconciliationResult(BaseModel):
 
     records: tuple[NodeSkeletonReconciliationRecord, ...]
     source_grounded_node_skeletons: tuple[SourceGroundedNodeSkeleton, ...]
+
+
+class NodeSkeletonVerificationDecision(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: str
+    decision: Literal["keep", "remove"]
+    grounding_status: Literal["supported", "uncertain", "unsupported"]
+    scope_status: Literal["in_scope", "boundary_case", "out_of_scope"]
+    diagnostic_value: Literal["high", "medium", "low"]
+    rationale: str
+
+    @field_validator("id", "rationale")
+    @classmethod
+    def _values_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
+class NodeSkeletonVerificationDecisionList(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    decisions: tuple[NodeSkeletonVerificationDecision, ...]
+
+
+class NodeSkeletonVerificationInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    scope: GraphAuthoringScope
+    skeletons: tuple[SourceGroundedNodeSkeleton, ...]
+
+
+class NodeSkeletonVerificationResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    decisions: tuple[NodeSkeletonVerificationDecision, ...]
+    verified_skeletons: tuple[SourceGroundedNodeSkeleton, ...]
 
 
 class NodeRubricPatch(BaseModel):
@@ -276,6 +376,7 @@ class KnowledgeEdgeList(BaseModel):
 class GraphAuthoringWorkflowResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
+    scope: GraphAuthoringScope = DEFAULT_GRAPH_AUTHORING_SCOPE
     source_grounded_node_skeletons: tuple[SourceGroundedNodeSkeleton, ...]
     candidate_nodes: tuple[KnowledgeNode, ...]
     candidate_edges: tuple[KnowledgeEdge, ...]

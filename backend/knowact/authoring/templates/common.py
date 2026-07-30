@@ -124,6 +124,11 @@ def dump_model_list(items: Sequence[object]) -> str:
     return json.dumps(payload, indent=2, sort_keys=True)
 
 
+def dump_model(item: object) -> str:
+    payload = item.model_dump(mode="json", exclude_none=True) if hasattr(item, "model_dump") else item
+    return json.dumps(payload, indent=2, sort_keys=True)
+
+
 def render_parsed_source_markdown(source_materials: Sequence[object]) -> str:
     rendered_sources: list[str] = []
     for item in source_materials:

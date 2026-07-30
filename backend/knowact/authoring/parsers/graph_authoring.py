@@ -5,6 +5,8 @@ from pydantic import ValidationError
 
 from backend.knowact.authoring.schemas import (
     KnowledgeEdgeList,
+    NodeSkeletonVerificationDecision,
+    NodeSkeletonVerificationDecisionList,
     NodeRubricPatch,
     NodeRubricPatchList,
     ReconciledNodeSkeletonDraft,
@@ -92,6 +94,12 @@ def parse_segment_node_extraction_output(raw_output: str) -> tuple[SegmentNodeEx
 
 def parse_node_skeleton_reconciliation_output(raw_output: str) -> tuple[ReconciledNodeSkeletonDraft, ...]:
     return _parse_model(raw_output, ReconciledNodeSkeletonDraftList).skeletons
+
+
+def parse_node_skeleton_verification_output(
+    raw_output: str,
+) -> tuple[NodeSkeletonVerificationDecision, ...]:
+    return _parse_model(raw_output, NodeSkeletonVerificationDecisionList).decisions
 
 
 def parse_node_rubric_authoring_output(raw_output: str) -> tuple[NodeRubricPatch, ...]:
