@@ -1,34 +1,34 @@
 \section{The \knowact Benchmark}
 \label{sec:benchmark}
 
-\knowact evaluates whether an agent can infer, maintain, and use a structured model of a user's knowledge. This section defines the target state, benchmark artifacts, interaction boundary, agent protocol, and scoring rule.
+\knowact is organized around an attribution question: when an agent reconstructs a user accurately, what makes that performance evidence of active user modeling rather than prior knowledge, exhaustive questioning, or leakage? Each benchmark component removes one ambiguity. The graph fixes the hypothesis space, the hidden map fixes the target, the turn budget gives questions an opportunity cost, and the visibility boundary fixes what can count as evidence.
 
-\subsection{Active Knowledge-State Diagnosis}
+\subsection{Measurement Target and Identifiability}
 \label{sec:formulation}
 
-We operationalize functional ToM as three observable abilities: infer a user state from interaction evidence, revise that state over time, and use the current estimate to select the next action.
+We operationalize functional ToM as a conjunction of three observable abilities: infer a user state from interaction evidence, revise that state as evidence accumulates, and condition the next action on the current estimate. Testing only the first recovers a static inference task; testing only the last permits a generic policy with no explicit user model.
 
-The benchmark does not assume a particular cognitive architecture. It tests these abilities through bounded, auditable behavior in a controlled environment.
+The construct is intentionally behavioral. \knowact does not assume that an agent represents beliefs as humans do. It asks whether a structured estimate explains and supports the agent's diagnostic behavior under controlled information access.
 
-\paragraph{Domain knowledge graph.}
+\paragraph{A shared hypothesis space.}
 A benchmark domain is represented by an authored knowledge graph
 \begin{equation}
     \KG = (\Vnodes, \Eedges),
 \end{equation}
 where each node $v_i \in \Vnodes$ is a diagnosable knowledge unit and each edge $e_{ij} \in \Eedges$ is a reviewed domain relation.
 
-Nodes contain definitions, source locators, diagnostic goals, mastery rubrics, diagnostic signals, and simulator guidance. Edges organize the domain but do not encode user state.
+The graph is public to both agent and simulator. It removes domain discovery from the target capability and makes competing agents reason over the same variables. Nodes contain definitions, source locators, diagnostic goals, mastery rubrics, and diagnostic signals. Edges express domain structure; they never encode a particular user's state.
 
-\paragraph{Hidden user knowledge map.}
+\paragraph{An explicit latent target.}
 For a graph with $N = |\Vnodes|$ nodes, the hidden map is
 \begin{equation}
     \Mtrue = \{s_i^{\star}\}_{i=1}^{N}.
 \end{equation}
 Each state includes mastery $m_i^{\star} \in \{0,1,\ldots,5\}$, evidence references, misconceptions, and unknowns. Levels are node-specific rubric positions, not a universal psychometric scale.
 
-Optional profile context can control conversational style. It is not part of the primary mastery target and cannot override the reviewed node states.
+Making the target explicit allows direct reconstruction scoring, but it also limits the claim. The map is an operational description of knowledge relevant to the authored graph, not a complete psychological profile. Optional profile context controls conversational style; it is neither scored nor allowed to override node states.
 
-\paragraph{Bounded diagnostic episode.}
+\paragraph{A budgeted identification problem.}
 An episode is specified by
 \begin{equation}
     \mathcal{E}p = (\KG, \Mtrue, \mathcal{Z}, T, \rho, \sigma),
@@ -46,7 +46,9 @@ receives answer $a_t$, and updates its estimate
 
 After at most $T$ turns, the agent submits a full-graph reconstruction $\Mhat_T$. The hidden map, evidence, simulator traces, and scoring internals remain inaccessible throughout the episode.
 
-\subsection{Benchmark Construction}
+The budget is what turns dialogue into active diagnosis. Without it, exhaustive coverage can erase differences among acquisition policies. Requiring a full-graph submission prevents an agent from reporting only easy or directly queried nodes. Adaptivity is then a counterfactual claim: after different answers to the same early probe, a policy with a functioning user model should have reason to choose different subsequent probes.
+
+\subsection{Constructing a Scorable Latent State}
 
 \begin{figure}[t]
 \centering
@@ -64,75 +66,46 @@ $\downarrow$\\[-0.2em]
 \label{fig:pipeline}
 \end{figure}
 
-\paragraph{Source-grounded graph authoring.}
-The initial domain is statistical learning, grounded in \emph{An Introduction to Statistical Learning with Applications in Python} \citep{james2023islp}.
+\paragraph{The graph is a measurement model.}
+The initial domain is statistical learning, grounded in \emph{An Introduction to Statistical Learning with Applications in Python} \citep{james2023islp}. Source grounding constrains what the graph may claim, but factual support alone is insufficient. Node granularity determines what distinctions the benchmark can observe: coarse nodes hide partial knowledge, while excessively fine nodes reward terminology rather than understanding.
 
-Before extraction, authors freeze the source scope, node eligibility rules, relation definitions, and competency questions. A node must be source-grounded, conceptually stable, and diagnosable through a small number of targeted questions.
+Authors therefore fix the aspect, representative tasks, exclusions, and node budget before extraction; the initial configuration targets roughly 20 representative nodes and caps the graph at 24. LLMs generate candidates, but do not define the construct: source-linked extraction, global reconciliation, independent verification, and domain review determine what enters the scored space. This distinction is essential because definitions can be source-supported while rubrics and relation rationales remain pedagogical hypotheses. Fail-closed validation and immutable traces make both kinds of judgment inspectable. Appendix~\ref{app:construction} specifies the complete workflow.
 
-The workflow then performs local extraction, evidence verification, global canonicalization, diagnostic enrichment, relation proposal, and graph-level auditing.
+\paragraph{The map separates state from expression.}
+A hidden map assigns one reviewed state to every graph node. The scored node-level state, simulator-only behavioral evidence, and optional style context remain separate artifacts. Consequently, fluency cannot substitute for mastery, and the simulator cannot invent evidence to justify a label. Review asks not only whether a map is complete and internally consistent, but whether its distinctions can plausibly become observable in dialogue.
 
-Separate proposer and verifier contexts reduce self-approval. Uncertain items are quarantined for review rather than silently discarded.
-
-Definitions and relations retain exact source evidence. Diagnostic rubrics are marked as expert pedagogical extensions because they operationalize assessment and need not be stated verbatim by the source.
-
-Human adjudication determines which candidates are promoted. Source checksums, prompt and model configurations, item-level decisions, and immutable graph snapshots make the construction process reproducible and auditable.
-
-\paragraph{Knowledge-map authoring.}
-A hidden map assigns a reviewed state to every graph node. Evidence records specify what the user can explain, where an explanation fails, and which misconceptions or uncertainties may surface.
-
-Authoring separates three artifacts:
-\begin{itemize}[leftmargin=1.5em]
-    \item the static node-level state used as scoring ground truth;
-    \item simulator-only evidence that supports natural answers;
-    \item optional profile context that controls style without changing knowledge.
-\end{itemize}
-
-Candidate maps undergo human checks for graph coverage, internal consistency, plausibility, and evaluability before they become eligible for episodes.
-
-\paragraph{Episode manifests.}
-An immutable manifest binds the graph version, hidden map, turn budget, interaction rule, scoring profile, and pinned provider configuration.
-
-This binding makes repeated runs comparable and prevents accidental changes in benchmark artifacts or runtime settings. Appendix~\ref{app:construction} provides the detailed authoring workflow.
+\paragraph{Comparability is an artifact property.}
+An immutable manifest binds the graph version, hidden map, turn budget, interaction rule, scoring profile, and pinned provider configuration. This prevents a change in model ranking from being silently attributed to a changed graph, user, or simulator.
 
 \subsection{User Simulation and Visibility Boundary}
 \label{sec:simulator}
 
-The simulator must produce natural answers while remaining faithful to the hidden map. \knowact therefore treats simulation as a staged information boundary rather than an unconstrained role-playing prompt.
+Simulation creates the benchmark's central validity tension. A rigid state-query API would be controllable but would remove natural-language diagnosis; an unconstrained role-playing model would be natural but could invent knowledge, reveal labels, or answer from graph-wide context. \knowact treats the simulator as an information boundary that must mediate between these objectives.
 
-\paragraph{Question grounding.}
-A grounder maps the current question to a directly targeted node set $S_t \subseteq \Vnodes$. It also detects ungrounded requests, hidden-label requests, and multiple independent questions.
+\paragraph{Ground before revealing hidden state.}
+A grounder maps the question to a directly targeted node set $S_t \subseteq \Vnodes$ and rejects ungrounded, hidden-label, or compound requests. Because grounding sees the public graph and limited visible dialogue but no hidden state, the target is determined by the question's meaning rather than by which private facts would make it easy to answer.
 
-Grounding sees the public graph and limited visible dialogue, but no hidden state. A probe may cover multiple nodes only when they form one integrated diagnostic question, such as a comparison.
+\paragraph{Reveal only what the question licenses.}
+The context builder retrieves state and evidence only for $S_t$; graph neighbors are not revealed merely because an edge exists. Thus, relations may support an agent's inference without turning the simulator into a full-map oracle. An answer policy converts this restricted context into a de-identified blueprint of permitted claims and uncertainty boundaries, excluding mastery labels, hidden identifiers, and scoring fields.
 
-\paragraph{Hidden-context selection and answer policy.}
-After grounding, the context builder retrieves state and evidence only for nodes in $S_t$. Connected neighbors are not included merely because a graph edge exists.
-
-An answer policy converts the selected context into a de-identified blueprint containing expressible claims, uncertainty boundaries, misconceptions, evidence-supported cues, and prohibited overstatements.
-
-The blueprint excludes mastery labels, node and evidence identifiers, map identifiers, user identifiers, and scoring fields. It is the sole content interface to natural-language generation.
-
-\paragraph{Generation and leakage control.}
-The generator receives the blueprint, visible dialogue required for continuity, and an optional style hint. It never receives the raw hidden map.
-
-Generation preserves partial knowledge and misconceptions rather than reducing all states to know/do-not-know answers. Bounded retries and safe fallbacks handle malformed outputs.
-
-The runtime separates tested-agent, simulator, and evaluation contexts. Hidden policy traces remain available to benchmark authors for audit but never enter the visible transcript.
+\paragraph{Separate content fidelity from surface realization.}
+The generator realizes the blueprint using only the visible dialogue needed for continuity and an optional style hint. The policy therefore controls \emph{what} may be revealed, while generation controls \emph{how} it is said. Separate tested-agent, simulator, and evaluation contexts keep hidden traces auditable but invisible. These controls establish non-leakage under the implemented boundary; human fidelity remains an empirical question tested in Section~\ref{sec:experiments}.
 
 \subsection{Active Diagnosis Agent Protocol}
 \label{sec:agent}
 
-\paragraph{Full-graph working map.}
+The protocol constrains what must be observable, not how an agent must reason internally. Agents may use prompting, probabilistic inference, planning, or learned policies. They share an external state and action interface so that differences in performance can be interpreted under the same evidence and budget.
+
+\paragraph{The working map is an instrument.}
 The tested agent maintains an assessment for every node:
 \begin{equation}
     \hat{s}_{i,t} = (\hat{m}_{i,t}, c_{i,t}, n_{i,t}, R_{i,t}),
 \end{equation}
 where $\hat{m}_{i,t} \in \{\unknown,0,\ldots,5\}$ is assessed mastery, $c_{i,t}$ is confidence, $n_{i,t}$ is an optional note, and $R_{i,t}$ contains supporting visible turns.
 
-All nodes begin as \unknown. A non-unknown assessment should cite visible evidence; unsupported estimates may be submitted but are reported separately.
+All nodes begin as \unknown. Non-unknown assessments should cite visible evidence; unsupported estimates remain scoreable but are reported separately. The schema is not claimed to be cognitively privileged. It makes state maintenance inspectable, so a coherent update trajectory can be distinguished from a late guess.
 
-The full map exposes uncertainty and gives the policy a domain-wide basis for comparing mastery, confidence, graph position, and evidence coverage.
-
-\paragraph{Semantic action interface.}
+\paragraph{Actions expose the closed loop.}
 The runtime exposes only benchmark-relevant operations:
 \begin{itemize}[leftmargin=1.5em]
     \item read the authored episode graph or current working map;
@@ -141,23 +114,16 @@ The runtime exposes only benchmark-relevant operations:
     \item finalize the reconstructed map.
 \end{itemize}
 
-These actions make state updates and probe choices observable. They also prevent policies from bypassing the intended loop through generic access to hidden artifacts.
+These operations make two links observable: answers should change the working map, and the working map should influence later probes. Restricting the interface also prevents a policy from bypassing the intended loop through generic access to benchmark artifacts.
 
-\paragraph{Diagnostic loop.}
-A tested agent repeatedly:
-\begin{enumerate}[leftmargin=1.7em]
-    \item interprets the latest answer as evidence about visible concepts;
-    \item revises mastery, confidence, notes, and supporting turns;
-    \item selects a probe expected to reduce decision-relevant uncertainty;
-    \item asks one question or finalizes when the budget is exhausted.
-\end{enumerate}
-
-\knowact does not prescribe how information value is computed. Agents may use direct prompting, graph-aware coverage, Bayesian updates, planning, or learned policies under the same interface.
+The resulting loop is intentionally underspecified: interpret an answer, revise the working map, and select a probe expected to reduce decision-relevant uncertainty. \knowact neither prescribes an inference algorithm nor assumes optimal experimental design; it tests whether later choices use the information the agent claims to maintain.
 
 \subsection{Evaluation Metrics}
 \label{sec:evaluation}
 
-\paragraph{Primary reconstruction metric.}
+No single metric establishes the full infer--update--act claim. The primary score measures endpoint reconstruction because this target is deterministic and common to all agents. Process measures then test whether that endpoint is supported by visible evidence and acquired efficiently.
+
+\paragraph{Endpoint reconstruction.}
 Let the final predicted mastery for node $i$ be $\hat{m}_i$. For submitted levels $0$ through $5$, the node loss is squared ordinal distance:
 \begin{equation}
     d(\hat{m}_i,m_i^{\star}) = (\hat{m}_i-m_i^{\star})^2.
@@ -169,10 +135,10 @@ An \unknown prediction receives the fixed maximum penalty of $36$. The episode s
 \end{equation}
 where lower is better. The score is deterministic and requires no evaluator model.
 
-Ordinal distance rewards near misses and penalizes severe errors more strongly than exact match. Scores must still be interpreted against node-specific rubrics rather than as universal psychometric distances.
+Squared ordinal distance encodes two judgments: adjacent mistakes are less serious than endpoint mistakes, and large errors should grow more than linearly. An \unknown prediction is penalized more heavily than any valid level error so that selective non-commitment cannot improve the score. These are benchmark conventions, not claims that the six levels form a universal psychometric interval scale; interpretation remains anchored to each node's rubric.
 
-\paragraph{Supporting metrics.}
-Secondary metrics characterize both endpoint quality and diagnostic behavior:
+\paragraph{Evidence and acquisition diagnostics.}
+Secondary metrics expose explanations hidden by the mean endpoint score:
 \begin{itemize}[leftmargin=1.5em]
     \item exact mastery match, signed error, and missing-prediction rate;
     \item unsupported inference rate based on absent visible support;
@@ -181,4 +147,4 @@ Secondary metrics characterize both endpoint quality and diagnostic behavior:
     \item information gain per turn for agents that expose calibrated beliefs.
 \end{itemize}
 
-Misconceptions and free-text unknowns support qualitative analysis but are excluded from the initial automatic score, avoiding an additional subjective judge.
+Misconceptions and free-text unknowns remain available for qualitative analysis but are excluded from the initial automatic score. This gives up some semantic richness to avoid making an additional LLM judge part of the primary result. The experimental comparisons in Section~\ref{sec:experiments} determine which combinations of these signals support stronger claims about adaptivity.

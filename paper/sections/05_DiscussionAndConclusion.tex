@@ -1,50 +1,48 @@
 \section{Discussion and Conclusion}
 \label{sec:discussion}
 
-\subsection{What \knowact Measures}
+\subsection{What a \knowact Result Would Mean}
 
-Low reconstruction error is not evidence of functional ToM when it can be obtained through leakage or a fixed prior. \knowact therefore pairs endpoint accuracy with an observable diagnostic process.
+A benchmark score is evidence only relative to the explanations that the design excludes. Low reconstruction error alone is compatible with several stories: the agent inferred the user from dialogue, exploited a strong population prior, received leaked information, or guessed well. \knowact strengthens interpretation by pairing endpoint accuracy with controlled access, evidence references, and non-adaptive comparisons.
 
-The visibility boundary limits available evidence, questions consume a fixed budget, map updates cite visible turns, and non-adaptive agents provide controls. Together, these constraints distinguish:
+The resulting claims form a hierarchy:
 \begin{enumerate}[leftmargin=1.7em]
-    \item \emph{state inference}: interpreting what an answer implies;
-    \item \emph{state maintenance}: integrating evidence over time;
-    \item \emph{state-conditioned action}: using the current map to select a probe.
+    \item \emph{reconstruction}: the final map matches the reviewed map;
+    \item \emph{active acquisition}: adaptive policies outperform matched non-adaptive controls;
+    \item \emph{state use}: working-map or graph ablations identify a mechanism for that advantage;
+    \item \emph{external validity}: the advantage is robust across simulators and transfers to human interaction.
 \end{enumerate}
 
-The interaction is a form of active information acquisition over a structured latent state. Unlike pool-based active learning, actions are open-ended questions interpreted by a conversational simulator.
+Evidence for a lower level does not entail a higher one. In particular, accurate reconstruction is not yet functional ToM if the same result is achieved by a fixed script. Conversely, failure to transfer to humans would indict the simulator proxy, not necessarily the internal consistency of the reconstruction task.
 
-Unlike conventional adaptive testing, the probe set need not be fixed or calibrated in advance. This flexibility motivates the benchmark while making grounding, evidence audit, and simulator validation essential.
+The interaction can be viewed as active information acquisition over a structured latent state. It differs from pool-based active learning because probes are open-ended utterances whose meaning must be grounded. It differs from conventional adaptive testing because the item bank is not fixed or psychometrically calibrated. This expressivity is precisely why provenance, grounding, and proxy validation are constitutive parts of the measurement argument.
 
-The benchmark is diagnostic rather than task-complete. It does not yet test whether a reconstructed map improves teaching, recommendation, or collaboration.
+Even a fully validated result would remain diagnostic rather than task-complete. \knowact asks whether an agent can acquire a useful user model; it does not yet establish that the model improves teaching, recommendation, or collaboration. Connecting reconstruction to downstream benefit is a separate claim and a natural next benchmark layer.
 
 \subsection{Limitations and Threats to Validity}
 
+\paragraph{The target is authored, not discovered.}
+The graph and rubrics determine which distinctions count as knowledge. Expert review and source provenance make that choice defensible and inspectable, but not uniquely correct. Rankings may change under another granularity, relation set, or rubric design.
+
 \paragraph{Simulator fidelity.}
-A simulator can be consistent with a reviewed map without matching how people express partial knowledge. Human studies must test response similarity, diagnostic value, and transfer of agent rankings.
+A simulator can be perfectly consistent with a reviewed map while expressing partial knowledge unlike a person. Leakage tests establish access control, not behavioral realism. Matched human studies must test diagnostic value and ranking transfer rather than relying on naturalness alone.
 
 \paragraph{Construction circularity.}
-Related model families may author artifacts, simulate users, and serve as tested agents. Correlated biases could make episodes easier or distort rankings.
-
-Source grounding, human review, model-family diversity, rule-based fixtures, and matched human validation reduce this risk but cannot eliminate it.
+Related model families may propose graph artifacts, simulate users, and serve as tested agents. Shared inductive biases could make the benchmark easier for some models. Source grounding, human review, model-family diversity, deterministic fixtures, and human validation reduce but cannot remove this dependence.
 
 \paragraph{Simplified knowledge state.}
-A static L0--L5 state cannot capture context dependence, procedural fluency, forgetting, confidence, or learning during interaction.
-
-The initial benchmark freezes the hidden state to make reconstruction identifiable. Dynamic learning and state transition are important extensions.
+A static L0--L5 state cannot capture context dependence, procedural fluency, confidence, forgetting, or learning during dialogue. Freezing state makes the reconstruction target identifiable, but it also turns explanations into observations rather than teaching events. Dynamic diagnosis will require a transition model and a different causal interpretation.
 
 \paragraph{Initial domain scope.}
-The first release focuses on statistical learning. Evaluation across domains is required to test transfer across graph topologies, source styles, and concept distributions.
+The first release focuses on statistical learning and a small authored graph. It can validate the protocol but not cross-domain generality. Additional domains must vary source style, graph topology, concept granularity, and the kinds of misconceptions that can be expressed.
 
 \paragraph{Operational claims.}
-Success demonstrates behavior compatible with structured user modeling under benchmark constraints. It does not establish human-like beliefs, consciousness, or a psychologically faithful ToM mechanism.
+Success would demonstrate behavior compatible with structured user modeling under benchmark constraints. It would not establish human-like beliefs, consciousness, or a psychologically faithful ToM mechanism. The term functional ToM names the tested role of the representation, not its ontological status.
 
 \subsection{Conclusion and Outlook}
 
-We introduced \knowact, a benchmark for evaluating functional ToM through active knowledge-state diagnosis.
+Evaluating user-aware agents requires more than placing them in a conversation. The evaluator must know what user state is at stake, make evidence acquisition consequential, and distinguish accurate inference from leakage, priors, and generic interaction skill.
 
-A tested agent sees a reviewed domain graph but not the user-specific map. Under a fixed budget, it must ask diagnostic questions, maintain an evidence-backed working map, and reconstruct the hidden state.
+\knowact offers one operationalization of these requirements. It turns a reviewed knowledge map into an explicit latent target, lets agents choose natural-language probes under a budget, and exposes the link from visible evidence to working state and subsequent action. The simulator boundary and deterministic score make this loop auditable without claiming that simulation is equivalent to human interaction.
 
-A visibility-separated simulator and deterministic scoring protocol make the process auditable. The design isolates active user-state acquisition from broader social or task success.
-
-The next step is empirical validation across adaptive and non-adaptive agents, simulator designs, matched human episodes, and additional knowledge domains.
+The immediate next step is not to broaden the claim but to test it: adaptive controls, mechanism ablations, simulator variation, and matched human episodes must establish which level of the evidence hierarchy \knowact can support. Only then should the benchmark be extended to dynamic learning, downstream assistance, and additional domains.

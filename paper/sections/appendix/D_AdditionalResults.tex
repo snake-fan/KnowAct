@@ -1,2 +1,29 @@
+\section{Detailed Experimental Protocol}
+\label{app:experimental-protocol}
+
+\subsection{Artifact and Run Binding}
+
+Every reported run identifies the graph and map versions, turn budget, interaction rule, scoring profile, simulator configuration, tested-agent model, provider settings, and execution configuration. Reported graph versions link to the source hash, declared aspect scope, extraction evidence, reconciliation and verification decisions, workflow traces, and human-review record. Development fixtures without this chain are excluded from benchmark claims.
+
+Agents receive identical public artifacts and episode constraints. Hidden maps, simulator evidence, policy traces, and scoring internals remain outside the tested-agent context. Repeated stochastic runs are nested within episodes; confidence intervals and paired tests use the episode as the independent unit.
+
+\subsection{Policy Controls and Analyses}
+
+The fixed-question agent follows a predefined diagnostic order. The random agent samples valid targets under the interaction constraints. The simple LLM agent chooses questions and updates its map through the same semantic interface as structured agents.
+
+The main analysis reports mastery distance, exact match, missing predictions, unsupported inference, and per-node signed error. Turn-indexed curves distinguish early information acquisition from final reconstruction. Working-map, graph-relation, and evidence-reference ablations test state maintenance, graph-mediated generalization, and traceability.
+
+\subsection{Graph Quality Check}
+
+Two statistical-learning reviewers independently inspect every node and edge, resolving disagreement by discussion or third-party adjudication. Node judgments cover source support, scope fit, granularity, and diagnostic usefulness. Edge judgments cover endpoints, relation type, direction, and rationale. Acceptance, edit, rejection, agreement, and review-time statistics are reported separately from deterministic schema checks.
+
+The same source and scope are processed with a one-shot extraction prompt and the staged evidence-and-verifier workflow while holding model and sampling settings fixed. Reviewer acceptance, unsupported-node rate, duplication, and review time provide a bounded workflow comparison.
+
+\subsection{Simulator, Human, and Error Analyses}
+
+Robustness checks vary simulator model, grounding implementation, answer policy, and profile style while holding maps and budgets fixed. Matched human episodes compare state fidelity, diagnostic usefulness, naturalness, leakage, agent rankings, and adaptivity effects.
+
+Error categories include poor grounding, hidden-state leakage, missed evidence, stale working-map state, redundant probes, unsupported graph propagation, and premature finalization. Representative trajectories connect each error to both the map update and the subsequent action.
+
 % Reserved for complete per-domain results, turn-efficiency curves,
 % robustness checks, human-validation statistics, and qualitative cases.

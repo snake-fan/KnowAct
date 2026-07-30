@@ -1,94 +1,37 @@
 \section{Experimental Evaluation}
 \label{sec:experiments}
 
-The empirical evaluation is organized around the benchmark's central claim: adaptive evidence acquisition should improve hidden-map reconstruction under a fixed interaction budget.
+The benchmark supports progressively stronger claims, and the experiments must keep them separate. Accurate final maps establish reconstruction; an advantage over non-adaptive controls establishes that question choice matters; state and graph ablations test why it matters; simulator and human comparisons test whether the conclusion survives outside one proxy environment.
 
-\subsection{Research Questions}
+Empirical runs are not yet complete. We therefore state the comparisons and falsification criteria before reporting results. This section is an evaluation protocol, not evidence that the proposed construct has already been validated.
 
-We ask five questions:
+\subsection{Claims and Falsification Criteria}
+
+We organize evaluation around four hypotheses:
 \begin{enumerate}[leftmargin=1.7em]
-    \item Do adaptive agents outperform fixed and random diagnostic policies under equal turn budgets?
-    \item Do explicit working maps and graph relations improve reconstruction and question efficiency?
-    \item Are agent rankings robust to simulator model, answer policy, grounding, and profile style?
-    \item Do simulator answers and agent rankings agree with matched human-user episodes?
-    \item Does verified graph authoring improve intrinsic graph quality and reduce expert-review effort relative to simpler construction workflows?
+    \item \textbf{H1---adaptive acquisition:} under equal turn budgets, state-conditioned policies reconstruct hidden maps more accurately than fixed and random diagnostic policies.
+    \item \textbf{H2---explicit state use:} removing the working map or graph access degrades either reconstruction or early-turn efficiency.
+    \item \textbf{H3---simulator robustness:} comparative conclusions persist across simulator model, grounding, answer policy, and profile style.
+    \item \textbf{H4---human transfer:} simulator answers preserve task-relevant human behavior closely enough that agent rankings agree with matched human-user episodes.
 \end{enumerate}
 
-These questions separate construction validity, endpoint reconstruction, state-conditioned action, simulator dependence, and transfer to human interaction.
+Each hypothesis blocks a different over-interpretation. A low reconstruction loss does not establish H1 if a fixed script performs equally well. H1 does not establish H2 if adaptivity comes from unstructured dialogue history alone. H1 and H2 do not establish external validity if rankings reverse under another simulator or with human users. Failure of H3 or H4 would narrow the benchmark claim rather than merely lower a score.
 
-\subsection{Benchmark Instances and Experimental Setup}
+\subsection{Paired Comparative Design}
 
-The initial study uses reviewed statistical-learning graphs grounded in the ISLP source, reviewed hidden maps, and immutable episode manifests.
+The initial study is a construct-validation experiment in statistical learning, not a test of cross-domain generality. The unit of comparison is a reviewed episode. Policies receive the same public graph, hidden-user instance, budget, interaction rule, and scoring profile; repeated stochastic runs remain nested within episodes.
 
-Each reported run must identify the graph and map versions, turn budget, interaction rule, scoring profile, simulator configuration, tested-agent model, and provider settings.
+Three controls give H1 its interpretation. A fixed-question policy controls for a reasonable diagnostic script, a random policy controls for interaction volume, and a simple LLM policy tests whether generic conversational adaptation is sufficient. Structured policies add an explicit working map, graph-aware planning, or an information-gain objective. Beating a no-interaction prior shows that dialogue contains evidence; only a paired advantage over fixed and random policies shows that selecting evidence helps.
 
-Reported graph versions must link to complete source, extraction, verification, repair, and human-review traces. Graphs without this chain are development artifacts and are excluded from benchmark claims.
+The primary analysis reports mastery distance, exact match, missing predictions, and unsupported inference at matched budgets. Final-turn performance tests reconstruction, whereas turn-indexed curves test acquisition efficiency. Per-node signed errors reveal calibration patterns hidden by an aggregate score.
 
-All compared agents receive identical public graphs and episode constraints. Hidden maps, simulator evidence, policy traces, and scoring internals remain outside the tested-agent context.
+\subsection{Mechanism and Validity Tests}
 
-% TODO: Report graph size, hidden-map count, mastery distribution,
-% human-review statistics, model versions, inference settings, and run counts.
+Working-map and graph ablations target H2. Simulator, grounding, answer-policy, and profile-style variations target H3; both absolute changes and rank reversals are reported because only the latter directly threaten comparative validity. Matched human episodes target H4 at the turn level through state fidelity and at the episode level through ranking transfer.
 
-\subsection{Baselines}
+Graph review is a prerequisite validity check because the graph defines the scored variables. Two domain reviewers assess source support, granularity, diagnostic usefulness, and relation validity. A matched one-shot authoring comparison tests only whether the staged workflow reduces unsupported or duplicate candidates and review effort; it does not establish a uniquely correct ontology.
 
-The initial evaluation compares three baseline families:
-\begin{itemize}[leftmargin=1.5em]
-    \item \textbf{Fixed-question agent:} follows a predefined diagnostic order and does not adapt to answers.
-    \item \textbf{Random-question agent:} samples valid diagnostic targets under the episode constraints.
-    \item \textbf{Simple LLM agent:} chooses questions and updates its map directly through the semantic interface.
-\end{itemize}
+Appendix~\ref{app:experimental-protocol} specifies artifact bindings, review judgments, statistical units, ablations, and error categories. Empirical tables will replace the placeholders below once the protocol has been executed.
 
-These controls distinguish the value of interaction from the value of adaptive user modeling. Structured agents can add uncertainty estimates, graph-aware planning, or explicit information-gain objectives.
-
-\subsection{Knowledge-Graph Construction Validation}
-
-The construction study uses a textbook-specific reference graph created independently by two domain experts and adjudicated by a third.
-
-Experts annotate source spans before seeing system candidates, avoiding candidate-induced recall inflation.
-
-Node matching distinguishes equivalent, broader, narrower, related, and unmatched concepts. Only equivalent nodes count as true positives.
-
-We report node precision, recall, and F1, duplication, unsupported-node rate, granularity errors, and source coverage.
-
-Edges require aligned endpoints, relation type, and direction. We report end-to-end and oracle-node edge F1 by relation type.
-
-We also report self-loops, cycles, relation conflicts, and evidence support. We do not credit unstated transitive closure.
-
-Rubrics are evaluated for fidelity, diagnostic relevance, ordinal monotonicity, adjacent-level distinguishability, observable signals, and plausible misconceptions.
-
-Agreement is reported rather than replacing expert judgments with an LLM judge.
-
-Baselines include human-only authoring, one-shot LLM generation, segment extraction with deterministic deduplication, and a staged LLM workflow without independent verification. All model comparisons are budget-matched.
-
-Ablations remove overlap, evidence spans, canonicalization, rubric validation, edge verification, abstention, and bounded repair.
-
-We also inject timeouts, malformed outputs, invalid locators, unsupported claims, ambiguous merges, dangling edges, and context overflow.
-
-We report schema validity, grounding precision and recall, calibration, silent corruption, recovery, latency, tokens, expert editing time, and acceptance without edits.
-
-Chapter-stratified paired bootstrap intervals account for clustered items.
-
-\subsection{Main Reconstruction Results}
-
-The main comparison reports mastery distance, exact match, missing predictions, and unsupported inference for every agent under matched budgets.
-
-Results should include confidence intervals across episode instances and repeated stochastic runs. Per-node errors should accompany aggregate scores to expose systematic over- or under-estimation.
-
-% TODO: Insert the main results table and statistical comparisons.
-
-\subsection{Efficiency, Ablations, and Robustness}
-
-Turn-efficiency curves measure reconstruction quality after each interaction. They test whether adaptive policies gain information earlier rather than only matching non-adaptive agents at the final turn.
-
-Ablations remove the explicit working map, graph relations, or evidence requirements. Robustness checks vary simulator models, grounding policies, answer policies, and profile styles.
-
-% TODO: Insert turn-budget curves, component ablations, and sensitivity results.
-
-\subsection{Simulator Validation and Error Analysis}
-
-Simulator validation compares generated answers with matched human responses on state fidelity, diagnostic usefulness, naturalness, and leakage.
-
-Agent error analysis groups failures into poor grounding, missed evidence, unsupported graph propagation, stale working-map state, redundant probes, and premature finalization.
-
-% TODO: Report human-study protocol, agreement, simulator fidelity,
-% agent-ranking transfer, and representative failure cases.
+% TODO: Insert paired reconstruction results, turn curves, ablations,
+% simulator sensitivity, graph review, and matched-human results.

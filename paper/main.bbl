@@ -1,0 +1,292 @@
+\begin{thebibliography}{32}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Chen et~al.(2024{\natexlab{a}})Chen, Shen, Lv, Wang, Ni, and
+  Ye]{chen2024sackg}
+Hanzhu Chen, Xu~Shen, Qitan Lv, Jie Wang, Xiaoqi Ni, and Jieping Ye.
+\newblock {SAC-KG}: Exploiting large language models as skilled automatic
+  constructors for domain knowledge graph.
+\newblock In \emph{Proceedings of the 62nd Annual Meeting of the Association
+  for Computational Linguistics}, pp.\  4345--4360. Association for
+  Computational Linguistics, 2024{\natexlab{a}}.
+\newblock \doi{10.18653/v1/2024.acl-long.238}.
+
+\bibitem[Chen et~al.(2024{\natexlab{b}})Chen, Wu, Zhou, Wen, Bi, Jiang, Cao,
+  Hu, Lai, Xiong, and Huang]{chen2024tombench}
+Zhuang Chen, Jincenzi Wu, Jinfeng Zhou, Bosi Wen, Guanqun Bi, Gongyao Jiang,
+  Yaru Cao, Mengting Hu, Yunghwei Lai, Zexuan Xiong, and Minlie Huang.
+\newblock {ToMBench}: Benchmarking theory of mind in large language models.
+\newblock In \emph{Proceedings of the 62nd Annual Meeting of the Association
+  for Computational Linguistics}, pp.\  15959--15983. Association for
+  Computational Linguistics, 2024{\natexlab{b}}.
+\newblock \doi{10.18653/v1/2024.acl-long.847}.
+
+\bibitem[Corbett \& Anderson(1994)Corbett and
+  Anderson]{corbett1994knowledgetracing}
+Albert~T. Corbett and John~R. Anderson.
+\newblock Knowledge tracing: Modeling the acquisition of procedural knowledge.
+\newblock \emph{User Modeling and User-Adapted Interaction}, 4\penalty0
+  (4):\penalty0 253--278, 1994.
+
+\bibitem[Dou et~al.(2025)Dou, Galley, Peng, Kedzie, Cai, Ritter, Quirk, Xu, and
+  Gao]{dou2025simulatorarena}
+Yao Dou, Michel Galley, Baolin Peng, Chris Kedzie, Weixin Cai, Alan Ritter,
+  Chris Quirk, Wei Xu, and Jianfeng Gao.
+\newblock {SimulatorArena}: Are user simulators reliable proxies for multi-turn
+  evaluation of {AI} assistants?
+\newblock In \emph{Proceedings of the 2025 Conference on Empirical Methods in
+  Natural Language Processing}, pp.\  35212--35290. Association for
+  Computational Linguistics, 2025.
+\newblock \doi{10.18653/v1/2025.emnlp-main.1786}.
+
+\bibitem[Gandhi et~al.(2023)Gandhi, Fr{"a}nken, Gerstenberg, and
+  Goodman]{gandhi2023bigtom}
+Kanishk Gandhi, Jan-Philipp Fr{"a}nken, Tobias Gerstenberg, and Noah~D.
+  Goodman.
+\newblock Understanding social reasoning in language models with language
+  models.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~36, 2023.
+
+\bibitem[Ghosh et~al.(2020)Ghosh, Heffernan, and Lan]{ghosh2020akt}
+Aritra Ghosh, Neil Heffernan, and Andrew~S. Lan.
+\newblock Context-aware attentive knowledge tracing.
+\newblock In \emph{Proceedings of the 26th ACM SIGKDD International Conference
+  on Knowledge Discovery and Data Mining}, pp.\  2330--2339. ACM, 2020.
+
+\bibitem[Gr{\"u}ninger \& Fox(1995)Gr{\"u}ninger and
+  Fox]{gruninger1995competency}
+Michael Gr{\"u}ninger and Mark~S. Fox.
+\newblock The role of competency questions in enterprise engineering.
+\newblock In \emph{Benchmarking---Theory and Practice}, pp.\  22--31. Springer,
+  1995.
+\newblock \doi{10.1007/978-0-387-34847-6_3}.
+
+\bibitem[Gu et~al.(2024)Gu, Tafjord, Kim, Moore, Le~Bras, Clark, and
+  Choi]{gu2024simpletom}
+Yuling Gu, Oyvind Tafjord, Hyunwoo Kim, Jared Moore, Ronan Le~Bras, Peter
+  Clark, and Yejin Choi.
+\newblock {SimpleToM}: Exposing the gap between explicit {ToM} inference and
+  implicit {ToM} application in {LLM}s.
+\newblock \emph{arXiv preprint arXiv:2410.13648}, 2024.
+
+\bibitem[Han et~al.(2024)Han, Collier, Buntine, and Shareghi]{han2024pive}
+Jiuzhou Han, Nigel Collier, Wray Buntine, and Ehsan Shareghi.
+\newblock {PiVe}: Prompting with iterative verification improving graph-based
+  generative capability of {LLM}s.
+\newblock In \emph{Findings of the Association for Computational Linguistics:
+  ACL 2024}, pp.\  6702--6718. Association for Computational Linguistics, 2024.
+\newblock \doi{10.18653/v1/2024.findings-acl.400}.
+
+\bibitem[Huang et~al.(2025)Huang, Chen, Sheng, Li, and
+  Zhang]{huang2025graphjudge}
+Haoyu Huang, Chong Chen, Zeang Sheng, Yang Li, and Wentao Zhang.
+\newblock Can {LLM}s be good graph judge for knowledge graph construction?
+\newblock In \emph{Proceedings of the 2025 Conference on Empirical Methods in
+  Natural Language Processing}, pp.\  10929--10948. Association for
+  Computational Linguistics, 2025.
+\newblock \doi{10.18653/v1/2025.emnlp-main.554}.
+
+\bibitem[Hwang et~al.(2026)Hwang, Yin, Carenini, West, and
+  Shwartz]{hwang2026infusing}
+EunJeong Hwang, Yuwei Yin, Giuseppe Carenini, Peter West, and Vered Shwartz.
+\newblock Infusing theory of mind into socially intelligent {LLM} agents.
+\newblock In \emph{Findings of the Association for Computational Linguistics:
+  ACL 2026}, pp.\  11327--11360. Association for Computational Linguistics,
+  2026.
+\newblock \doi{10.18653/v1/2026.findings-acl.551}.
+
+\bibitem[James et~al.(2023)James, Witten, Hastie, Tibshirani, and
+  Taylor]{james2023islp}
+Gareth James, Daniela Witten, Trevor Hastie, Robert Tibshirani, and Jonathan
+  Taylor.
+\newblock \emph{An Introduction to Statistical Learning: with Applications in
+  Python}.
+\newblock Springer, 2023.
+
+\bibitem[Jiang et~al.(2025)Jiang, Hao, Cho, Li, Yuan, Chen, Ungar, Taylor, and
+  Roth]{jiang2025personamem}
+Bowen Jiang, Zhuoqun Hao, Young~Min Cho, Bryan Li, Yuan Yuan, Sihao Chen, Lyle
+  Ungar, Camillo~Jose Taylor, and Dan Roth.
+\newblock Know me, respond to me: Benchmarking {LLM}s for dynamic user
+  profiling and personalized responses at scale.
+\newblock In \emph{Conference on Language Modeling}, 2025.
+
+\bibitem[Kim et~al.(2026)Kim, Yang, Hwang, Lee, and Lee]{kim2026graphrefine}
+Donghyun Kim, Hyeongjun Yang, Seokju Hwang, Kyong-Ho Lee, and Chanhee Lee.
+\newblock {LLM}s as knowledge graph refiners: Mitigating factual
+  inconsistencies in generative knowledge extraction.
+\newblock In \emph{Proceedings of the 64th Annual Meeting of the Association
+  for Computational Linguistics}, pp.\  29358--29378. Association for
+  Computational Linguistics, 2026.
+\newblock \doi{10.18653/v1/2026.acl-long.1353}.
+
+\bibitem[Kim et~al.(2023)Kim, Sclar, Zhou, Bras, Kim, Choi, and
+  Sap]{kim2023fantom}
+Hyunwoo Kim, Melanie Sclar, Xuhui Zhou, Ronan Bras, Gunhee Kim, Yejin Choi, and
+  Maarten Sap.
+\newblock {FANToM}: A benchmark for stress-testing machine theory of mind in
+  interactions.
+\newblock In \emph{Proceedings of the 2023 Conference on Empirical Methods in
+  Natural Language Processing}, pp.\  14397--14413. Association for
+  Computational Linguistics, 2023.
+\newblock \doi{10.18653/v1/2023.emnlp-main.890}.
+
+\bibitem[Le et~al.(2019)Le, Boureau, and Nickel]{le2019revisiting}
+Matthew Le, Y-Lan Boureau, and Maximilian Nickel.
+\newblock Revisiting the evaluation of theory of mind through question
+  answering.
+\newblock In \emph{Proceedings of the 2019 Conference on Empirical Methods in
+  Natural Language Processing and the 9th International Joint Conference on
+  Natural Language Processing}, pp.\  5872--5877. Association for Computational
+  Linguistics, 2019.
+\newblock \doi{10.18653/v1/D19-1598}.
+
+\bibitem[Li et~al.(2026)Li, Zhang, Huang, Li, Zhan, Luo, Liu, and
+  Chen]{li2026longtutor}
+Ning Li, Zheng Zhang, Zhenya Huang, Rui Li, Yi~Zhan, Yinbo Luo, Qi~Liu, and
+  Enhong Chen.
+\newblock {LongTutor}: Benchmarking large language models for long-term
+  personalized tutoring.
+\newblock In \emph{Proceedings of the 64th Annual Meeting of the Association
+  for Computational Linguistics}, pp.\  29712--29737. Association for
+  Computational Linguistics, 2026.
+\newblock \doi{10.18653/v1/2026.acl-long.1371}.
+
+\bibitem[Luo et~al.(2024)Luo, Tang, Wang, and Zhang]{luo2024duetsim}
+Xiang Luo, Zhiwen Tang, Jin Wang, and Xuejie Zhang.
+\newblock {DuetSim}: Building user simulator with dual large language models
+  for task-oriented dialogues.
+\newblock In \emph{Proceedings of the 2024 Joint International Conference on
+  Computational Linguistics, Language Resources and Evaluation}, pp.\
+  5414--5424. ELRA and ICCL, 2024.
+
+\bibitem[Ma et~al.(2024)Ma, Zhang, Zhu, Yang, Yang, Jin, Lan, Kong, and
+  He]{ma2024agentboard}
+Chang Ma, Junlei Zhang, Zhihao Zhu, Cheng Yang, Yujiu Yang, Yaohui Jin,
+  Zhenzhong Lan, Lingpeng Kong, and Junxian He.
+\newblock {AgentBoard}: An analytical evaluation board of multi-turn {LLM}
+  agents.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~37, 2024.
+
+\bibitem[Mislevy et~al.(2003)Mislevy, Almond, and Lukas]{mislevy2003ecd}
+Robert~J. Mislevy, Russell~G. Almond, and Janice~F. Lukas.
+\newblock A brief introduction to evidence-centered design.
+\newblock Technical Report RR-03-16, Educational Testing Service, 2003.
+
+\bibitem[Mo et~al.(2025)Mo, Yu, Kazdan, Mpala, Yu, Kanatsoulis, and
+  Koyejo]{mo2025kggen}
+Belinda Mo, Kyssen Yu, Joshua Kazdan, Proud Mpala, Lisa Yu, Charilaos
+  Kanatsoulis, and Sanmi Koyejo.
+\newblock {KGGen}: Extracting knowledge graphs from plain text with language
+  models.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~38, 2025.
+
+\bibitem[Mou et~al.(2025)Mou, Liang, Lin, Zhang, Liu, Yang, Ye, Chen, Kuang,
+  Huang, and Wei]{mou2025agentsense}
+Xinyi Mou, Jingcong Liang, Jiayu Lin, Xinnong Zhang, Xiawei Liu, Shiyue Yang,
+  Rong Ye, Lei Chen, Haoyu Kuang, Xuanjing Huang, and Zhongyu Wei.
+\newblock {AgentSense}: Benchmarking social intelligence of language agents
+  through interactive scenarios.
+\newblock In \emph{Proceedings of the 2025 Conference of the Nations of the
+  Americas Chapter of the Association for Computational Linguistics: Human
+  Language Technologies}, pp.\  4975--5001. Association for Computational
+  Linguistics, 2025.
+\newblock \doi{10.18653/v1/2025.naacl-long.257}.
+
+\bibitem[Piech et~al.(2015)Piech, Bassen, Huang, Ganguli, Sahami, Guibas, and
+  Sohl-Dickstein]{piech2015dkt}
+Chris Piech, Jonathan Bassen, Jonathan Huang, Surya Ganguli, Mehran Sahami,
+  Leonidas Guibas, and Jascha Sohl-Dickstein.
+\newblock Deep knowledge tracing.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~28, 2015.
+
+\bibitem[Salemi et~al.(2024)Salemi, Mysore, Bendersky, and
+  Zamani]{salemi2024lamp}
+Alireza Salemi, Sheshera Mysore, Michael Bendersky, and Hamed Zamani.
+\newblock {LaMP}: When large language models meet personalization.
+\newblock In \emph{Proceedings of the 62nd Annual Meeting of the Association
+  for Computational Linguistics}, pp.\  7370--7392. Association for
+  Computational Linguistics, 2024.
+\newblock \doi{10.18653/v1/2024.acl-long.399}.
+
+\bibitem[Shi et~al.(2019)Shi, Qian, Wang, and Yu]{shi2019usersimulators}
+Weiyan Shi, Kun Qian, Xuewei Wang, and Zhou Yu.
+\newblock How to build user simulators to train {RL}-based dialog systems.
+\newblock In \emph{Proceedings of the 2019 Conference on Empirical Methods in
+  Natural Language Processing and the 9th International Joint Conference on
+  Natural Language Processing}, pp.\  1990--2000. Association for Computational
+  Linguistics, 2019.
+\newblock \doi{10.18653/v1/D19-1206}.
+
+\bibitem[Wang et~al.(2026)Wang, Zhang, Lan, Duo, Li, Gao, and
+  Su]{wang2026tomelp}
+Ruirui Wang, Haoran Zhang, Tian Lan, Zehua Duo, Jiang Li, Guanglai Gao, and
+  Xiangdong Su.
+\newblock {ToMELP}: A theory-of-mind benchmark for route-controlled persuasion
+  under the elaboration likelihood model.
+\newblock In \emph{Findings of the Association for Computational Linguistics:
+  ACL 2026}, pp.\  21320--21338. Association for Computational Linguistics,
+  2026.
+\newblock \doi{10.18653/v1/2026.findings-acl.1072}.
+
+\bibitem[Wang et~al.(2024)Wang, Wang, Liu, Chen, Yuan, Peng, and
+  Ji]{wang2024mint}
+Xingyao Wang, Zihan Wang, Jiateng Liu, Yangyi Chen, Lifan Yuan, Hao Peng, and
+  Heng Ji.
+\newblock {MINT}: Evaluating {LLM}s in multi-turn interaction with tools and
+  language feedback.
+\newblock In \emph{International Conference on Learning Representations}, 2024.
+
+\bibitem[Wu et~al.(2023)Wu, He, Jia, Mihalcea, Chen, and Deng]{wu2023hitom}
+Yufan Wu, Yinghui He, Yilin Jia, Rada Mihalcea, Yulong Chen, and Naihao Deng.
+\newblock {Hi-ToM}: A benchmark for evaluating higher-order theory of mind
+  reasoning in large language models.
+\newblock In \emph{Findings of the Association for Computational Linguistics:
+  EMNLP 2023}, pp.\  10691--10706. Association for Computational Linguistics,
+  2023.
+\newblock \doi{10.18653/v1/2023.findings-emnlp.717}.
+
+\bibitem[Xu et~al.(2024)Xu, Zhao, Zhu, Du, and He]{xu2024opentom}
+Hainiu Xu, Runcong Zhao, Lixing Zhu, Jinhua Du, and Yulan He.
+\newblock {OpenToM}: A comprehensive benchmark for evaluating theory-of-mind
+  reasoning capabilities of large language models.
+\newblock In \emph{Proceedings of the 62nd Annual Meeting of the Association
+  for Computational Linguistics}, pp.\  8593--8623. Association for
+  Computational Linguistics, 2024.
+\newblock \doi{10.18653/v1/2024.acl-long.466}.
+
+\bibitem[Zhang \& Soh(2024)Zhang and Soh]{zhang2024edc}
+Bowen Zhang and Harold Soh.
+\newblock Extract, define, canonicalize: An {LLM}-based framework for knowledge
+  graph construction.
+\newblock In \emph{Proceedings of the 2024 Conference on Empirical Methods in
+  Natural Language Processing}, pp.\  9820--9836. Association for Computational
+  Linguistics, 2024.
+\newblock \doi{10.18653/v1/2024.emnlp-main.548}.
+
+\bibitem[Zhou et~al.(2024)Zhou, Zhu, Mathur, Zhang, Yu, Qi, Morency, Bisk,
+  Fried, Neubig, and Sap]{zhou2024sotopia}
+Xuhui Zhou, Hao Zhu, Leena Mathur, Ruohong Zhang, Haofei Yu, Zhengyang Qi,
+  Louis-Philippe Morency, Yonatan Bisk, Daniel Fried, Graham Neubig, and
+  Maarten Sap.
+\newblock {SOTOPIA}: Interactive evaluation for social intelligence in language
+  agents.
+\newblock In \emph{International Conference on Learning Representations}, 2024.
+
+\bibitem[Zhou et~al.(2026)Zhou, Chen, Wang, Neubig, Sap, and
+  Wang]{zhou2026tomswe}
+Xuhui Zhou, Valerie Chen, Zora~Zhiruo Wang, Graham Neubig, Maarten Sap, and
+  Xingyao Wang.
+\newblock {TOM-SWE}: User mental modeling for software engineering agents.
+\newblock In \emph{Proceedings of the 43rd International Conference on Machine
+  Learning}, 2026.
+
+\end{thebibliography}
