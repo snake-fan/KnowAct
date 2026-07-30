@@ -60,3 +60,40 @@ Endpoint accuracy alone supports a weaker claim than adaptive gains with evidenc
 ## Revision Rule
 
 Main-text implementation detail is retained only when it establishes validity, comparability, or auditability. Operational chronology, schemas, retry behavior, and full authoring stages belong in the appendices.
+
+## Focused Sample: Expert Review and Appendix Reporting
+
+For the knowledge-graph appendix, a narrower sample of 12 accepted benchmark or
+knowledge-graph papers was inspected. The aim was to study how they disclose
+human quality control, not to reuse their wording.
+
+| Paper | Venue | Reporting move relevant to KnowAct |
+| --- | --- | --- |
+| [FANToM](https://aclanthology.org/2023.emnlp-main.890/) | EMNLP 2023 | States that the complete dataset was manually validated, gives annotator qualification and replication per item, and reports how flagged items were revised or removed. |
+| [ToMBench](https://aclanthology.org/2024.acl-long.847/) | ACL 2024 | Separates cross-review, author revision, and third-person resolution into explicit rounds. |
+| [GPQA](https://openreview.net/forum?id=Ti67584b98) | COLM 2024 | Defines expert eligibility before presenting a staged writer--validator--revision pipeline and reports concrete inclusion decisions. |
+| [MMMU](https://openaccess.thecvf.com/content/CVPR2024/html/Yue_MMMU_A_Massive_Multi-discipline_Multimodal_Understanding_and_Reasoning_Benchmark_for_CVPR_2024_paper.html) | CVPR 2024 | Describes annotator disciplinary background, puts the full annotation protocol in the supplement, and names each cleaning stage and exclusion category. |
+| [MMLU-Pro](https://proceedings.neurips.cc/paper_files/paper/2024/hash/ad236edc564f3e3156e1b2feafb99a24-Abstract-Datasets_and_Benchmarks_Track.html) | NeurIPS 2024 | Organizes expert review around correctness, appropriateness, and distractor validity, then reports defect counts by category. |
+| [NaturalBench](https://papers.nips.cc/paper_files/paper/2024/hash/1e69ff56d0ebff0752ff29caaddc25dd-Abstract-Datasets_and_Benchmarks_Track.html) | NeurIPS 2024 | Specifies the exact human decision task, uses two judgments per generated item, and retains an item only under agreement. |
+| [Extract, Define, Canonicalize](https://aclanthology.org/2024.emnlp-main.548/) | EMNLP 2024 | Uses two independent annotators for targeted KG validation, reports agreement, and places the questionnaire instructions in the appendix. |
+| [SAC-KG](https://aclanthology.org/2024.acl-long.238/) | ACL 2024 | Reports reviewer composition, questionnaire size, judgment dimensions, agreement statistics, and further protocol details in the appendix. |
+| [AppWorld](https://aclanthology.org/2024.acl-long.850/) | ACL 2024 | Quantifies construction effort and quality controls, while moving technical examples, code-level checks, and extensive materials out of the main argument. |
+| [SWE-bench](https://proceedings.iclr.cc/paper_files/paper/2024/hash/edac78c3e300629acfe6cbe9ca88fb84-Abstract-Conference.html) | ICLR 2024 | Gives only a high-level construction pipeline in the main paper and reserves fine-grained collection, filtering, and evaluation details for the appendix. |
+| [OSWorld](https://proceedings.neurips.cc/paper_files/paper/2024/hash/5d413e48f84dc61244b6be550f1cd8f5-Abstract-Datasets_and_Benchmarks_Track.html) | NeurIPS 2024 | Reports who created the tasks, the labor spent, what was double-checked, and the executable material attached to each item. |
+| [OlympiadBench](https://aclanthology.org/2024.acl-long.211/) | ACL 2024 | Connects source provenance, cleaning, expert-level annotation, evaluation scripts, and remaining manual-review limitations without claiming exhaustive validity. |
+
+### Writing pattern adopted
+
+The appendix now follows the recurring order across this sample:
+
+1. state the narrow validity claim and what is not being claimed;
+2. identify the frozen artifact and all materials shown to reviewers;
+3. define reviewer eligibility, independence, and conflicts of interest;
+4. specify the review unit, controlled fields, and allowed decisions;
+5. separate independent judgment from discussion, adjudication, and revision;
+6. report item dispositions, agreement, effort, final version, and unresolved defects;
+7. close with the limit of the evidence.
+
+The main paper retains only the fixed graph's role in the benchmark and a pointer
+to the appendix. It does not present graph generation as a paper contribution or
+evaluate authoring-method superiority.

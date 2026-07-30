@@ -19,14 +19,6 @@ Knowledge tracing provides the closest formal analogue. Bayesian and neural trac
 
 \knowact changes who controls the evidence. The tested agent asks open-ended questions and is scored on the full latent state after a bounded number of observations. The benchmark is therefore an active diagnosis problem rather than next-response prediction over a fixed curriculum.
 
-\subsection{LLM-Assisted Knowledge-Graph Construction}
-
-LLM-based graph construction commonly decomposes extraction, schema induction, canonicalization, and verification. EDC and KGGen address schema scale and entity resolution \citep{zhang2024edc,mo2025kggen}; PiVe, SAC-KG, GraphJudge, and GraphRefine add verification, filtering, or repair to improve factual graph quality \citep{han2024pive,chen2024sackg,huang2025graphjudge,kim2026graphrefine}.
-
-Those methods primarily ask whether text has been converted into accurate entity--relation triples. In \knowact, graph quality has a second consequence: it defines the variables over which a user is diagnosed. A source-faithful but non-diagnosable node, or a rubric whose adjacent levels cannot be distinguished in dialogue, weakens the benchmark even if the graph is factually correct.
-
-We therefore treat graph authoring as measurement design. Competency questions delimit the intended use of an ontology \citep{gruninger1995competency}, while evidence-centered design connects domain claims to observations that can support them \citep{mislevy2003ecd}. LLMs propose source-traceable candidates, but graph constraints and domain review decide which concepts and relations become part of the scored hypothesis space. Independent verification is a control against self-approval, not a claim that additional agents are intrinsically better.
-
 \subsection{LLM-Based User Simulation}
 
 User simulation trades experimental control for behavioral fidelity. Agenda-based simulators are reproducible but narrow; LLM simulators are expressive but can invent goals, leak hidden state, or impose model-specific artifacts. DuetSim separates generation and verification to improve response quality \citep{luo2024duetsim}. SimulatorArena instead evaluates the proxy assumption directly, comparing simulated behavior and assistant rankings with human interaction \citep{dou2025simulatorarena}. Earlier simulator research makes the same conceptual point: fluency is not fidelity to task-relevant behavior \citep{shi2019usersimulators}.

@@ -1,60 +1,92 @@
 \section{Benchmark Construction Details}
 \label{app:construction}
 
-\subsection{Graph-Authoring Workflow}
+\subsection{Knowledge-Graph Preparation and Claim Boundary}
 
-The graph-authoring workflow is evidence-first and fail-closed:
-\begin{enumerate}[leftmargin=1.7em]
-    \item \textbf{Specification.} Authors manually prepare one UTF-8 Markdown source and declare an aspect name and description, representative user tasks, exclusions, a soft target node count, and a hard maximum.
-    \item \textbf{Source integrity.} The local catalog records the Markdown file's size and SHA-256 hash; invalid extensions, undecodable content, blank files, and files over the configured size limit are rejected.
-    \item \textbf{Deterministic segmentation.} Heading-aware, non-overlapping segments retain their source path, heading path, character count, and source locator.
-    \item \textbf{Local extraction.} Each segment is paired with the same scope. The extractor emits thin node drafts with a short exact evidence excerpt, and code verifies that each excerpt occurs in its source segment after whitespace normalization.
-    \item \textbf{Global reconciliation and selection.} One global step merges duplicates, adjusts granularity, records supporting draft and segment identifiers, and selects representative skeletons near the target without exceeding the maximum. It may return fewer nodes rather than fill the graph with weak candidates.
-    \item \textbf{Independent verification.} A fresh context assigns one keep/remove decision to every skeleton based on source support, scope fit, and diagnostic value. Only supported, in-scope, high- or medium-value nodes continue.
-    \item \textbf{Diagnostic enrichment.} Retained skeletons receive goals, mastery rubrics, diagnostic signals, and simulator guidance.
-    \item \textbf{Relation authoring and validation.} A precision-first step proposes only typed relations with explicit rationales. Deterministic checks reject invalid endpoints, self-loops, duplicate identifiers, and canonicalization errors.
-    \item \textbf{Human review and promotion.} Candidate node and edge lists remain outside the evaluation runtime until reviewers inspect them and an author explicitly promotes an immutable version.
-\end{enumerate}
+The knowledge graph is a supporting benchmark artifact, not the methodological contribution evaluated in this paper. Its preparation follows a staged pattern common in LLM-assisted graph construction---source-bounded extraction, canonicalization, verification, and human inspection \citep{zhang2024edc,han2024pive,chen2024sackg,mo2025kggen}---but we make no claim that this workflow is superior to another authoring method. The relevant validity question is narrower: whether the fixed graph used for scoring is defensible for the declared statistical-learning scope.
 
-The relation vocabulary includes \texttt{part\_of}, \texttt{prerequisite\_for}, \texttt{supports}, and \texttt{contrasts\_with}. Each label has tests, examples, direction rules, and allowed evidence.
+The source is a manually prepared Markdown snapshot of \emph{An Introduction to Statistical Learning with Applications in Python} \citep{james2023islp}. Before candidate generation, the authors specify the intended aspect, five representative task families, exclusions, and a node budget. Candidate preparation then proceeds through heading-aware source segmentation, source-linked node extraction, global duplicate reconciliation, diagnostic-rubric enrichment, and typed relation proposal. The allowed edge types are \texttt{part\_of}, \texttt{prerequisite\_for}, \texttt{supports}, and \texttt{contrasts\_with}.
 
-\texttt{prerequisite\_for} denotes a direct dependency: lacking the source concept should normally block stable performance at higher rubric levels of the target. Transitive implications are not emitted as additional edges.
+Deterministic checks enforce schema validity, source-excerpt membership, identifier uniqueness, valid edge endpoints, canonical ordering, and the declared node budget. These checks establish structural integrity and traceability; they do not establish that a node is pedagogically useful, that adjacent rubric levels are distinguishable, or that a proposed relation is substantively correct. Those questions are reserved for expert review. This separation follows the broader measurement principle that the intended use and observable evidence must be specified separately from artifact generation \citep{gruninger1995competency,mislevy2003ecd}.
 
-\texttt{part\_of} denotes structural composition. \texttt{supports} denotes a useful but nonessential explanatory or transfer relation. \texttt{contrasts\_with} is stored in a canonical symmetric form.
+\subsection{Frozen Expert-Review Materials}
+\label{app:graph-review-materials}
 
-Rubrics and instructional prerequisite judgments are candidate pedagogical operationalizations, not automatically treated as textbook facts. Their validity is established by human review rather than by structural validation alone.
+The review input is the frozen \texttt{statistical\_learning\_foundations} graph version \texttt{v2.0}, containing 21 nodes and 30 edges. File hashes for the source, node list, edge list, and manifest are stored with the review record so that the reviewed input can be reconstructed exactly. Table~\ref{tab:graph-review-materials} summarizes the packet.
 
-\subsection{Agent Roles and Decision Independence}
+\begin{table}[h!]
+\caption{Materials supplied for the knowledge-graph expert review.}
+\label{tab:graph-review-materials}
+\centering
+\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.24\linewidth}X}
+\toprule
+\textbf{Material} & \textbf{Contents and purpose} \\
+\midrule
+Source snapshot & The scoped textbook Markdown with stable section locators, used to check whether node definitions and claimed relations are source-supported. \\
+Scope specification & The aspect description, exclusions, and five representative task families, used to judge scope fit and bounded coverage. \\
+Node packet & All 21 node names, definitions, source locators, diagnostic goals, L0--L5 rubrics, diagnostic signals, and simulator guidance. \\
+Edge packet & All 30 source--target pairs, proposed relation types, directions, and rationales. \\
+Review forms & Separate node, edge, graph-coverage, reviewer-metadata, and adjudication forms with prespecified categorical fields. \\
+Version record & Graph version, candidate-run identifier, file names, and SHA-256 hashes for the frozen input and final adjudicated graph. \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-A deterministic orchestrator invokes five bounded model roles: local extractor, global reconciler/selector, independent skeleton verifier, rubric author, and relation proposer. Deterministic code handles segmentation, parsing, evidence membership, budget/provenance checks, and final schema/graph validation.
+Each reviewer receives the same source, scope specification, graph files, and an unfilled copy of every applicable form. Reviewers do not receive model traces, verifier outputs, previous internal judgments, or the other reviewer's responses before submitting their independent review.
 
-Roles are logical separation, not a claim that more agents improve quality. Independent prompts and fresh contexts prevent a proposer from validating its own rationale; a different model can be used when resources permit.
+\subsection{Reviewers and Independence}
 
-Local extraction requests may run concurrently, but results and traces are assembled in source order. Reconciliation is global because the initial narrow slice is intentionally small enough to compare all drafts under one aspect and node budget.
+We recruit two reviewers with directly relevant statistical-learning expertise. Eligibility requires at least one of the following: experience teaching or assisting a university course covering statistical learning or regression; research using statistical-learning or regression methodology; or an advanced degree with relevant coursework and assessment experience. Reviewer qualifications, experience band, and conflicts of interest are recorded under anonymous codes \texttt{R1} and \texttt{R2}.
 
-\subsection{Bounded Error Recovery}
+Neither reviewer may have generated, edited, verified, or promoted the candidate graph. They review all items independently and may consult the cited source sections, but they may not discuss judgments until both forms are locked. A third qualified reviewer is recruited only if an item remains unresolved after \texttt{R1} and \texttt{R2} inspect each other's completed rationales. This design follows the transparent reporting pattern used by expert-curated and fully human-verified benchmarks, which state reviewer eligibility, expose the review unit and instructions, separate independent judgments from revision, and report concrete dispositions rather than only asserting data quality \citep{kim2023fantom,chen2024tombench,zhang2024edc,chen2024sackg}.
 
-The current v1 implementation uses fail-fast, stage-level validation rather than autonomous semantic repair. A provider failure, malformed response, missing or mismatched evidence excerpt, invalid reconciliation provenance, verifier contract violation, node-budget overflow, rubric mismatch, or invalid edge stops downstream execution.
+\subsection{Item-Level Review Procedure}
 
-When artifact writing is enabled, completed intermediates and per-step raw/parser traces remain available with a structured workflow log. The benchmark author inspects the failing checkpoint, source evidence, declared scope, and model output, then corrects the input or prompt and starts a new run. The same agent is not allowed to silently rewrite and approve its own invalid item.
+Both reviewers inspect every node and edge rather than a sample. Table~\ref{tab:graph-review-fields} gives the prespecified fields. Reviewers select controlled values and provide a rationale for every requested edit, rejection, or deletion. Free-text comments supplement but do not replace the categorical decisions.
 
-This policy favors visible failure over silent corruption. Automatic retry, semantic repair, coverage recovery, and resumable checkpoints are possible extensions, but are not claimed as properties of the current workflow.
+\begin{table}[h!]
+\caption{Prespecified expert-review fields and allowed decisions.}
+\label{tab:graph-review-fields}
+\centering
+\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.13\linewidth}>{\raggedright\arraybackslash}p{0.24\linewidth}X}
+\toprule
+\textbf{Unit} & \textbf{Field} & \textbf{Allowed values} \\
+\midrule
+Node & Source support & \texttt{supported}, \texttt{partial}, \texttt{unsupported}, \texttt{uncertain} \\
+Node & Scope fit & \texttt{in\_scope}, \texttt{boundary}, \texttt{out\_of\_scope} \\
+Node & Granularity & \texttt{appropriate}, \texttt{too\_broad}, \texttt{too\_narrow}, \texttt{mixed} \\
+Node & Diagnostic usefulness & \texttt{adequate}, \texttt{minor\_issue}, \texttt{major\_issue} \\
+Node & L0--L5 rubric quality & \texttt{adequate}, \texttt{minor\_issue}, \texttt{major\_issue} \\
+Node & Overall decision & \texttt{accept}, \texttt{edit}, \texttt{reject} \\
+\midrule
+Edge & Relation validity & \texttt{valid}, \texttt{uncertain}, \texttt{invalid} \\
+Edge & Type and direction & correct, incorrect with replacement, or uncertain \\
+Edge & Evidence basis & \texttt{source\_explicit}, \texttt{source\_entailed}, \texttt{expert\_pedagogical\_extension}, \texttt{unsupported} \\
+Edge & Overall decision & \texttt{accept}, \texttt{edit}, \texttt{delete} \\
+\midrule
+Graph & Task coverage & \texttt{sufficient}, \texttt{partial}, \texttt{insufficient}, with essential omissions or redundancies listed \\
+Graph & Overall decision & \texttt{approve}, \texttt{approve\_after\_edits}, \texttt{do\_not\_approve} \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-\subsection{Expert Review Protocol}
+For a node, source support concerns the name and definition; diagnostic usefulness concerns whether dialogue can reveal a meaningful difference in knowledge; rubric quality concerns whether L0--L5 is ordered, behaviorally observable, and sufficiently distinguishable for the benchmark. For an edge, a merely related pair is insufficient: the proposed type and direction must match the stated semantics. The graph-level check asks whether the fixed node set is adequate for the five declared task families; it is a bounded coverage judgment, not an estimate of recall against an exhaustive reference ontology.
 
-For the initial approximately 20-node graph, two domain experts review every candidate node and edge independently. They resolve disagreements by discussion; a third expert can adjudicate unresolved cases.
+\subsection{Adjudication, Analysis, and Promotion}
 
-Reviewers are recruited from instructors, experienced teaching assistants, and researchers in the target subject. Teaching history and a held-out calibration task establish eligibility.
+After independent submission, the two overall decisions and all field-level disagreements are copied into a single adjudication record. Adjudication is mandatory for different overall decisions; every requested edit or deletion; any \texttt{unsupported}, \texttt{out\_of\_scope}, \texttt{major\_issue}, or \texttt{invalid} judgment; and any task rated \texttt{partial} or \texttt{insufficient}. The reviewers first discuss the recorded evidence and smallest proposed correction. A third reviewer decides only cases that remain unresolved.
 
-Review captures item-level accept, edit, and reject decisions with rationales. Node judgments cover source support, aspect fit, granularity, rubric quality, and diagnostic usefulness; edge judgments cover endpoints, type, direction, and rationale. We record reviewer qualifications, review time, and inter-reviewer agreement.
+We report node and edge decision counts and percentages, raw agreement on overall decisions, Cohen's $\kappa$, field-level disagreement counts, reviewer time, and every adjudicated disposition. Raw agreement is reported alongside $\kappa$ because a high prevalence of accepted items can depress chance-corrected agreement. Since the complete fixed graph is reviewed, the analysis is descriptive and uses no sampling-based significance test or arbitrary minimum-$\kappa$ promotion threshold.
 
-Promotion requires complete machine-checkable provenance, zero unresolved structural errors, and explicit reviewer confirmation. Model verification reduces review load but never replaces expert judgment.
+The graph is eligible for benchmark experiments only after all forms are complete, no disagreement or validity defect remains unresolved, all accepted edits are implemented, all five task families are judged sufficiently covered or have a documented scope resolution, and the resulting graph passes structural validation. Content changes are published as a new immutable version rather than overwriting \texttt{v2.0}. The complete forms and exact analysis template are included in the supplementary review package. Appendix~\ref{app:graph-review-results} reserves the result table to be filled after the study.
+
+This procedure supports content validity for the declared source scope and tasks. It does not establish that the graph is an exhaustive ontology, that the authoring workflow is superior, or that the node-specific L0--L5 rubrics form a universal psychometric scale.
 
 \subsection{Knowledge-Map Review}
 
-Reviewers verify that each candidate map covers every node and that each state is supported by behaviorally realizable evidence.
-
-They also check consistency among mastery, misconceptions, unknowns, profile context, and graph structure. Promotion creates an immutable reviewed snapshot.
+Reviewers verify that each candidate map covers every node and that each state is supported by behaviorally realizable evidence. They also check consistency among mastery, misconceptions, unknowns, profile context, and graph structure. Promotion creates an immutable reviewed snapshot.
 
 \subsection{Manifest-Bound Runtime Contexts}
 

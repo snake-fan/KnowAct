@@ -13,11 +13,34 @@ The fixed-question agent follows a predefined diagnostic order. The random agent
 
 The main analysis reports mastery distance, exact match, missing predictions, unsupported inference, and per-node signed error. Turn-indexed curves distinguish early information acquisition from final reconstruction. Working-map, graph-relation, and evidence-reference ablations test state maintenance, graph-mediated generalization, and traceability.
 
-\subsection{Graph Quality Check}
+\subsection{Knowledge-Graph Expert-Review Results}
+\label{app:graph-review-results}
 
-Two statistical-learning reviewers independently inspect every node and edge, resolving disagreement by discussion or third-party adjudication. Node judgments cover source support, scope fit, granularity, and diagnostic usefulness. Edge judgments cover endpoints, relation type, direction, and rationale. Acceptance, edit, rejection, agreement, and review-time statistics are reported separately from deterministic schema checks.
+Table~\ref{tab:graph-review-results-placeholder} is a reporting placeholder for the study specified in Appendix~\ref{app:construction}. Every \texttt{TBD} entry must be replaced from the locked reviewer forms and adjudication record before empirical claims are made.
 
-The same source and scope are processed with a one-shot extraction prompt and the staged evidence-and-verifier workflow while holding model and sampling settings fixed. Reviewer acceptance, unsupported-node rate, duplication, and review time provide a bounded workflow comparison.
+\begin{table}[h!]
+\caption{Expert-review results placeholder. Decision entries should be reported as counts with percentages in parentheses.}
+\label{tab:graph-review-results-placeholder}
+\centering
+\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}Xccc}
+\toprule
+\textbf{Measure} & \textbf{Nodes} & \textbf{Edges} & \textbf{Task coverage} \\
+\midrule
+Items reviewed & 21 & 30 & 5 \\
+\texttt{R1}: accept / edit / reject or delete & \texttt{TBD} & \texttt{TBD} & --- \\
+\texttt{R2}: accept / edit / reject or delete & \texttt{TBD} & \texttt{TBD} & --- \\
+Final adjudicated dispositions & \texttt{TBD} & \texttt{TBD} & \texttt{TBD} \\
+Raw agreement & \texttt{TBD} & \texttt{TBD} & \texttt{TBD}/5 \\
+Cohen's $\kappa$ & \texttt{TBD} & \texttt{TBD} & --- \\
+Items requiring adjudication & \texttt{TBD} & \texttt{TBD} & \texttt{TBD} \\
+Unresolved items & \texttt{TBD} & \texttt{TBD} & \texttt{TBD} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\noindent\textbf{Result statement to replace.}
+Two qualified statistical-learning reviewers independently assessed all 21 nodes and 30 edges. Node decisions achieved raw agreement of \texttt{TBD} with Cohen's $\kappa$ of \texttt{TBD}; edge decisions achieved raw agreement of \texttt{TBD} with $\kappa$ of \texttt{TBD}. The reviewers required \texttt{TBD} minutes and \texttt{TBD} minutes, respectively. After adjudication, \texttt{TBD} nodes were accepted unchanged, \texttt{TBD} were edited, and \texttt{TBD} were rejected; \texttt{TBD} edges were accepted unchanged, \texttt{TBD} were edited, and \texttt{TBD} were deleted. The final graph version was \texttt{TBD}, and the number of unresolved validity defects was \texttt{TBD}. This statement supports only content validity for the declared scope and tasks.
 
 \subsection{Simulator, Human, and Error Analyses}
 

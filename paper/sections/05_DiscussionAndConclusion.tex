@@ -27,8 +27,8 @@ The graph and rubrics determine which distinctions count as knowledge. Expert re
 \paragraph{Simulator fidelity.}
 A simulator can be perfectly consistent with a reviewed map while expressing partial knowledge unlike a person. Leakage tests establish access control, not behavioral realism. Matched human studies must test diagnostic value and ranking transfer rather than relying on naturalness alone.
 
-\paragraph{Construction circularity.}
-Related model families may propose graph artifacts, simulate users, and serve as tested agents. Shared inductive biases could make the benchmark easier for some models. Source grounding, human review, model-family diversity, deterministic fixtures, and human validation reduce but cannot remove this dependence.
+\paragraph{Artifact dependence.}
+The fixed graph, rubrics, maps, and simulator jointly operationalize the target construct. Their shared design choices may make the benchmark easier for some model families. Source grounding, deterministic fixtures, artifact review, simulator variation, and human validation reduce but cannot remove this dependence.
 
 \paragraph{Simplified knowledge state.}
 A static L0--L5 state cannot capture context dependence, procedural fluency, confidence, forgetting, or learning during dialogue. Freezing state makes the reconstruction target identifiable, but it also turns explanations into observations rather than teaching events. Dynamic diagnosis will require a transition model and a different causal interpretation.

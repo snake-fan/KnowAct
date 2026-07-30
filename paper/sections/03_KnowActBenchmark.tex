@@ -11,11 +11,11 @@ We operationalize functional ToM as a conjunction of three observable abilities:
 The construct is intentionally behavioral. \knowact does not assume that an agent represents beliefs as humans do. It asks whether a structured estimate explains and supports the agent's diagnostic behavior under controlled information access.
 
 \paragraph{A shared hypothesis space.}
-A benchmark domain is represented by an authored knowledge graph
+A benchmark domain is represented by a fixed knowledge graph
 \begin{equation}
     \KG = (\Vnodes, \Eedges),
 \end{equation}
-where each node $v_i \in \Vnodes$ is a diagnosable knowledge unit and each edge $e_{ij} \in \Eedges$ is a reviewed domain relation.
+where each node $v_i \in \Vnodes$ is a diagnosable knowledge unit and each edge $e_{ij} \in \Eedges$ is a typed domain relation.
 
 The graph is public to both agent and simulator. It removes domain discovery from the target capability and makes competing agents reason over the same variables. Nodes contain definitions, source locators, diagnostic goals, mastery rubrics, and diagnostic signals. Edges express domain structure; they never encode a particular user's state.
 
@@ -54,7 +54,7 @@ The budget is what turns dialogue into active diagnosis. Without it, exhaustive 
 \centering
 \fbox{\begin{minipage}{0.94\linewidth}
 \centering
-\textbf{Authoritative source} $\rightarrow$ \textbf{Reviewed knowledge graph}\\
+\textbf{Authoritative source} $\rightarrow$ \textbf{Fixed knowledge graph}\\
 $\downarrow$\\[-0.2em]
 \textbf{Reviewed hidden knowledge map + evidence}\\
 $\downarrow$\\[-0.2em]
@@ -62,14 +62,12 @@ $\downarrow$\\[-0.2em]
 $\downarrow$\\[-0.2em]
 \textbf{Final reconstructed map} $\rightarrow$ \textbf{Deterministic scoring}
 \end{minipage}}
-\caption{The \knowact pipeline. Authoring produces reviewed hidden artifacts; the tested agent interacts only through the visible episode interface.}
+\caption{The \knowact pipeline. Fixed benchmark artifacts define the episode; the tested agent interacts only through the visible interface.}
 \label{fig:pipeline}
 \end{figure}
 
 \paragraph{The graph is a measurement model.}
-The initial domain is statistical learning, grounded in \emph{An Introduction to Statistical Learning with Applications in Python} \citep{james2023islp}. Source grounding constrains what the graph may claim, but factual support alone is insufficient. Node granularity determines what distinctions the benchmark can observe: coarse nodes hide partial knowledge, while excessively fine nodes reward terminology rather than understanding.
-
-Authors therefore fix the aspect, representative tasks, exclusions, and node budget before extraction; the initial configuration targets roughly 20 representative nodes and caps the graph at 24. LLMs generate candidates, but do not define the construct: source-linked extraction, global reconciliation, independent verification, and domain review determine what enters the scored space. This distinction is essential because definitions can be source-supported while rubrics and relation rationales remain pedagogical hypotheses. Fail-closed validation and immutable traces make both kinds of judgment inspectable. Appendix~\ref{app:construction} specifies the complete workflow.
+The initial domain is statistical learning, grounded in \emph{An Introduction to Statistical Learning with Applications in Python} \citep{james2023islp}. Its fixed graph contains 21 diagnosable nodes and 30 typed relations covering five representative task families. Node granularity determines what distinctions the benchmark can observe: coarse nodes hide partial knowledge, while excessively fine nodes reward terminology rather than understanding. Appendix~\ref{app:construction} documents graph preparation, the frozen review materials, and the expert content-review protocol.
 
 \paragraph{The map separates state from expression.}
 A hidden map assigns one reviewed state to every graph node. The scored node-level state, simulator-only behavioral evidence, and optional style context remain separate artifacts. Consequently, fluency cannot substitute for mastery, and the simulator cannot invent evidence to justify a label. Review asks not only whether a map is complete and internally consistent, but whether its distinctions can plausibly become observable in dialogue.
