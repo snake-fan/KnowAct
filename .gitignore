@@ -64,6 +64,13 @@ outputs/
 runs/
 results/
 reports/generated/
+!experiments/
+!experiments/*/
+!experiments/*/results/
+!experiments/*/results/*.md
+experiments/*/results/raw/
+experiments/*/results/private/
+experiments/*/results/generated/
 *.sqlite
 *.sqlite3
 *.db

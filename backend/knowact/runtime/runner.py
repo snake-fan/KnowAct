@@ -11,8 +11,10 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from backend.knowact.agents.agents.simple_llm import SimpleLLMTestedAgent
-from backend.knowact.agents.llm_agent import build_simple_llm_tested_agent_for_provider
+from backend.knowact.agents.llm_agent import (
+    build_evidence_calibrated_tested_agent_for_provider,
+    build_simple_llm_tested_agent_for_provider,
+)
 from backend.knowact.agents.protocol import (
     AskDiagnosticQuestionDecision,
     DecisionPhase,
@@ -43,6 +45,7 @@ from backend.knowact.runtime.checkpoint import (
     EpisodeRunCheckpointRepository,
     advanced_checkpoint,
 )
+from backend.knowact.runtime.experiment_paths import episode_run_dir
 from backend.knowact.runtime.episode_options import (
     DEFAULT_DEEPSEEK_MODEL,
     DEFAULT_OPENAI_MODEL,
@@ -67,6 +70,7 @@ _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 class EpisodeRunAgentKind(StrEnum):
     SIMPLE_LLM_AGENT = "simple_llm_agent"
+    EVIDENCE_CALIBRATED_AGENT = "evidence_calibrated_agent"
 
 
 class EpisodeRunAlreadyExistsError(FileExistsError):
@@ -677,8 +681,12 @@ def _default_model(provider: str) -> str:
     return DEFAULT_OPENAI_MODEL if provider == "openai" else DEFAULT_DEEPSEEK_MODEL
 
 
-def _build_tested_agent(request: EpisodeRunRequest) -> SimpleLLMTestedAgent:
-    if request.agent_kind != EpisodeRunAgentKind.SIMPLE_LLM_AGENT:
+def _build_tested_agent(request: EpisodeRunRequest) -> TestedAgent:
+    if request.agent_kind == EpisodeRunAgentKind.SIMPLE_LLM_AGENT:
+        builder = build_simple_llm_tested_agent_for_provider
+    elif request.agent_kind == EpisodeRunAgentKind.EVIDENCE_CALIBRATED_AGENT:
+        builder = build_evidence_calibrated_tested_agent_for_provider
+    else:
         raise UnsupportedEpisodeRunAgentKindError(
             f"Unsupported tested agent kind: {request.agent_kind}"
         )
@@ -686,7 +694,7 @@ def _build_tested_agent(request: EpisodeRunRequest) -> SimpleLLMTestedAgent:
         config = openai_config_from_env()
         if request.tested_agent_model is not None:
             config = config.model_copy(update={"model": request.tested_agent_model})
-        return build_simple_llm_tested_agent_for_provider(
+        return builder(
             client_provider="openai",
             temperature=request.tested_agent_temperature,
             openai_config=config,
@@ -694,7 +702,7 @@ def _build_tested_agent(request: EpisodeRunRequest) -> SimpleLLMTestedAgent:
     config = deepseek_config_from_env()
     if request.tested_agent_model is not None:
         config = config.model_copy(update={"model": request.tested_agent_model})
-    return build_simple_llm_tested_agent_for_provider(
+    return builder(
         client_provider="deepseek",
         temperature=request.tested_agent_temperature,
         deepseek_config=config,
@@ -742,8 +750,9 @@ def _ensure_run_dir_available(workspace_root: Path, run_id: str) -> None:
 
 
 def _run_dir_path(workspace_root: Path, run_id: str) -> Path:
-    return workspace_root / "experiments" / "runs" / _validate_safe_id(
-        run_id, "run_id"
+    return episode_run_dir(
+        workspace_root,
+        _validate_safe_id(run_id, "run_id"),
     )
 
 

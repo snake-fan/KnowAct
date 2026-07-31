@@ -1,7 +1,8 @@
 {
-  "metadata_version": "1.0",
+  "metadata_version": "1.1",
   "source_id": "OSTEP",
   "benchmark_domain": "OSTEP",
+  "domain_summary": "Foundations of operating systems and CPU virtualization based on the introductory process and scheduling chapters of Operating Systems: Three Easy Pieces. It covers operating-system roles, process abstractions and APIs, user/kernel execution, traps and context switches, scheduling metrics and policies, and multi-level feedback queues.",
   "title": "Operating Systems: Three Easy Pieces — CPU Virtualization Foundations",
   "citation": "Arpaci-Dusseau and Arpaci-Dusseau, Operating Systems: Three Easy Pieces, Chapters 2 and 4-8.",
   "storage_path": "source_materials/OSTEP/experiment_scope.md",

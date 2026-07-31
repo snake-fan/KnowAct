@@ -598,7 +598,7 @@ _Avoid_: ground-truth edge, authored edge
 - **Profile Context** is a structured JSON artifact with a readable summary plus background, prior experience, goals, and preferences.
 - **Profile Context** does not contain node-level mastery values; those belong to a **Knowledge Map**.
 - **Profile Context Validation** is deterministic structural validation, not an LLM-based semantic review.
-- Profile-context authoring receives a rough user description, benchmark-domain identity, and optional domain summary; it does not receive graph nodes, node rubrics, or edges.
+- Profile-context authoring receives a rough user description, benchmark-domain identity, and a metadata-owned domain summary resolved by the backend; the workbench displays the summary read-only and clients cannot override it. Profile-context authoring does not receive graph nodes, node rubrics, or edges.
 - Candidate-map generation receives the confirmed **Profile Context** and the reviewed **Authored Knowledge Graph**.
 - Candidate-map generation identifies its reviewed **Authored Knowledge Graph** by benchmark domain and graph version; it does not accept ad hoc uploaded node and edge JSON payloads.
 - Candidate-map generation identifies its confirmed **Profile Context** by `user_id`; it does not accept ad hoc inline profile-context JSON payloads.

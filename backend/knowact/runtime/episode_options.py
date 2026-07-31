@@ -26,7 +26,10 @@ class EpisodeModelProviderOption(BaseModel):
 class EpisodeModelCatalog(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    agent_kinds: tuple[str, ...] = ("simple_llm_agent",)
+    agent_kinds: tuple[str, ...] = (
+        "simple_llm_agent",
+        "evidence_calibrated_agent",
+    )
     providers: tuple[EpisodeModelProviderOption, ...]
     tested_agent_temperature_options: tuple[float, ...] = (
         TESTED_AGENT_TEMPERATURE_OPTIONS

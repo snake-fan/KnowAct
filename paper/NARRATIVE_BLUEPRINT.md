@@ -1,6 +1,6 @@
 # KnowAct Paper Narrative Blueprint
 
-> Status: proposed structural contract for author confirmation. This file fixes
+> Status: confirmed structural contract (2026-07-30). This file fixes
 > the argument and space allocation before prose and results are filled in. It
 > does not claim that the proposed reconstruction agent or its experiments are
 > complete.
@@ -166,6 +166,10 @@ active probing, memory/state updates, stopping, and traceable decisions.
 Explain why simulator consistency, human fidelity, and ranking preservation are
 different validity questions.
 
+Use **SAGE — Scoped Answer Generation from Epistemic State** for the implemented
+workflow. Related Work supplies the evidence and limitations behind its
+decomposition; it must not narrate SAGE as already human-faithful.
+
 End the section with one synthesis paragraph that states exactly which
 combination is missing: explicit full-map reconstruction plus agent-controlled
 evidence acquisition plus process-level attribution.
@@ -194,8 +198,13 @@ Tie each design choice to the alternative explanation it blocks:
 #### 3.3 Episode and simulator boundary
 
 Describe only information access and observation production needed to interpret
-agent behavior. Detailed simulator stages and runtime orchestration move to the
-appendix.
+agent behavior. Name and formalize SAGE as public grounding, local hidden-state
+retrieval, epistemic blueprint, and surface realization. Detailed schemas,
+prompts, retry behavior, and runtime orchestration move to the appendix.
+
+The main text may claim implemented context isolation for raw hidden fields. It
+must reserve semantic fidelity, adversarial non-leakage, and human proxy validity
+for experiments.
 
 #### 3.4 Evaluation objects
 
@@ -304,6 +313,8 @@ Experiments are organized by claims, not by whichever result is available first.
   decrease, and are confidence estimates calibrated?
 - **RQ5 Validity:** Do conclusions persist across simulators and transfer to
   matched human episodes?
+- **RQ6 Simulator validity:** Does SAGE preserve held-out state, avoid
+  systematic over/under-performance, and preserve matched human agent effects?
 
 #### 5.2 Compared agents
 
@@ -348,6 +359,15 @@ alternative explanation.
 Vary simulator model, grounding, answer policy, and profile style. Report both
 absolute changes and agent rank reversals. Matched human episodes test state
 fidelity, diagnostic usefulness, and ranking transfer.
+
+The SAGE study uses disjoint authoring questions A and validation questions B.
+Its primary endpoints are human--simulator expressed-mastery distance and
+participant overall representativeness. Seeds are nested repetitions, never
+independent users or best-of samples.
+
+Ablate monolithic role prompting, persona-only conditioning, blueprint,
+reviewed evidence, style, and LLM realization. Run raw/full-map context only in
+an isolated safety harness.
 
 #### 5.7 Error analysis
 

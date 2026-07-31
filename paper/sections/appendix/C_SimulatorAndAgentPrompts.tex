@@ -3,11 +3,23 @@
 
 \subsection{Simulator Stage Contracts}
 
-The question grounder receives the public graph, the current question, and limited visible history. It returns grounded node identifiers or a structured rejection reason.
+The \sagesim grounder receives the public graph, current question, and limited visible history. It
+returns grounded node identifiers or a structured rejection reason before hidden state is loaded.
 
-The answer policy receives only the grounded hidden context. It returns a de-identified blueprint that constrains claims, uncertainty, misconceptions, cues, and prohibited overstatements.
+The context builder retrieves hidden state and reviewed evidence only for directly grounded nodes.
+Graph neighbors are not included merely because an edge exists.
 
-The generator receives the blueprint and surface-style context. It produces the user-visible answer without access to raw mastery labels, map identifiers, evidence identifiers, or scoring fields.
+The answer policy receives this local context. It returns a strict, de-identified blueprint that
+constrains claims, uncertainty, misconceptions, cues, and prohibited overstatements.
+
+The generator receives the blueprint, limited visible dialogue, and optional style context. It does not
+receive raw mastery labels, map identifiers, evidence identifiers, or scoring fields.
+
+The current service validates the policy schema, then retries only failed, timed-out, empty, or
+malformed generation. It has no independent post-generation semantic validator.
+
+Therefore, the release must not describe context isolation as universal non-leakage. The adversarial
+and human semantic-leakage protocols in Appendix~\ref{app:experimental-protocol} test the output claim.
 
 \subsection{Tested-Agent Actions}
 

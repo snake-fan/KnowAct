@@ -22,6 +22,20 @@ class DecisionPhaseContext(BaseModel):
     remaining_diagnostic_turns: int = Field(ge=0)
 
 
+class DiagnosticUtilityTrace(BaseModel):
+    """Deterministic selection record for an experimental diagnostic action."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    estimated_information_gain: float = Field(ge=0.0, le=1.0)
+    coverage_gain: float = Field(ge=0.0, le=1.0)
+    graph_leverage: float = Field(ge=0.0, le=1.0)
+    redundancy: float = Field(ge=0.0, le=1.0)
+    complexity: float = Field(ge=0.0, le=1.0)
+    outcome_model_confidence: float = Field(ge=0.0, le=1.0)
+    selected_utility: float
+
+
 class DiagnosticQuestionPlan(BaseModel):
     """Tested-agent-visible rationale for one information-seeking action."""
 
@@ -31,6 +45,7 @@ class DiagnosticQuestionPlan(BaseModel):
     secondary_target_node_ids: tuple[str, ...] = Field(default_factory=tuple)
     target_mastery_boundary: str
     selection_reason: str
+    utility_trace: DiagnosticUtilityTrace | None = None
 
     @field_validator(
         "primary_target_node_id", "target_mastery_boundary", "selection_reason"

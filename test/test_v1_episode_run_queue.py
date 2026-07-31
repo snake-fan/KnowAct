@@ -83,6 +83,18 @@ class V1EpisodeRunQueueTest(unittest.TestCase):
             persisted = EpisodeExecutionRepository(
                 workspace_root=workspace_root
             ).snapshot()
+            queue_path = (
+                workspace_root
+                / "experiments"
+                / "03_agent_reconstruction"
+                / "runtime"
+                / "run_queue.json"
+            )
+            legacy_queue_path = (
+                workspace_root / "experiments" / "runtime" / "run_queue.json"
+            )
+            queue_path_exists = queue_path.is_file()
+            legacy_queue_path_exists = legacy_queue_path.exists()
 
             for invalid in (2, 9):
                 with self.subTest(invalid=invalid):
@@ -90,6 +102,8 @@ class V1EpisodeRunQueueTest(unittest.TestCase):
                         repository.set_concurrency(invalid)
 
         self.assertEqual(8, persisted.concurrency)
+        self.assertTrue(queue_path_exists)
+        self.assertFalse(legacy_queue_path_exists)
 
     def test_checkpoint_validates_episode_identity_and_immutable_configuration(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -108,7 +122,14 @@ class V1EpisodeRunQueueTest(unittest.TestCase):
                 graph_version=manifest.graph_version,
                 graph=graph,
             )
-            run_dir = workspace_root / "experiments" / "runs" / "run_a"
+            run_dir = (
+                workspace_root
+                / "experiments"
+                / "03_agent_reconstruction"
+                / "results"
+                / "runs"
+                / "run_a"
+            )
             run_dir.mkdir(parents=True)
             repository = EpisodeRunCheckpointRepository(workspace_root=workspace_root)
             checkpoint = repository.initial_checkpoint(

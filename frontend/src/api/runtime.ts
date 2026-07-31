@@ -9,7 +9,9 @@ export type RuntimeInteractionRule = typeof RUNTIME_INTERACTION_RULE;
 export type RuntimeScoringProfile = typeof RUNTIME_SCORING_PROFILE;
 export type TestedAgentClientProvider = "openai" | "deepseek";
 export type SimulatorClientProvider = "openai" | "deepseek";
-export type RuntimeEpisodeAgentKind = "simple_llm_agent";
+export type RuntimeEpisodeAgentKind =
+  | "simple_llm_agent"
+  | "evidence_calibrated_agent";
 
 export type EpisodeExecutionConfiguration = {
   agent_kind: RuntimeEpisodeAgentKind;

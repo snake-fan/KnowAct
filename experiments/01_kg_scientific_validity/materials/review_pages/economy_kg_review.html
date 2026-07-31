@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Economy Candidate KG Expert Review</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17211b;
+      --muted: #637068;
+      --paper: #f4f1e9;
+      --panel: #fffdf7;
+      --line: #d9d4c7;
+      --accent: #176b51;
+      --accent-soft: #e4f0e9;
+      --warn: #9a5a14;
+      --danger: #a13732;
+      --shadow: 0 12px 36px rgba(38, 47, 40, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    button, select, input, textarea { border-radius: 8px; }
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      padding: 9px 13px;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+    button.danger { color: var(--danger); }
+    button:disabled { cursor: not-allowed; opacity: 0.52; }
+
+    .app-shell { min-height: 100vh; }
+    .masthead {
+      background: #12251d;
+      color: white;
+      padding: 28px max(24px, calc((100vw - 1440px) / 2));
+    }
+    .eyebrow {
+      color: #9ed7c0;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      margin: 0 0 7px;
+      text-transform: uppercase;
+    }
+    h1 { font-size: clamp(24px, 4vw, 40px); line-height: 1.13; margin: 0; }
+    .subtitle { color: #c8d5cf; margin: 10px 0 0; max-width: 900px; }
+    .binding-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 18px;
+    }
+    .binding-pill {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px;
+      font-size: 12px;
+      padding: 6px 10px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+      gap: 22px;
+      margin: 0 auto;
+      max-width: 1440px;
+      padding: 22px;
+    }
+    .sidebar {
+      align-self: start;
+      position: sticky;
+      top: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+    }
+    .nav-panel { overflow: hidden; }
+    .nav-title {
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      padding: 14px 16px 10px;
+      text-transform: uppercase;
+    }
+    .nav-button {
+      align-items: center;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 13px 16px;
+      text-align: left;
+      width: 100%;
+    }
+    .nav-button.active { background: var(--accent-soft); color: var(--accent); font-weight: 750; }
+    .count {
+      background: #ece9df;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 11px;
+      padding: 2px 7px;
+    }
+    .nav-button.active .count { background: white; color: var(--accent); }
+    .save-state {
+      color: var(--muted);
+      font-size: 12px;
+      padding: 12px 16px;
+    }
+
+    .content { min-width: 0; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .section-header {
+      align-items: start;
+      display: flex;
+      justify-content: space-between;
+      margin: 5px 0 16px;
+    }
+    .section-header h2 { font-size: 25px; line-height: 1.25; margin: 0 0 4px; }
+    .section-header p { color: var(--muted); margin: 0; }
+    .progress-badge {
+      background: var(--accent-soft);
+      border-radius: 999px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 750;
+      padding: 6px 10px;
+      white-space: nowrap;
+    }
+
+    .card { margin-bottom: 15px; padding: 20px; }
+    .card-title { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
+    .card h3 { font-size: 19px; line-height: 1.3; margin: 0; }
+    .label-guide {
+      background: #f8f6ef;
+      border-color: #c9c4b7;
+    }
+    .label-guide > p { color: var(--muted); margin: 5px 0 14px; }
+    .label-guide-grid {
+      display: grid;
+      gap: 9px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .label-guide-item {
+      background: white;
+      border: 1px solid #dfdbcf;
+      border-radius: 9px;
+      padding: 10px 12px;
+    }
+    .label-guide-item strong { display: block; font-size: 13px; margin-bottom: 3px; }
+    .label-guide-item p { color: var(--muted); font-size: 12px; margin: 0; }
+    .label-guide-item code { color: var(--accent); font-size: 11px; }
+    .identifier {
+      color: var(--muted);
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+    .item-number {
+      background: #ece9df;
+      border-radius: 7px;
+      color: var(--muted);
+      flex: 0 0 auto;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 7px;
+    }
+    .item-status {
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 8px;
+    }
+    .item-status.done { background: var(--accent-soft); color: var(--accent); }
+    .item-status.todo { background: #f7e9d3; color: var(--warn); }
+    details {
+      border-top: 1px solid var(--line);
+      margin-top: 15px;
+      padding-top: 12px;
+    }
+    summary { color: var(--accent); cursor: pointer; font-weight: 750; }
+    .detail-block { margin-top: 13px; }
+    .detail-block h4 {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      margin: 0 0 5px;
+      text-transform: uppercase;
+    }
+    .detail-block p { margin: 0; white-space: pre-wrap; }
+    .locator, .rubric-row {
+      background: #f4f1e8;
+      border-left: 3px solid #a9b9b1;
+      margin: 7px 0;
+      padding: 9px 11px;
+    }
+    .rubric-row strong { color: var(--accent); display: inline-block; min-width: 30px; }
+    ul { margin: 7px 0; padding-left: 20px; }
+
+    .review-grid {
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 16px;
+      padding-top: 16px;
+    }
+    .field { min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 5px;
+    }
+    .required::after { color: var(--danger); content: " *"; }
+    .hint { color: var(--muted); display: block; font-size: 11px; margin-top: 4px; }
+    input, select, textarea {
+      background: white;
+      border: 1px solid #bbb7aa;
+      color: var(--ink);
+      padding: 9px 10px;
+      width: 100%;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(23, 107, 81, 0.12);
+      outline: none;
+    }
+    textarea { min-height: 84px; resize: vertical; }
+    .compact-textarea { min-height: 62px; }
+
+    .scope-summary { font-size: 16px; line-height: 1.8; margin: 8px 0 0; }
+    .callout {
+      background: #fff7e8;
+      border: 1px solid #ecd1a6;
+      border-radius: 10px;
+      color: #664216;
+      margin: 14px 0;
+      padding: 12px 14px;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .file-input { display: none; }
+    .error-box {
+      background: #fff0ef;
+      border: 1px solid #e0aaa7;
+      border-radius: 10px;
+      color: #75211d;
+      display: none;
+      margin: 14px 0;
+      padding: 13px 15px;
+    }
+    .error-box.visible { display: block; }
+    .success-box {
+      background: var(--accent-soft);
+      border: 1px solid #a7cbbb;
+      border-radius: 10px;
+      color: #154f3e;
+      margin: 14px 0;
+      padding: 13px 15px;
+    }
+    .checkbox-line { align-items: flex-start; display: flex; gap: 9px; }
+    .checkbox-line input { margin-top: 4px; width: auto; }
+    .hash-list {
+      background: #f0ede5;
+      border-radius: 9px;
+      font: 11px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+      padding: 11px 13px;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; padding: 14px; }
+      .sidebar { position: static; }
+      .nav-panel { display: grid; grid-template-columns: repeat(3, 1fr); }
+      .nav-title, .save-state { grid-column: 1 / -1; }
+      .nav-button { border-right: 1px solid var(--line); }
+      .review-grid, .label-guide-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+    }
+    @media print {
+      .sidebar, .actions { display: none !important; }
+      .layout { display: block; max-width: none; padding: 0; }
+      .section { display: block !important; }
+      .panel { box-shadow: none; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <script id="review-package" type="application/json">{"schema_version":"knowact.kg_review_package.v1","review_input_kind":"candidate_graph","graph":{"domain":"Economy","candidate_run_id":"kg_metadata_v1_economy_20260730_contract_retry_v6","review_package_id":"Economy:kg_metadata_v1_economy_20260730_contract_retry_v6","graph_fingerprint":"sha256:b95fdf3c34c8e05bfc30a50bcf643404541f25e5a1dd6d4aabb69f5f1659e961","node_count":22,"edge_count":20,"representative_task_count":50,"artifact_binding":{"domain":"Economy","candidate_run_id":"kg_metadata_v1_economy_20260730_contract_retry_v6","candidate_nodes":{"repository_path":"benchmark/domains/Economy/candidate_graphs/kg_metadata_v1_economy_20260730_contract_retry_v6/candidate_nodes.json","sha256":"fca37c522b2d3e924b3cfd0636ff44c8f2abaf5a4f29900f5237037aff328f5d"},"candidate_edges":{"repository_path":"benchmark/domains/Economy/candidate_graphs/kg_metadata_v1_economy_20260730_contract_retry_v6/candidate_edges.json","sha256":"1ecee19a42bc690ca0dbb53e1fb79a9180141c0a02ee0535b1495d1a9d438998"},"source_metadata":{"repository_path":"storage/source_materials/Economy/metadata.json","sha256":"2890ed14c5f75fcc33046cbd456befed9da1c707610b62dec055d70aa8caf45b"},"source_content_sha256":"cf7f44613e50529d0293bd3511024ac14264612e99766d3f7aca5e6fc0282cae"}},"source":{"source_id":"Economy","title":"The Economy: Introductory Economics Foundations","citation":"CORE Econ, The Economy 1.0, Units 1-4.","storage_uri":"storage/source_materials/Economy/experiment_scope.md","content_sha256":"cf7f44613e50529d0293bd3511024ac14264612e99766d3f7aca5e6fc0282cae"},"scope":{"aspect_name":"Introductory economics foundations","aspect_description":"Diagnosable concepts from The Economy Units 1-4: capitalism and long-run growth, technology and population, scarcity and individual choice, and strategic social interactions.","review_scope_summary":"这张图谱聚焦《The Economy》前四单元的入门经济学基础，覆盖资本主义制度与长期增长、技术进步和工业革命、人口与马尔萨斯停滞、稀缺条件下的可行集合与个体选择，以及策略互动、纳什均衡、公共品和社会偏好等内容。评审重点是这些概念是否被组织成适合诊断学习者理解水平的知识单元，并由合理的先修、支持、组成或对比关系连接起来。","representative_tasks":["Use a long-run GDP-per-capita graph to explain the hockey-stick pattern and identify what the graph does not prove.","Distinguish total GDP, GDP per capita, nominal income, and real income when comparing living standards.","Explain how private property, markets, and firms jointly characterize a capitalist economic system.","Compare markets and firms as alternative ways of coordinating specialization and production.","Explain how specialization and technological progress can raise labour productivity and living standards.","Interpret income-distribution data that show inequality both between countries and within countries.","Assess whether a correlation between capitalism and growth is sufficient evidence of causation.","Explain why environmental damage and inequality can coexist with rising average GDP per capita.","Reconstruct the feedback mechanism that produces a Malthusian trap.","Explain how sustained technological progress can allow income growth to outpace population growth.","Use relative wages and energy prices to predict whether a cost-saving technology will be adopted.","Distinguish a production function from a single observed production outcome.","Calculate and interpret average product and marginal product from a production schedule.","Identify diminishing marginal product and explain its relevance to production choices.","Use an isocost line to compare the costs of alternative production techniques.","Explain why an innovator may earn temporary economic rents after adopting a superior technology.","Explain how competition and diffusion can erode an innovator's temporary rents.","Distinguish a general-purpose technology from a narrow process improvement.","Evaluate competing explanations for why the Industrial Revolution began in Britain.","Identify which assumptions in a simplified technological-change model are doing explanatory work.","Construct a feasible set for a choice involving limited time and multiple objectives.","Identify the opportunity cost of additional consumption, study, leisure, or work in a concrete scenario.","Use an indifference curve to compare bundles without treating utility as directly measurable happiness.","Interpret the marginal rate of substitution as willingness to trade one objective for another.","Use a concave production function to explain why additional study or work may have diminishing returns.","Distinguish feasible, infeasible, dominated, and efficient choices on a constrained-choice diagram.","Find a preferred feasible choice by combining a feasible frontier with indifference curves.","Explain why a tangency condition characterizes an interior optimum and when it may fail.","Separate the income effect and substitution effect of an increase in the wage rate.","Explain why higher wages need not cause every person to work more hours.","Use ceteris paribus reasoning to evaluate a claim about study time and academic performance.","Identify omitted variables that could confound an observed relationship between effort and outcomes.","Compare average and marginal quantities and explain why they can move in different directions.","Explain scarcity as a constraint on choice rather than as a synonym for poverty.","Identify self-interest, altruism, reciprocity, and inequality aversion in a strategic interaction.","Represent a two-player interaction with actions, payoffs, and outcomes.","Determine whether a strategy is dominant by comparing payoffs across the other player's possible actions.","Find a Nash equilibrium and explain why it need not maximize joint wellbeing.","Explain the conflict between individual incentives and collective outcomes in a prisoner's dilemma.","Diagnose free riding in a public-goods game and identify the payoff structure that sustains it.","Predict how repeated interaction can change incentives for cooperation.","Explain how reciprocity and credible punishment may support cooperative outcomes.","Distinguish altruistic preferences from strategic cooperation motivated by future rewards.","Use inequality aversion to explain behavior that a purely self-interested model cannot explain.","Predict how changing a game's rules or payoffs can change its equilibrium.","Distinguish a coordination problem from a social dilemma using payoff comparisons.","Interpret experimental-game evidence without assuming that one observed choice reveals a fixed personality type.","Explain how institutions can alter incentives while preferences remain unchanged.","Design a diagnostic comparison that separates misunderstanding of Nash equilibrium from disagreement about fairness.","Connect capitalism, technological change, constrained choice, and social interaction without collapsing them into one causal claim."],"excluded_topics":["Units 5 and later of The Economy","Detailed firm governance and employment contracts","Supply-and-demand equilibrium and price-taking markets","Credit, banking, money, inflation, unemployment, and fiscal policy","International trade and macroeconomic stabilization","Advanced welfare economics and formal social-choice theory","Econometric estimation beyond qualitative ceteris paribus reasoning","Calculus-based optimization proofs","Policy prescriptions not developed in Units 1-4","Historical facts that do not support a reusable economic concept"],"target_node_count":20,"max_node_count":24},"nodes":[{"id":"gdp_based_income_comparisons","name":"GDP-Based Income Comparisons","type":"concept","definition":"GDP-based income comparisons use GDP per capita as average output or income per person, distinguish nominal from real GDP over time, and use purchasing power parity to compare purchasing power across countries.","source_locators":[{"source_id":"Economy","locator":"Unit 1, Section 1.2 Measuring income and living standards","note":"Defines GDP per capita and cautions against treating it as full wellbeing."},{"source_id":"Economy","locator":"Unit 1, Section 1.2, Einstein: Comparing income at different times, and across different countries","note":"Distinguishes nominal GDP from real GDP."},{"source_id":"Economy","locator":"Unit 1, Section 1.2, Einstein: Taking account of price differences among countries","note":"Explains PPP as a correction for price-level and currency differences."}],"diagnostic_goal":"Diagnose whether the learner can use GDP per capita appropriately for income and living-standard comparisons, distinguish nominal from real GDP over time, and explain why purchasing power parity is needed for cross-country comparisons.","levels":{"L0":"Cannot identify GDP per capita as an average per-person measure and may treat any GDP number, money income, prices, or wellbeing measure as interchangeable.","L1":"Can recall terms such as GDP per capita, nominal GDP, real GDP, and purchasing power parity, but gives memorized definitions without reliably distinguishing average output or income, inflation correction, and cross-country purchasing power.","L2":"Can explain that GDP per capita is average income or output per person and that real GDP adjusts for price changes, but may still overstate GDP per capita as typical disposable income or overall wellbeing and only vaguely understands PPP.","L3":"Can distinguish GDP per capita from broader wellbeing, nominal GDP from real GDP when prices change, and PPP comparisons from simple currency or market-exchange-rate comparisons; recognizes common boundary errors such as confusing inflation with increased output.","L4":"Can apply the distinctions to new comparisons, such as deciding whether a nominal GDP increase reflects real output growth, or why two countries' incomes should be compared using common prices to assess purchasing power.","L5":"Can critically evaluate GDP-based income comparisons, explain their usefulness and limits, construct examples where nominal, real, and PPP comparisons diverge, and teach why GDP per capita is a broad indicator rather than a complete measure of living standards."},"diagnostic_signals":["Correctly identifies GDP per capita as an average per-person output or income measure rather than total national income alone.","Notes that GDP per capita is useful for broad living-standard comparisons but is not the same as typical disposable income or overall wellbeing.","Explains that real GDP corrects nominal GDP for price changes so inflation is not mistaken for more output.","Recognizes that if nominal GDP rises only because prices rise, real GDP may be unchanged.","Explains PPP as using a common set of prices to compare what incomes can buy across countries.","Incorrectly treats exchange-rate conversion, nominal GDP, real GDP, and PPP-adjusted income as equivalent."],"simulator_behavior":"Answers should reveal whether the learner separates average income, inflation adjustment, and cross-country purchasing-power adjustment, and whether they avoid treating GDP per capita as a complete measure of wellbeing."},{"id":"capitalist_institutions_private_property_markets_and_firms","name":"Capitalist Institutions: Private Property, Markets, and Firms","type":"concept","definition":"Capitalism is an economic system characterized by private property, markets, and firms, where markets coordinate voluntary reciprocal exchange and firms organize production under owners who hire and direct employees to sell output for profit.","source_locators":[{"source_id":"Economy","locator":"Unit 1, Section 1.6 Capitalism defined: Private property, markets, and firms","note":"Defines capitalism by its central institutions."},{"source_id":"Economy","locator":"Unit 1, Section 1.6 Capitalism defined: Markets","note":"Defines markets as voluntary and reciprocal transfers."},{"source_id":"Economy","locator":"Unit 1, Section 1.6 Capitalism defined: Firm","note":"Lists defining characteristics of firms."}],"diagnostic_goal":"Diagnose whether the learner understands capitalism as the combination of private property, markets, and firms, including how markets and firms differ as coordinating institutions.","levels":{"L0":"Does not recognize capitalism in terms of private property, markets, and firms, and may describe it only as money, greed, government absence, or any form of trade.","L1":"Can recall that capitalism involves private property, markets, and firms, but cannot explain why all three matter or how markets and firms are distinct.","L2":"Can give a basic explanation that markets involve buying and selling and firms produce for profit, but has unclear boundaries between voluntary exchange, gifts, theft, commands, and employment inside firms.","L3":"Can explain capitalism as a system combining private property, voluntary reciprocal market exchange, and firms in which owners hire and direct employees to produce output for sale for profit; can contrast markets with gifts, theft, and commands.","L4":"Can apply the institutional distinctions to classify examples, such as identifying whether a transfer is a market exchange or whether production is organized within a firm rather than through separate market trades.","L5":"Can analyze and teach how private property, markets, and firms jointly define capitalism, generate examples and counterexamples, and critique oversimplified definitions that reduce capitalism to one institution alone."},"diagnostic_signals":["Names private property, markets, and firms as the central institutions rather than relying on only one feature.","Describes markets as voluntary and reciprocal transfers, not gifts, theft, or commands.","Explains that firms organize production through ownership of capital goods, employment, direction of workers, and sale of output for profit.","Distinguishes exchange between market participants from direction within a firm.","Avoids defining capitalism solely as profit seeking, money use, free markets, or absence of government.","Can classify borderline cases using the presence or absence of private property, voluntary reciprocal exchange, and firm organization."],"simulator_behavior":"Answers should show whether the learner can define capitalism institutionally and separate market exchange from firm-based production without importing user-specific judgments or policy preferences."},{"id":"specialization_and_comparative_advantage","name":"Specialization and Comparative Advantage","type":"concept","definition":"Specialization raises productivity when people focus on limited activities, and comparative advantage explains how trade can benefit producers even when one producer has an absolute advantage in all goods.","source_locators":[{"source_id":"Economy","locator":"Unit 1, Section 1.8 The gains from specialization","note":"Links division of labour to learning, ability differences, scale, and comparative advantage."}],"diagnostic_goal":"Diagnose whether the learner understands how specialization can raise productivity and why comparative advantage allows mutual gains from trade even when absolute advantages differ.","levels":{"L0":"Does not recognize specialization or comparative advantage and may think trade can benefit only the producer who is better at producing everything.","L1":"Can repeat terms such as specialization, division of labour, productivity, or comparative advantage, but cannot explain the source of gains or the difference from absolute advantage.","L2":"Can explain that focusing on limited activities can improve productivity, but gives only a simple account and may still believe trade requires each producer to have an absolute advantage in something.","L3":"Can connect specialization to learning, differences in abilities, and economies of scale, and can explain that comparative advantage can make specialization and trade beneficial even when one producer has an absolute advantage in all goods.","L4":"Can apply comparative-advantage reasoning to new producer or country examples, identifying mutually beneficial specialization and trade possibilities despite absolute-productivity differences.","L5":"Can construct and critique comparative-advantage examples, explain the mechanism of mutual gains clearly, and distinguish productivity gains from specialization from gains due to relative rather than absolute advantage."},"diagnostic_signals":["Explains that specialization can raise productivity through learning, differing abilities, or economies of scale.","Distinguishes absolute advantage from comparative advantage.","Recognizes that all producers can benefit by specializing and trading goods even if one is absolutely better at producing all goods.","Identifies that the relevant comparison is relative advantage or opportunity cost, not simply who produces more of everything.","Incorrectly claims that trade benefits only the more productive producer or only occurs when each side is best at a different good.","Can generate or interpret a simple specialization-and-trade scenario without confusing total productivity with comparative advantage."],"simulator_behavior":"Answers should reveal whether the learner attributes gains to specialization mechanisms and comparative advantage, and whether they avoid the misconception that absolute advantage in all goods rules out mutual gains from trade."},{"id":"technological_progress_and_the_permanent_technological_revolution","name":"Technological Progress and the Permanent Technological Revolution","type":"concept","definition":"Technological progress is a change in production technology that reduces the resources needed for a given output; the permanent technological revolution is repeated, generation-after-generation improvement in production methods.","source_locators":[{"source_id":"Economy","locator":"Unit 1, Section 1.4 The permanent technological revolution","note":"Defines technology and links sustained innovation to labour productivity."}],"diagnostic_goal":"Diagnose whether the learner understands technological progress as reducing the resources needed for a given output and understands the permanent technological revolution as repeated improvement in production methods linked to sustained productivity and living-standard growth.","levels":{"L0":"Does not identify technological progress as a production-technology change and may treat any new device, higher spending, or larger output as progress regardless of resource use.","L1":"Can recall that technological progress involves technology improving or resources being reduced, but cannot specify the given-output comparison or the repeated nature of the permanent technological revolution.","L2":"Can explain that technological progress means producing the same output with fewer resources, but may not connect repeated improvements to sustained labour productivity or living standards.","L3":"Can distinguish a one-time change in production technology from generation-after-generation improvement, and can explain how repeated resource-saving improvements support sustained growth in labour productivity and living standards.","L4":"Can apply the concept to examples by deciding whether a production change is technological progress and explaining how continuing improvements could affect productivity over time.","L5":"Can critique ambiguous cases, construct examples of resource-saving production changes, and teach how a permanent technological revolution differs from isolated inventions or simple increases in output."},"diagnostic_signals":["Defines technological progress in terms of reducing resources required for a given output.","Maintains the comparison at a given output rather than treating any output increase as technological progress.","Recognizes repeated technological improvement as central to the permanent technological revolution.","Links repeated improvements to sustained labour productivity growth and living-standard gains.","Incorrectly equates technological progress with more machines, more production, or novelty without resource-saving production change.","Can assess whether a described change in methods qualifies as technological progress."],"simulator_behavior":"Answers should show whether the learner focuses on resource requirements for a given output and can connect repeated production-method improvements to productivity and living-standard growth."},{"id":"general_purpose_technologies_and_the_industrial_revolution","name":"General-Purpose Technologies and the Industrial Revolution","type":"concept","definition":"General-purpose technologies are advances applicable across many sectors that spawn further innovations; the Industrial Revolution is presented as a wave of technological and organizational change that transformed production.","source_locators":[{"source_id":"Economy","locator":"Experiment Scope: Introductory Economics Foundations (part 2), Unit 2 introduction","note":"Defines the Industrial Revolution and general-purpose technologies."}],"diagnostic_goal":"Diagnose whether the learner understands general-purpose technologies as broad, innovation-spawning advances and understands the Industrial Revolution as a wave of technological and organizational change beginning in eighteenth-century Britain.","levels":{"L0":"Does not recognize general-purpose technologies or the Industrial Revolution, or treats them as any isolated invention or any period of economic growth.","L1":"Can recall that the Industrial Revolution began in Britain in the eighteenth century or that general-purpose technologies affect many sectors, but cannot explain the broader transformation or innovation-spawning role.","L2":"Can describe the Industrial Revolution as involving technological change and general-purpose technologies as widely used advances, but may overlook organizational change or the way broad technologies generate further innovations.","L3":"Can explain that the Industrial Revolution was a wave of technological and organizational changes starting in eighteenth-century Britain, and can distinguish general-purpose technologies from narrower improvements because they apply across many sectors and spawn further innovations.","L4":"Can apply the distinction to examples by identifying whether an advance is general-purpose or sector-specific and explaining how broad technologies can contribute to production transformation.","L5":"Can analyze the Industrial Revolution as a system-wide wave of technological and organizational change, generate examples and counterexamples of general-purpose technologies, and critique accounts that reduce it to a single invention."},"diagnostic_signals":["Identifies the Industrial Revolution as a wave of technological and organizational changes rather than a single event or invention.","Locates the described Industrial Revolution as beginning in eighteenth-century Britain when relevant.","Defines general-purpose technologies as applicable across many sectors.","Explains that general-purpose technologies spawn further innovations.","Distinguishes broad, cross-sector advances from narrow sector-specific improvements.","Incorrectly treats every new technology as general-purpose or ignores organizational change in the Industrial Revolution."],"simulator_behavior":"Answers should reveal whether the learner can separate broad, innovation-generating technologies from narrow improvements and can describe the Industrial Revolution as a broad technological and organizational transformation."},{"id":"causality_versus_correlation_in_economic_explanation","name":"Causality Versus Correlation in Economic Explanation","type":"concept","definition":"Causality means that a change in one variable produces a change in another through a mechanism, while correlation only shows that variables moved together.","source_locators":[{"source_id":"Economy","locator":"Unit 1, Section 1.9 Capitalism, causation and history’s hockey stick","note":"Warns against inferring causation from timing or co-movement alone."}],"diagnostic_goal":"Diagnose whether the learner can distinguish correlation from causality in economic explanation and recognize that causal claims require a mechanism rather than timing or co-movement alone.","levels":{"L0":"Cannot distinguish causality from correlation and treats variables moving together or occurring in sequence as proof that one caused the other.","L1":"Can repeat that correlation is not causation, but cannot explain what correlation shows or what is needed for a causal explanation.","L2":"Can explain that correlation means two things moved together and causality means one change produces another, but gives weak or vague accounts of mechanisms.","L3":"Can state that co-movement or timing alone is insufficient for causation and can explain that a causal claim needs a mechanism linking a change in one variable to a change in another.","L4":"Can apply the distinction to economic examples, such as evaluating whether the timing of capitalism and growth supports a causal claim only when supported by a plausible mechanism.","L5":"Can critique causal arguments, propose alternative explanations for correlations, articulate mechanisms, and design examples showing why observed co-movement is insufficient evidence of causation."},"diagnostic_signals":["Defines correlation as variables moving together rather than one producing the other.","Defines causality as a change in one variable producing a change in another through a mechanism.","Rejects timing or co-movement alone as sufficient evidence for causation.","Mentions the need for a mechanism in economic explanation.","Incorrectly infers causation merely because capitalism and growth, or any two variables, occur together over time.","Can evaluate whether a proposed relationship is causal, correlational, or under-supported."],"simulator_behavior":"Answers should show whether the learner requires a mechanism for causal claims and resists inferring causation from co-movement or timing alone."},{"id":"economic_models_and_ceteris_paribus_reasoning","name":"Economic Models and Ceteris Paribus Reasoning","type":"concept","definition":"Economic models are simplified representations that focus on essential features of a question, often using ceteris paribus reasoning to hold other influences constant and clarify mechanisms or predictions.","source_locators":[{"source_id":"Economy","locator":"Experiment Scope: Introductory Economics Foundations (part 2), Section 2.2 Economic models: How to see more by looking at less","note":"Defines models as simplifications that focus attention on what matters."},{"source_id":"Economy","locator":"Experiment Scope: Introductory Economics Foundations (part 2), Section 2.3 Basic concepts: Prices, costs, and innovation rents","note":"Introduces ceteris paribus reasoning for focused comparison."},{"source_id":"Economy","locator":"3.1 Labour and production","note":"Applies ceteris paribus to study time and GPA."},{"source_id":"Economy","locator":"Unit 3, Section 3.8","note":"Explains that models may work as if people calculated, without claiming conscious calculation."}],"diagnostic_goal":"Diagnose whether the learner understands economic models as purposeful simplifications, can use ceteris paribus reasoning to isolate relationships, and recognizes the role of omitted factors and as-if reasoning.","levels":{"L0":"Does not recognize models as simplified representations and may treat them as exact descriptions, useless fictions, or claims that people consciously calculate every modeled step.","L1":"Can recall terms such as model, simplification, ceteris paribus, or as-if, but cannot explain how simplification, holding other influences constant, and prediction or explanation fit together.","L2":"Can explain that models simplify reality and that ceteris paribus means other things are held constant, but may not identify which omitted factors matter or may assume the model describes conscious decision calculations.","L3":"Can explain that models focus on essential features for a question, omit unnecessary details, use ceteris paribus comparisons to isolate a mechanism, and require attention to omitted influences such as study environment when interpreting relationships.","L4":"Can apply model and ceteris paribus reasoning to new cases, identifying what is being held constant, what mechanism is being clarified, and why a prediction may still be useful as if people calculated without claiming they actually do.","L5":"Can critique and construct simplified economic models, justify what is included or omitted for a question, design ceteris paribus comparisons, and explain the strengths and limits of as-if reasoning in prediction and explanation."},"diagnostic_signals":["Describes models as simplified representations that focus attention on what is important for a question.","Recognizes that models omit details not needed for the specific purpose rather than aiming to include everything.","Explains ceteris paribus as comparing cases while holding other relevant influences constant.","Uses examples such as study time and GPA to note that omitted factors can affect interpretation.","Understands as-if reasoning: models may predict or explain without claiming people consciously perform the calculations.","Incorrectly treats ceteris paribus as meaning omitted factors do not exist or never matter."],"simulator_behavior":"Answers should reveal whether the learner can reason with simplification and controlled comparison, while acknowledging omitted factors and avoiding the misconception that models require conscious calculation by agents."},{"id":"relative_prices_and_technology_choice","name":"Relative Prices and Technology Choice","type":"concept","definition":"Relative prices are ratios of prices that guide comparisons among alternatives and can determine which production technology is least costly.","source_locators":[{"source_id":"Economy","locator":"Experiment Scope: Introductory Economics Foundations (part 2), Sections 2.3-2.6","note":"Uses wages relative to coal or capital-goods prices to explain technology choice."}],"diagnostic_goal":"Diagnose whether the learner understands relative prices as price ratios that guide comparison among alternatives and can explain how changes in relative input prices affect least-cost technology choice.","levels":{"L0":"Does not recognize relative prices and may think technology choice depends only on physical efficiency, absolute prices, or the newest available technique.","L1":"Can recall that relative prices are price comparisons or that firms compare input prices, but cannot explain how these comparisons affect technology choice.","L2":"Can explain that relative prices compare one price with another and that firms consider input costs, but may not see why a change in wages relative to energy or capital-goods prices can change the least-cost technique.","L3":"Can explain that relative prices are ratios of prices and that firms choose among production technologies by comparing total costs implied by relative input prices such as wages, energy, or capital goods.","L4":"Can apply relative-price reasoning to new examples, predicting when a change in wages, energy prices, or capital-goods prices would make a different technology least costly.","L5":"Can construct and critique technology-choice examples, separate technical feasibility from cost minimization, and explain how shifts in relative input prices can overturn a previously least-cost technology choice."},"diagnostic_signals":["Defines relative prices as ratios or comparisons among prices rather than isolated money prices.","Explains that technology choice depends on relative input prices.","Mentions wages relative to energy or capital-goods prices as relevant comparisons when grounded in examples.","Recognizes that a technique can become least costly or cease to be least costly when relative prices change.","Avoids choosing technology solely by newest, fastest, most output-producing, or lowest absolute price of one input.","Can reason through a simple change in input prices and its effect on least-cost production technology."],"simulator_behavior":"Answers should show whether the learner compares input prices relatively and uses those comparisons to determine least-cost technology choices rather than relying on physical or absolute-price criteria alone."},{"id":"malthusian_trap_and_subsistence_equilibrium","name":"Malthusian Trap and Subsistence Equilibrium","type":"concept","definition":"The Malthusian trap is a feedback mechanism in which income or wages above subsistence raise population, population growth lowers average product and income per person, and living standards return to subsistence equilibrium.","source_locators":[{"source_id":"Economy","locator":"Experiment Scope: Introductory Economics Foundations (part 2), Unit 2 introduction","note":"Introduces Malthus's logic that productivity gains lead to population growth and a return to subsistence."},{"source_id":"Economy","locator":"2.8 Malthusian economics: Population grows when living standards rise","note":"Explains population response to living standards and subsistence equilibrium."},{"source_id":"Economy","locator":"2.8 Malthusian economics: The effect of technological improvement","note":"Shows temporary income gains from technology followed by return to subsistence."},{"source_id":"Economy","locator":"2.8 Malthusian economics: Modelling Malthus","note":"Summarizes the wage-population feedback cycle."}],"diagnostic_goal":"Diagnose whether the learner understands the Malthusian feedback mechanism linking living standards, population growth, diminishing average product of labour, and return to subsistence equilibrium.","levels":{"L0":"Cannot identify the Malthusian trap as a population-income feedback mechanism; may treat it as simply poverty, famine, or lack of technology without explaining why wages return to subsistence.","L1":"Can recall terms such as subsistence, population growth, or Malthusian trap, but gives a memorized or fragmentary description and does not connect higher wages to population expansion and falling income per person.","L2":"Can explain that when living standards rise, population tends to grow and income eventually falls back toward subsistence, but the explanation is simple and may leave out diminishing average product of labour or the constant-population condition at subsistence wages.","L3":"Can describe the full cycle: wages above subsistence raise population, more labour lowers average product and income per person, and equilibrium is restored at subsistence with a larger population; can distinguish temporary gains from a stable subsistence equilibrium.","L4":"Can apply the model to new scenarios, such as a technological improvement, predicting a short-run rise in income per person followed by population growth and a return to subsistence under Malthusian assumptions.","L5":"Can critically explain the assumptions behind the trap, including the demographic response to living standards and diminishing average product of labour, teach the mechanism using examples, and generate counterexamples where the feedback would not restore subsistence."},"diagnostic_signals":["States whether population is constant, rising, or falling at subsistence versus above-subsistence wages.","Connects higher living standards to population expansion rather than treating population as fixed.","Explains that population growth lowers average product or income per person in the model.","Recognizes that technological improvement produces only temporary income gains in the Malthusian model unless conditions change.","Avoids the misconception that the trap means technology cannot increase total output or population.","Distinguishes subsistence equilibrium from a one-time low-income outcome."],"simulator_behavior":"Answers should reveal whether the simulated knowledge state can trace the wage-population-output feedback, identify subsistence as the equilibrium condition, and apply or misapply the mechanism to changes such as technological improvement."},{"id":"escape_from_malthusian_stagnation","name":"Escape from Malthusian Stagnation","type":"concept","definition":"Escape from Malthusian stagnation occurs when sustained technological improvement offsets diminishing average product of labour so population and real wages can rise together.","source_locators":[{"source_id":"Economy","locator":"2.10 Escaping from Malthusian stagnation","note":"Contrasts Malthusian stagnation with simultaneous increases in population and real wages."}],"diagnostic_goal":"Diagnose whether the learner understands escape from Malthusian stagnation as a regime in which sustained technological improvement allows real wages and population to rise together.","levels":{"L0":"Does not recognize escape from Malthusian stagnation; may say population growth always forces wages back to subsistence or confuse escape with a temporary productivity shock.","L1":"Can recall that escape involves rising wages, rising population, or technology, but cannot explain how these features differ from the Malthusian trap.","L2":"Can state that both population and real wages increase in the new regime, but gives only a basic explanation and may not connect this to sustained technological improvement offsetting diminishing average product.","L3":"Can contrast Malthusian stagnation with escape: in stagnation productivity gains are absorbed by population growth, while in escape continuing technological improvement allows income growth to outpace the population feedback.","L4":"Can apply the concept to distinguish examples where wages and population rise together from examples that remain Malthusian, using sustained technological progress as the key mechanism.","L5":"Can reflect on the conditions required for escape, explain why a single temporary improvement is insufficient, and generate examples or counterexamples involving the balance between technological improvement, population, and real wages."},"diagnostic_signals":["Identifies simultaneous increases in population and real wages as the hallmark of escape.","Names sustained technological improvement as the mechanism rather than merely a one-off increase in output.","Contrasts escape with the return-to-subsistence logic of the Malthusian trap.","Avoids claiming that any population growth by itself means escape.","Avoids claiming that any technological improvement automatically produces permanent escape.","Uses real wages or income per person rather than only total output as the relevant living-standard measure."],"simulator_behavior":"Answers should indicate whether the simulated knowledge state can distinguish a sustained post-Malthusian regime from a temporary Malthusian productivity gain and can use simultaneous wage and population growth as the diagnostic pattern."},{"id":"production_function","name":"Production Function","type":"concept","definition":"A production function describes how much output can be produced from a given amount or combination of inputs.","source_locators":[{"source_id":"Economy","locator":"3.1 Labour and production","note":"Applies the concept to study hours as input and grade as output."}],"diagnostic_goal":"Diagnose whether the learner understands a production function as a relationship mapping input amounts or input combinations to the amount of output that can be produced.","levels":{"L0":"Cannot identify a production function; may confuse it with a budget constraint, a preference ranking, a single observed production result, or a general goal of producing more output.","L1":"Can repeat that a production function relates inputs and output, but cannot explain what varies or what the relationship is used to describe.","L2":"Can explain in simple terms that output depends on inputs, such as study hours affecting a grade, but may treat the function as only one observed input-output pair rather than a relationship over many possible input levels or combinations.","L3":"Can describe a production function as showing the possible output for different amounts or combinations of inputs and can distinguish it from an actual chosen outcome on that relationship.","L4":"Can apply the idea to new production contexts by identifying the relevant inputs and output and interpreting how changing an input would move along or alter the relationship.","L5":"Can teach or critique the concept by explaining what information a production function includes and excludes, generate examples with single or multiple inputs, and distinguish it from neighboring concepts such as preferences or constraints."},"diagnostic_signals":["Identifies both inputs and output in an example.","Describes the relationship over varying input amounts or combinations, not just one data point.","Uses language of possible output that can be produced from given inputs.","Correctly interprets examples such as study hours as input and grade as output.","Avoids confusing the production function with utility, preferences, or a budget line.","Can explain that different input levels correspond to different possible output levels."],"simulator_behavior":"Answers should reveal whether the simulated knowledge state treats the production function as a general input-output relationship and can separate that relationship from a particular observed production choice or outcome."},{"id":"average_product_marginal_product_and_diminishing_marginal_product","name":"Average Product, Marginal Product, and Diminishing Marginal Product","type":"concept","definition":"Average product is total output divided by an input, marginal product is the additional output from one more unit of input holding other inputs constant, and diminishing marginal product occurs when successive input units add less output.","source_locators":[{"source_id":"Economy","locator":"3.1 Labour and production","note":"Defines average product, marginal product, and diminishing marginal product using the study-hours example."}],"diagnostic_goal":"Diagnose whether the learner understands average product, marginal product, and diminishing marginal product as distinct measures derived from a production relationship.","levels":{"L0":"Does not distinguish average product from marginal product; may use the terms interchangeably or define both as total output.","L1":"Can recall isolated phrases such as output per input or extra output, but cannot reliably assign them to average product and marginal product or explain diminishing marginal product.","L2":"Can give basic definitions: average product is total output divided by input and marginal product is extra output from one more input unit, but may struggle with examples or with holding other inputs constant.","L3":"Can distinguish the questions each measure answers, explain that marginal product can fall as input rises, and connect diminishing marginal product to a production function becoming flatter.","L4":"Can apply the concepts to new numerical or graphical examples, computing or interpreting average and marginal product and identifying when marginal product is diminishing.","L5":"Can explain subtle cases where average and marginal product move differently, teach the distinction with examples, and generate cases showing constant, increasing, or diminishing marginal product."},"diagnostic_signals":["Defines average product as total output divided by an input.","Defines marginal product as additional output from one more unit of input while other inputs are held constant.","Recognizes diminishing marginal product as successive input units adding less output.","Connects diminishing marginal product to a flattening production curve.","Avoids confusing diminishing marginal product with falling total output.","Can distinguish average output per unit from the increment added by the next unit."],"simulator_behavior":"Answers should show whether the simulated knowledge state can define, distinguish, and apply average product, marginal product, and diminishing marginal product without collapsing them into total output or each other."},{"id":"feasible_set_feasible_frontier_and_budget_constraint","name":"Feasible Set, Feasible Frontier, and Budget Constraint","type":"concept","definition":"A feasible set contains all combinations available under constraints, a feasible frontier shows the maximum feasible amount of one objective for each amount of another, and a budget constraint is a feasible frontier for consumption choices.","source_locators":[{"source_id":"Economy","locator":"3.4 The feasible set","note":"Defines feasible combinations and the frontier in the grade-free-time choice."},{"source_id":"Economy","locator":"Unit 3, Section 3.7, Figure 3.15","note":"Defines the work-consumption budget constraint as a feasible frontier."}],"diagnostic_goal":"Diagnose whether the learner understands feasible sets, feasible frontiers, and budget constraints as representations of choices available under constraints.","levels":{"L0":"Cannot identify feasible and infeasible choices; may treat every desired combination as available or confuse the feasible set with preferences or utility.","L1":"Can recall terms such as feasible set, frontier, or budget constraint, but gives only vague definitions and cannot distinguish the area of feasible choices from the boundary.","L2":"Can explain that the feasible set contains available combinations and that the frontier shows a maximum, but may be unclear about which points are inside, on, or outside the constraint.","L3":"Can distinguish feasible, infeasible, and frontier choices; can explain that the feasible frontier gives the maximum amount of one objective for each amount of another and that a budget constraint is such a frontier for consumption choices.","L4":"Can apply the framework to new cases, such as free time and grades or free time and consumption, identifying the feasible set below the frontier and the maximum attainable combinations on the budget constraint.","L5":"Can teach and critique the representation by generating examples of constraints, explaining changes to the frontier, and distinguishing feasibility from desirability or optimality."},"diagnostic_signals":["Identifies the feasible set as all available combinations under constraints.","Identifies the feasible frontier as the boundary of maximum attainable combinations.","Recognizes that points below or within the frontier may be feasible but not maximal.","Recognizes that points beyond the frontier are infeasible under the stated constraint.","Describes a budget constraint as a feasible frontier for consumption choices.","Avoids treating the highest-utility choice as automatically feasible."],"simulator_behavior":"Answers should reveal whether the simulated knowledge state can classify choices as feasible, frontier, or infeasible and can interpret a budget constraint as the maximum consumption available for each level of another objective."},{"id":"marginal_rate_of_transformation_and_opportunity_cost","name":"Marginal Rate of Transformation and Opportunity Cost","type":"concept","definition":"The marginal rate of transformation is the rate at which one feasible objective can be transformed into another; in the work-time model it equals the wage and is the opportunity cost of free time.","source_locators":[{"source_id":"Economy","locator":"Unit 3, Section 3.7, Figure 3.15 and Figure 3.16","note":"Links the budget-constraint slope, wage, MRT, and opportunity cost of free time."}],"diagnostic_goal":"Diagnose whether the learner understands the marginal rate of transformation as the feasible trade-off between objectives and, in the work-time model, as the wage or opportunity cost of free time.","levels":{"L0":"Does not recognize marginal rate of transformation or opportunity cost; may confuse it with personal willingness to trade or with total income.","L1":"Can recall that MRT, wage, slope, or opportunity cost are related, but cannot explain the trade-off they measure.","L2":"Can state that MRT is a rate of transforming one objective into another and that the wage is related to it, but may be unclear about the direction of the trade-off or the meaning of consumption forgone.","L3":"Can explain that in the work-time model the wage is the slope of the budget constraint, the rate at which time can be transformed into consumption, and the opportunity cost of an additional unit of free time.","L4":"Can apply the concept to new budget-constraint examples, using the wage or slope to calculate or interpret how much consumption is forgone when free time increases.","L5":"Can teach the distinction between feasible trade-offs and preference-based willingness to trade, generate examples with different wages, and explain how changes in the wage alter the opportunity cost of free time."},"diagnostic_signals":["Identifies MRT as a feasible trade-off, not a preference ranking.","Links the MRT in the work-time model to the slope of the budget constraint.","States that the wage measures how much consumption is gained by working more or forgone by taking more free time.","Uses opportunity cost language correctly for an additional unit of free time.","Avoids confusing MRT with MRS.","Can interpret the effect of a higher or lower wage on the trade-off between free time and consumption."],"simulator_behavior":"Answers should indicate whether the simulated knowledge state can use the wage or budget-constraint slope to describe the objective trade-off between free time and consumption and distinguish it from willingness to trade."},{"id":"preferences_indifference_curves_and_marginal_rate_of_substitution","name":"Preferences, Indifference Curves, and Marginal Rate of Substitution","type":"concept","definition":"Preferences describe how a person ranks outcomes, indifference curves join bundles that provide equal utility, and the marginal rate of substitution measures willingness to trade one good or objective for another.","source_locators":[{"source_id":"Economy","locator":"3.2 Preferences","note":"Introduces preferences, utility, indifference curves, and MRS using free time and grade."}],"diagnostic_goal":"Diagnose whether the learner understands preferences, indifference curves, and marginal rate of substitution as representations of rankings, equal-utility bundles, and willingness to trade.","levels":{"L0":"Cannot identify preferences or indifference curves; may treat them as budget constraints, production possibilities, or objective feasibility rather than rankings of outcomes.","L1":"Can recall words such as utility, indifference curve, or MRS, but cannot explain equal satisfaction or willingness to trade between objectives.","L2":"Can explain that preferences rank outcomes and indifference curves connect equally preferred bundles, but may treat utility as directly measurable happiness or struggle to interpret the MRS as a trade-off.","L3":"Can describe indifference curves as joining bundles that provide equal utility or satisfaction and explain MRS as the slope-based trade-off a person is willing to make between objectives.","L4":"Can apply the ideas to new examples, identifying equally preferred bundles and interpreting how much of one objective a person would give up for another along an indifference curve.","L5":"Can teach and critique the representation by distinguishing preferences from constraints, explaining utility without requiring direct measurement of happiness, and generating examples with different willingness-to-trade patterns."},"diagnostic_signals":["States that preferences rank outcomes or bundles.","Defines an indifference curve as connecting combinations that provide equal utility or satisfaction.","Interprets MRS as willingness to trade one good or objective for another.","Avoids confusing MRS with the feasible trade-off or wage-based MRT.","Avoids requiring utility to be directly measurable happiness.","Can apply the concepts to objectives such as free time and grades or consumption."],"simulator_behavior":"Answers should reveal whether the simulated knowledge state can represent subjective rankings with indifference curves and interpret MRS as willingness to trade, while keeping preferences separate from feasibility constraints."},{"id":"interior_optimum_where_mrs_equals_mrt","name":"Interior Optimum Where MRS Equals MRT","type":"concept","definition":"An interior utility-maximizing constrained choice occurs at a feasible-frontier point where the marginal rate of substitution equals the marginal rate of transformation, such as the wage in the work-consumption model.","source_locators":[{"source_id":"Economy","locator":"Unit 3, Section 3.7, Figures 3.15-3.16","note":"Identifies the ideal job where willingness to trade equals the feasible trade-off."}],"diagnostic_goal":"Diagnose whether the learner understands an interior constrained optimum as the feasible-frontier tangency where willingness to trade equals the feasible opportunity-cost trade-off.","levels":{"L0":"Does not recognize the interior optimum condition; may choose any preferred bundle, any feasible bundle, or the bundle with maximum one good without considering both preferences and constraints.","L1":"Can recall that MRS equals MRT, or that there is a tangency, but cannot explain what is being equated or why this identifies an optimum.","L2":"Can state that the optimum is where an indifference curve touches a budget constraint, but may not clearly connect MRS to willingness to trade and MRT to opportunity cost.","L3":"Can explain that at an interior optimum on the feasible frontier, the person's willingness to trade equals the feasible trade-off, such as MRS equaling the wage or budget-constraint slope in the work-consumption model.","L4":"Can apply the condition to new constrained-choice examples, identifying when an interior point is optimal and explaining why points with unequal MRS and MRT can be improved upon along the frontier.","L5":"Can teach and critically qualify the condition, explaining its dependence on an interior tangency and generating cases where the equality may not characterize the choice, such as boundary outcomes."},"diagnostic_signals":["States the condition MRS equals MRT for an interior optimum.","Identifies the optimum as a tangency between an indifference curve and the feasible frontier or budget constraint.","Explains MRS as willingness to trade and MRT as opportunity cost or feasible trade-off.","Links the work-consumption case to the wage as the relevant MRT.","Avoids choosing the highest indifference curve without checking feasibility.","Recognizes that the equality is for an interior solution rather than every constrained choice."],"simulator_behavior":"Answers should show whether the simulated knowledge state can combine preference trade-offs and feasible trade-offs to identify an interior optimum, and can distinguish tangency reasoning from merely selecting a desirable or feasible bundle."},{"id":"income_and_substitution_effects","name":"Income and Substitution Effects","type":"concept","definition":"The income effect is the change in choice caused by additional income with price or opportunity cost unchanged, while the substitution effect is the change caused by a price or opportunity-cost change holding the new utility level fixed.","source_locators":[{"source_id":"Economy","locator":"Unit 3, Section 3.7, Figure 3.17","note":"Defines income effect using unearned income and an outward budget shift."},{"source_id":"Economy","locator":"Unit 3, Section 3.7, Figure 3.19a and Figure 3.19b","note":"Defines substitution effect using a wage rise and changed opportunity cost."}],"diagnostic_goal":"Diagnose whether the learner can distinguish income effects from substitution effects in choice problems, especially when a wage or price change alters both attainable combinations and relative opportunity costs, and can explain why the two effects may offset each other.","levels":{"L0":"Cannot identify income or substitution effects in a choice problem, or treats any change in choice after a wage, price, or income change as one undifferentiated effect. May confuse opportunity cost changes with simple increases in money income.","L1":"Can recall that there are income and substitution effects, and may state short definitions, but cannot reliably say which effect holds price or opportunity cost unchanged and which isolates a changed relative trade-off at the new utility level.","L2":"Can explain in basic terms that the income effect comes from being able to afford or reach more combinations, while the substitution effect comes from a changed opportunity cost. Still struggles with boundary cases, such as separating an outward budget shift from a wage rise that changes the cost of free time.","L3":"Can distinguish the two effects in structured examples: identifies additional income with unchanged relative trade-offs as the income effect, and identifies a higher wage or price change that makes one option more costly relative to another as the substitution effect. Recognizes that the two effects can work in opposite directions but may need guidance to apply this to unfamiliar choices.","L4":"Can apply the distinction to new price, wage, or opportunity-cost scenarios, explaining which component pushes choices toward or away from an activity and why a higher wage need not make everyone work more hours. Can reason through cases where income and substitution effects reinforce or offset each other.","L5":"Can reflectively analyze and teach the decomposition of a choice change into income and substitution effects, including constructing examples and counterexamples where the effects have different signs. Can critique claims that infer behavior from a price or wage change without separating expanded attainable options from altered relative opportunity costs."},"diagnostic_signals":["Correctly identifies the income effect as the effect of extra income or expanded attainable combinations when the price or opportunity cost is unchanged.","Correctly identifies the substitution effect as the effect of a changed price or opportunity cost while holding the new utility level fixed.","Uses opportunity cost language appropriately, such as explaining that a higher wage makes free time more costly.","Recognizes that income and substitution effects can move choices in different directions rather than assuming all wage increases increase hours worked.","Distinguishes an unearned income shift from a wage change that changes the relative trade-off.","Misclassifies all effects of a wage increase as income effects, or all effects of higher purchasing power as substitution effects.","Can construct or interpret an example in which the two effects offset each other."],"simulator_behavior":"When answering about this node, vary whether responses merely name the two effects, correctly separate unchanged-income versus changed-opportunity-cost reasoning, or apply the decomposition to wage and price scenarios with possible opposing effects."},{"id":"strategic_interaction_and_game_models","name":"Strategic Interaction and Game Models","type":"concept","definition":"A strategic interaction is a situation in which participants know their actions affect others and others' actions affect them; a game models this by specifying players, feasible strategies, information, and payoffs.","source_locators":[{"source_id":"Economy","locator":"Unit 4, Section 4.1","note":"Defines strategic interaction and contrasts it with individual choice."},{"source_id":"Economy","locator":"Unit 4, Section 4.1, Figure 4.1","note":"Lists the required elements of a game description."}],"diagnostic_goal":"Diagnose whether the learner understands strategic interaction as mutually recognized interdependence of actions and can identify the required components of a game model: players, feasible strategies, information, and payoffs.","levels":{"L0":"Does not recognize strategic interaction as distinct from an isolated individual choice. May describe any decision involving more than one person as strategic without considering whether each participant's outcome depends on others' actions.","L1":"Can recall the term strategic interaction or game, and may list one or two elements such as players or strategies, but cannot explain mutual awareness of action effects or the full structure needed for a game representation.","L2":"Can explain that strategic interaction involves people whose actions affect one another, and can name basic game elements. Still gives incomplete game descriptions or omits information or payoffs when asked to model an interaction.","L3":"Can distinguish strategic interaction from isolated choice by emphasizing that participants know their actions affect others and are affected by others. Can specify players, feasible strategies, information, and payoffs in a simple game, though may need help with more complex cases.","L4":"Can apply the game-model framework to new interactions by identifying who is interacting, what each can do, what they know, and the payoff consequences of action combinations. Can reject inadequate models that list participants but fail to specify strategies, information, or payoffs.","L5":"Can critically construct and explain game representations, including why particular players, strategy sets, information assumptions, and payoff descriptions are needed. Can generate examples and counterexamples showing when a situation is or is not strategic interaction."},"diagnostic_signals":["Explains strategic interaction in terms of mutually recognized effects of participants' actions on one another.","Contrasts strategic interaction with an isolated choice whose outcome does not depend on another participant's action.","Lists all core game-model elements: players, feasible strategies, information, and payoffs.","Describes payoffs as depending on combinations of actions rather than only on one person's choice.","Omits information or payoffs when asked to model a game, indicating partial understanding.","Treats any social setting as a game without specifying strategies or interdependence.","Can turn a verbal interaction into a structured game description without adding unsupported elements."],"simulator_behavior":"When answering about this node, responses should reflect different knowledge states from simple term recall to explicit modeling of strategic interdependence through players, strategies, information, and payoffs."},{"id":"social_dilemmas_dominant_strategies_and_prisoners_dilemmas","name":"Social Dilemmas, Dominant Strategies, and Prisoners' Dilemmas","type":"concept","definition":"A social dilemma occurs when individually chosen actions lead to an outcome worse than a feasible cooperative outcome; in a prisoners' dilemma, each player has a dominant strategy, but mutual use of those strategies makes each player and the group worse off than cooperation.","source_locators":[{"source_id":"Economy","locator":"Unit 4 introduction","note":"Defines social dilemmas as privately chosen actions leading to inferior outcomes."},{"source_id":"Economy","locator":"Unit 4, Section 4.2","note":"Defines dominant strategy equilibrium."},{"source_id":"Economy","locator":"Unit 4, Section 4.3","note":"Defines prisoners' dilemma using the pest-control example."}],"diagnostic_goal":"Diagnose whether the learner can explain how dominant strategies and prisoners' dilemmas illustrate social dilemmas, where individually rational choices produce outcomes worse than feasible cooperative outcomes.","levels":{"L0":"Cannot identify a social dilemma, dominant strategy, or prisoners' dilemma, or confuses them with any disagreement or bad outcome. Does not connect individual incentives to collectively inferior results.","L1":"Can recall isolated phrases such as dominant strategy, prisoners' dilemma, or cooperation, but cannot explain that a dominant strategy gives the highest payoff regardless of the other player's action or why mutual dominant strategies can be worse than cooperation.","L2":"Can give a basic explanation that private choices may lead to a worse group outcome and that a prisoners' dilemma involves incentives not to cooperate. Still struggles to identify dominant strategies from payoffs or to explain the comparison with a feasible cooperative outcome.","L3":"Can identify a dominant strategy as the highest-payoff action no matter what the other player does, and can explain a prisoners' dilemma as a case where each player has such a strategy but both are worse off when both use it than if both cooperated. Understands the social-dilemma framing in simple examples.","L4":"Can apply the concepts to new payoff descriptions or scenarios by checking each player's best action against the other's possible actions, identifying the dominant strategy equilibrium, and comparing it with a cooperative outcome that would make players better off.","L5":"Can analyze and teach the logic of social dilemmas, dominant strategies, and prisoners' dilemmas, including generating examples and counterexamples. Can critique mistaken claims that an equilibrium reached by dominant strategies must be socially or jointly best."},"diagnostic_signals":["Defines a dominant strategy as the action with the highest payoff regardless of what the other player does.","Identifies that a dominant strategy equilibrium is an outcome in which every player uses a dominant strategy.","Explains that a prisoners' dilemma requires both dominant strategies and a cooperative alternative that would give each player higher payoffs than the dominant-strategy outcome.","Connects prisoners' dilemmas to the broader social dilemma idea that independent pursuit of private objectives can yield an inferior outcome.","Distinguishes a merely unfavorable outcome from one generated by dominant-strategy incentives.","Incorrectly treats cooperation as dominant in a prisoners' dilemma without comparing payoffs across the other player's actions.","Recognizes that collective inferiority is assessed relative to a feasible cooperative outcome, not simply by whether someone is unhappy."],"simulator_behavior":"When answering about this node, responses should range from vague references to conflict or cooperation to precise payoff-based reasoning about dominant strategies, dominant-strategy equilibrium, and the cooperative benchmark."},{"id":"nash_equilibrium","name":"Nash Equilibrium","type":"concept","definition":"A Nash equilibrium is a set of strategies, one for each player, in which each player's strategy is a best response to the strategies chosen by the others.","source_locators":[{"source_id":"Economy","locator":"Experiment Scope: Introductory Economics Foundations (part 5), section 4.13","note":"Defines Nash equilibrium and illustrates one or multiple equilibria."}],"diagnostic_goal":"Diagnose whether the learner understands Nash equilibrium as a strategy profile in which each player's strategy is a best response to the others, including that there may be one or multiple equilibria and that equilibrium need not be jointly best.","levels":{"L0":"Does not recognize Nash equilibrium or treats it as any stable, fair, or best overall outcome. Cannot relate equilibrium to players' best responses to one another.","L1":"Can recall that Nash equilibrium involves best responses or strategies, but states the idea vaguely and may describe only one player's optimal action without reference to the others' strategies.","L2":"Can explain in basic terms that in a Nash equilibrium no player wants to change given what others do. Still has unclear boundaries, such as assuming the equilibrium is always unique or always the best outcome for the group.","L3":"Can identify Nash equilibrium as a set of strategies, one for each player, where every player's strategy is a best response to the strategies chosen by the others. Recognizes that a game may have one or multiple Nash equilibria and that equilibrium need not maximize joint outcomes.","L4":"Can apply the mutual-best-response test to new simple games or verbal scenarios, checking each player's incentives given the others' choices and rejecting outcomes where at least one player would prefer to switch.","L5":"Can reflectively analyze Nash equilibrium, generate examples with single or multiple equilibria, and explain why equilibrium is a prediction about mutual best responses rather than a claim about fairness, cooperation, or joint optimality."},"diagnostic_signals":["States that Nash equilibrium is a strategy profile, not just one player's action.","Uses mutual best-response reasoning: each player's strategy is best given the others' strategies.","Identifies that no individual player has an incentive to unilaterally change strategy at a Nash equilibrium.","Recognizes the possibility of multiple Nash equilibria in a game.","Avoids equating Nash equilibrium with the jointly best or socially best outcome.","Incorrectly labels an outcome as Nash equilibrium when one player could improve by switching given the other's strategy.","Can test candidate outcomes by checking best responses for all players."],"simulator_behavior":"When answering about this node, responses should vary from vague equilibrium language to explicit mutual-best-response tests, including awareness that equilibria can be multiple and not jointly optimal."},{"id":"public_goods_free_riding_and_cooperation","name":"Public Goods, Free Riding, and Cooperation","type":"concept","definition":"A public good is costly for one person to provide but benefits everyone without reducing availability to others; free riding occurs when someone benefits from others' contributions without contributing, while cooperation is participation in a common project intended to create mutual benefits.","source_locators":[{"source_id":"Economy","locator":"Unit 4, Section 4.6","note":"Defines public goods and free riding with an irrigation example."},{"source_id":"Economy","locator":"Experiment Scope: Introductory Economics Foundations (part 5), section 4.9","note":"Defines cooperation and notes that punishment can sustain cooperative outcomes."}],"diagnostic_goal":"Diagnose whether the learner can explain public goods, free riding, and cooperation as related concepts in mutual-benefit projects, including why individuals may benefit from others' contributions without contributing and how cooperative outcomes may be sustained.","levels":{"L0":"Cannot identify public goods, free riding, or cooperation in the relevant sense. May treat any publicly owned item as a public good or any nonpayment as free riding without considering shared benefits from another person's costly provision.","L1":"Can recall terms such as public good, free rider, or cooperation, but gives memorized or incomplete definitions. May say cooperation means being nice, without linking it to participation in a common project for mutual benefits.","L2":"Can explain that a public good can benefit everyone when one person pays a cost and that free riding means benefiting without contributing. Still has difficulty explaining why this creates an incentive problem or how cooperation relates to mutual-benefit projects.","L3":"Can describe the public-goods problem as one in which individuals may prefer others to contribute while they benefit from the good. Can define cooperation as participation in a common project intended to produce mutual benefits and understands that cooperation may occur with or without explicit agreement.","L4":"Can apply the concepts to new scenarios by identifying who bears costs, who receives benefits, who is free riding, and what behavior counts as cooperation. Can explain how punishment or independent actions may sustain cooperative outcomes in appropriate cases.","L5":"Can critically analyze public-goods and free-riding situations, generate examples and counterexamples, and explain the conditions under which cooperation can emerge or be sustained despite incentives to benefit from others' contributions."},"diagnostic_signals":["Identifies that a public good involves one person's costly provision producing benefits for everyone without reducing availability to others.","Explains free riding as receiving benefits from others' contributions without contributing oneself.","Defines cooperation as participation in a common project intended to produce mutual benefits.","Recognizes the incentive to prefer that others contribute while one still benefits from the public good.","Notes that cooperation may arise with or without explicit agreement.","Mentions that punishment or independent actions can help sustain cooperative outcomes when relevant.","Mistakenly equates public goods only with government-provided goods or treats any shared item as a public good without the costly-provision and shared-benefit logic."],"simulator_behavior":"When answering about this node, responses should reflect varying ability to connect public goods, free riding incentives, and cooperation in mutual-benefit projects, including possible sustaining mechanisms such as punishment or independent action."},{"id":"social_preferences_and_experimental_games","name":"Social Preferences and Experimental Games","type":"concept","definition":"Social preferences are motivations such as altruism, fairness, inequality aversion, and reciprocity that influence choices in social interactions; controlled behavioural experiments and games such as the ultimatum game can be used to study these motivations and how rules affect behaviour.","source_locators":[{"source_id":"Economy","locator":"Experiment Scope: Introductory Economics Foundations (part 5), section 4.8","note":"Defines controlled behavioural experiments."},{"source_id":"Economy","locator":"Experiment Scope: Introductory Economics Foundations (part 5), section 4.9","note":"Distinguishes social norms, individual preferences, and social preferences."},{"source_id":"Economy","locator":"Experiment Scope: Introductory Economics Foundations (part 5), section 4.10","note":"Introduces the ultimatum game as a tool for studying social preferences."},{"source_id":"Economy","locator":"Experiment Scope: Introductory Economics Foundations (part 5), section 4.12","note":"Shows how adding competition changes responder and proposer incentives."}],"diagnostic_goal":"Diagnose whether the learner understands social preferences as individual motives such as altruism, fairness, inequality aversion, and reciprocity, and understands how controlled experimental games such as the ultimatum game reveal how rules and incentives affect social behavior.","levels":{"L0":"Does not distinguish social preferences from selfish preferences, social norms, or personality labels. Cannot explain why controlled experimental games are used to study behavior in social interactions.","L1":"Can recall examples such as altruism, fairness, reciprocity, or the ultimatum game, but cannot explain how these motives affect choices or how experiments control rules and incentives.","L2":"Can give a basic explanation that people may care about fairness or others' outcomes, not only their own payoff, and that experiments observe choices. Still confuses group norms with individual preferences or treats experimental behavior as fixed personality rather than behavior under particular rules.","L3":"Can distinguish social norms as group-level expectations from individual social preferences as personal motives that may be influenced by norms. Can explain that controlled behavioural experiments observe choices under common rules, incentives, and treatments, and can describe the ultimatum game as a tool for studying social preferences.","L4":"Can apply the framework to interpret new experimental-game results, explaining how altruism, fairness or inequality aversion, and reciprocity may influence behavior, sometimes in opposite directions. Can explain why changing rules or incentives, such as adding competition, may change responder and proposer behavior.","L5":"Can critically analyze experimental evidence about social preferences, generate plausible interpretations and counterexamples, and teach why observed choices depend jointly on preferences, social norms, rules, incentives, and treatments rather than on a single fixed motive."},"diagnostic_signals":["Names relevant social preferences such as altruism, fairness, inequality aversion, and reciprocity.","Explains that social preferences influence individual choices in social interactions alongside self-interest.","Distinguishes social norms as group-level expectations from individual preferences as what people want to do, while noting norms may influence preferences.","Describes controlled behavioural experiments as observing behavior under common rules, incentives, and treatments.","Identifies the ultimatum game as a one-shot game used to study social preferences.","Explains that adding competition can change incentives, including making responders less likely to reject low offers.","Avoids interpreting experimental choices as direct evidence of fixed personality traits without considering rules and incentives.","Recognizes that different social preferences can work in opposite directions."],"simulator_behavior":"When answering about this node, responses should vary from listing motives or games to interpreting experimental behavior through social preferences, norms, controlled rules, incentives, and treatment changes such as competition."}],"edges":[{"id":"edge_production_function_prerequisite_for_average_product_marginal_product_and_diminishing_marginal_product","source":"production_function","target":"average_product_marginal_product_and_diminishing_marginal_product","type":"prerequisite_for","rationale":"Average product, marginal product, and diminishing marginal product are measures derived from how output changes with input levels along a production function.","weight":0.95,"curation_confidence":0.95},{"id":"edge_average_product_marginal_product_and_diminishing_marginal_product_prerequisite_for_malthusian_trap_and_subsistence_equilibrium","source":"average_product_marginal_product_and_diminishing_marginal_product","target":"malthusian_trap_and_subsistence_equilibrium","type":"prerequisite_for","rationale":"The Malthusian trap mechanism depends on population growth lowering average product and income per person, so understanding product measures is needed to explain the feedback cycle stably.","weight":0.85,"curation_confidence":0.86},{"id":"edge_technological_progress_and_the_permanent_technological_revolution_supports_malthusian_trap_and_subsistence_equilibrium","source":"technological_progress_and_the_permanent_technological_revolution","target":"malthusian_trap_and_subsistence_equilibrium","type":"supports","rationale":"Technological progress helps explain the Malthusian model's case where productivity improvements initially raise income per person before population growth returns living standards to subsistence.","weight":0.72,"curation_confidence":0.8},{"id":"edge_technological_progress_and_the_permanent_technological_revolution_prerequisite_for_escape_from_malthusian_stagnation","source":"technological_progress_and_the_permanent_technological_revolution","target":"escape_from_malthusian_stagnation","type":"prerequisite_for","rationale":"Escape from Malthusian stagnation is defined by sustained technological improvement offsetting diminishing average product, so technological progress is central to stable understanding of the escape mechanism.","weight":0.95,"curation_confidence":0.94},{"id":"edge_escape_from_malthusian_stagnation_contrasts_with_malthusian_trap_and_subsistence_equilibrium","source":"escape_from_malthusian_stagnation","target":"malthusian_trap_and_subsistence_equilibrium","type":"contrasts_with","rationale":"The Malthusian trap returns living standards to subsistence after population growth, whereas escape is the contrasting regime in which population and real wages rise together.","weight":0.92,"curation_confidence":0.93},{"id":"edge_general_purpose_technologies_and_the_industrial_revolution_supports_escape_from_malthusian_stagnation","source":"general_purpose_technologies_and_the_industrial_revolution","target":"escape_from_malthusian_stagnation","type":"supports","rationale":"General-purpose technologies and the Industrial Revolution provide a broad technological and organizational transformation that helps explain how sustained production improvements can support escape from stagnation.","weight":0.72,"curation_confidence":0.76},{"id":"edge_feasible_set_feasible_frontier_and_budget_constraint_prerequisite_for_marginal_rate_of_transformation_and_opportunity_cost","source":"feasible_set_feasible_frontier_and_budget_constraint","target":"marginal_rate_of_transformation_and_opportunity_cost","type":"prerequisite_for","rationale":"The marginal rate of transformation is the trade-off along a feasible frontier or budget constraint, so the constraint representation is needed to interpret the MRT as an opportunity cost.","weight":0.9,"curation_confidence":0.92},{"id":"edge_feasible_set_feasible_frontier_and_budget_constraint_contrasts_with_preferences_indifference_curves_and_marginal_rate_of_substitution","source":"feasible_set_feasible_frontier_and_budget_constraint","target":"preferences_indifference_curves_and_marginal_rate_of_substitution","type":"contrasts_with","rationale":"Feasible sets and budget constraints describe available combinations under constraints, while preferences and indifference curves describe rankings and willingness to trade among combinations.","weight":0.82,"curation_confidence":0.88},{"id":"edge_feasible_set_feasible_frontier_and_budget_constraint_prerequisite_for_interior_optimum_where_mrs_equals_mrt","source":"feasible_set_feasible_frontier_and_budget_constraint","target":"interior_optimum_where_mrs_equals_mrt","type":"prerequisite_for","rationale":"An interior constrained optimum is identified on a feasible frontier or budget constraint, so understanding feasible choices and frontiers is required before applying the tangency condition.","weight":0.93,"curation_confidence":0.94},{"id":"edge_preferences_indifference_curves_and_marginal_rate_of_substitution_prerequisite_for_interior_optimum_where_mrs_equals_mrt","source":"preferences_indifference_curves_and_marginal_rate_of_substitution","target":"interior_optimum_where_mrs_equals_mrt","type":"prerequisite_for","rationale":"The interior optimum condition equates MRS with MRT, so understanding preferences, indifference curves, and willingness to trade is required to interpret the preference side of the tangency.","weight":0.96,"curation_confidence":0.96},{"id":"edge_marginal_rate_of_transformation_and_opportunity_cost_prerequisite_for_interior_optimum_where_mrs_equals_mrt","source":"marginal_rate_of_transformation_and_opportunity_cost","target":"interior_optimum_where_mrs_equals_mrt","type":"prerequisite_for","rationale":"The interior optimum condition equates MRS with MRT, so understanding the feasible opportunity-cost trade-off is required to interpret the constraint side of the tangency.","weight":0.96,"curation_confidence":0.96},{"id":"edge_economic_models_and_ceteris_paribus_reasoning_prerequisite_for_income_and_substitution_effects","source":"economic_models_and_ceteris_paribus_reasoning","target":"income_and_substitution_effects","type":"prerequisite_for","rationale":"Income and substitution effects decompose a choice change by holding selected influences constant, which depends on ceteris paribus reasoning about prices, opportunity costs, and utility levels.","weight":0.82,"curation_confidence":0.85},{"id":"edge_feasible_set_feasible_frontier_and_budget_constraint_prerequisite_for_income_and_substitution_effects","source":"feasible_set_feasible_frontier_and_budget_constraint","target":"income_and_substitution_effects","type":"prerequisite_for","rationale":"Income and substitution effects are explained through shifts or changes in budget constraints and attainable combinations, so understanding feasible frontiers is needed to interpret the decomposition.","weight":0.86,"curation_confidence":0.88},{"id":"edge_preferences_indifference_curves_and_marginal_rate_of_substitution_prerequisite_for_income_and_substitution_effects","source":"preferences_indifference_curves_and_marginal_rate_of_substitution","target":"income_and_substitution_effects","type":"prerequisite_for","rationale":"The substitution effect is defined while holding the new utility level fixed, and the decomposition of choice changes requires preference and indifference-curve reasoning.","weight":0.84,"curation_confidence":0.86},{"id":"edge_marginal_rate_of_transformation_and_opportunity_cost_prerequisite_for_income_and_substitution_effects","source":"marginal_rate_of_transformation_and_opportunity_cost","target":"income_and_substitution_effects","type":"prerequisite_for","rationale":"The substitution effect isolates changes caused by altered price or opportunity cost, such as a wage changing the cost of free time, which requires understanding MRT and opportunity cost.","weight":0.85,"curation_confidence":0.88},{"id":"edge_strategic_interaction_and_game_models_prerequisite_for_social_dilemmas_dominant_strategies_and_prisoners_dilemmas","source":"strategic_interaction_and_game_models","target":"social_dilemmas_dominant_strategies_and_prisoners_dilemmas","type":"prerequisite_for","rationale":"Prisoners' dilemmas and dominant-strategy reasoning are game-model concepts that require identifying players, strategies, information, and payoffs in a strategic interaction.","weight":0.94,"curation_confidence":0.95},{"id":"edge_strategic_interaction_and_game_models_prerequisite_for_nash_equilibrium","source":"strategic_interaction_and_game_models","target":"nash_equilibrium","type":"prerequisite_for","rationale":"Nash equilibrium is a strategy profile in a game, so understanding strategic interaction and the components of a game model is required before applying mutual best-response reasoning.","weight":0.95,"curation_confidence":0.96},{"id":"edge_strategic_interaction_and_game_models_prerequisite_for_social_preferences_and_experimental_games","source":"strategic_interaction_and_game_models","target":"social_preferences_and_experimental_games","type":"prerequisite_for","rationale":"Experimental games such as the ultimatum game study behavior by specifying players, rules, strategies, information, and payoffs, which builds on the structure of game models.","weight":0.78,"curation_confidence":0.82},{"id":"edge_public_goods_free_riding_and_cooperation_supports_social_dilemmas_dominant_strategies_and_prisoners_dilemmas","source":"public_goods_free_riding_and_cooperation","target":"social_dilemmas_dominant_strategies_and_prisoners_dilemmas","type":"supports","rationale":"Public-goods free riding illustrates how individually attractive noncontribution can undermine a feasible cooperative outcome, strengthening the explanation of social dilemmas.","weight":0.78,"curation_confidence":0.84},{"id":"edge_social_preferences_and_experimental_games_supports_public_goods_free_riding_and_cooperation","source":"social_preferences_and_experimental_games","target":"public_goods_free_riding_and_cooperation","type":"supports","rationale":"Social preferences such as altruism, fairness, and reciprocity help explain why people may cooperate or contribute in social interactions despite free-riding incentives.","weight":0.74,"curation_confidence":0.8}]}</script>
+  <div class="app-shell">
+    <header class="masthead">
+      <p class="eyebrow">KnowAct · Expert content-validity review</p>
+      <h1 id="page-title"></h1>
+      <p class="subtitle" id="page-subtitle"></p>
+      <div class="binding-strip" id="binding-strip"></div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="panel nav-panel">
+          <div class="nav-title">评审导航</div>
+          <button class="nav-button active" data-section-target="overview">1. 范围与评审者 <span class="count" id="nav-overview-count"></span></button>
+          <button class="nav-button" data-section-target="nodes">2. 节点 <span class="count" id="nav-nodes-count"></span></button>
+          <button class="nav-button" data-section-target="edges">3. 边 <span class="count" id="nav-edges-count"></span></button>
+          <button class="nav-button" data-section-target="coverage">4. 覆盖度 <span class="count" id="nav-coverage-count"></span></button>
+          <button class="nav-button" data-section-target="submit">5. 校验与导出 <span class="count" id="nav-submit-count"></span></button>
+          <div class="save-state" id="save-state">尚未保存</div>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section class="section active" id="section-overview"></section>
+        <section class="section" id="section-nodes"></section>
+        <section class="section" id="section-edges"></section>
+        <section class="section" id="section-coverage"></section>
+        <section class="section" id="section-submit"></section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    "use strict";
+
+    const packageData = JSON.parse(document.getElementById("review-package").textContent);
+    const SUBMISSION_SCHEMA = "knowact.kg_review_submission.v3";
+    const storageKey = `knowact:kg-review:${packageData.graph.graph_fingerprint}`;
+    const sectionOrder = ["overview", "nodes", "edges", "coverage", "submit"];
+    let activeSection = "overview";
+    let state = loadState() || createBlankState();
+
+    const nodeOptions = {
+      scope_fit: ["in_scope", "boundary", "out_of_scope"],
+      granularity: ["appropriate", "too_broad", "too_narrow", "mixed"],
+      diagnostic_usefulness: ["adequate", "minor_issue", "major_issue"],
+      rubric_quality: ["adequate", "minor_issue", "major_issue"],
+      decision: ["accept", "edit", "reject"],
+    };
+    const edgeOptions = {
+      relation_validity: ["valid", "uncertain", "invalid"],
+      type_correct: ["yes", "no", "uncertain"],
+      replacement_type: ["part_of", "prerequisite_for", "supports", "contrasts_with"],
+      direction_correct: ["yes", "no", "not_applicable", "uncertain"],
+      provenance_class: ["source_explicit", "source_entailed", "expert_pedagogical_extension", "unsupported"],
+      decision: ["accept", "edit", "delete"],
+    };
+
+    function esc(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function blankNodeReview() {
+      return {
+        scope_fit: "", granularity: "",
+        diagnostic_usefulness: "", rubric_quality: "", decision: "",
+        proposed_change: "", rationale: "",
+      };
+    }
+
+    function blankEdgeReview() {
+      return {
+        relation_validity: "", type_correct: "", replacement_type: "",
+        direction_correct: "", provenance_class: "", decision: "",
+        proposed_change: "", rationale: "",
+      };
+    }
+
+    function blankCoverageReview() {
+      return { task_coverage: "", missing_or_redundant_content: "", rationale: "" };
+    }
+
+    function createBlankState() {
+      return {
+        submissionId: "",
+        reviewer: {
+          reviewer_id: "",
+          role: "",
+          experience_band: "",
+          introduction: "",
+        },
+        nodeReviews: Object.fromEntries(packageData.nodes.map(node => [node.id, blankNodeReview()])),
+        edgeReviews: Object.fromEntries(packageData.edges.map(edge => [edge.id, blankEdgeReview()])),
+        coverageReviews: Object.fromEntries(
+          packageData.scope.representative_tasks.map((_, index) => [`task_${String(index + 1).padStart(3, "0")}`, blankCoverageReview()])
+        ),
+        overall: { decision: "", rationale: "" },
+      };
+    }
+
+    function loadState() {
+      try {
+        const value = localStorage.getItem(storageKey);
+        if (!value) return null;
+        const parsed = JSON.parse(value);
+        if (parsed.graphFingerprint !== packageData.graph.graph_fingerprint) return null;
+        return parsed.state;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(storageKey, JSON.stringify({
+        graphFingerprint: packageData.graph.graph_fingerprint,
+        state,
+      }));
+      document.getElementById("save-state").textContent = `已在本机保存 · ${new Date().toLocaleTimeString()}`;
+      updateProgress();
+    }
+
+    function ensureCompleteShape() {
+      const reviewer = state.reviewer || {};
+      state.reviewer = {
+        reviewer_id: reviewer.reviewer_id || "",
+        role: reviewer.role || "",
+        experience_band: reviewer.experience_band || "",
+        introduction: reviewer.introduction || "",
+      };
+      for (const node of packageData.nodes) {
+        state.nodeReviews[node.id] ||= blankNodeReview();
+      }
+      for (const edge of packageData.edges) {
+        state.edgeReviews[edge.id] ||= blankEdgeReview();
+      }
+      packageData.scope.representative_tasks.forEach((_, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        state.coverageReviews[id] ||= blankCoverageReview();
+      });
+      state.overall ||= { decision: "", rationale: "" };
+    }
+
+    function selectField(label, scope, id, field, value, options, hint = "", allowBlank = true) {
+      const optionHtml = [
+        allowBlank ? '<option value="">请选择 / Select</option>' : "",
+        ...options.map(option => `<option value="${esc(option)}"${value === option ? " selected" : ""}>${esc(option)}</option>`),
+      ].join("");
+      return `<div class="field">
+        <label class="required">${esc(label)}</label>
+        <select data-scope="${esc(scope)}" data-id="${esc(id)}" data-field="${esc(field)}">${optionHtml}</select>
+        ${hint ? `<span class="hint">${esc(hint)}</span>` : ""}
+      </div>`;
+    }
+
+    function textField(label, scope, id, field, value, options = {}) {
+      const full = options.full ? " full" : "";
+      const required = options.required ? " required" : "";
+      const hint = options.hint ? `<span class="hint">${esc(options.hint)}</span>` : "";
+      const type = options.type || "textarea";
+      const min = options.min !== undefined ? ` min="${esc(options.min)}"` : "";
+      const step = options.step !== undefined ? ` step="${esc(options.step)}"` : "";
+      if (type === "textarea") {
+        return `<div class="field${full}">
+          <label class="${required}">${esc(label)}</label>
+          <textarea class="${options.compact ? "compact-textarea" : ""}" data-scope="${esc(scope)}" data-id="${esc(id)}" data-field="${esc(field)}">${esc(value)}</textarea>
+          ${hint}
+        </div>`;
+      }
+      return `<div class="field${full}">
+        <label class="${required}">${esc(label)}</label>
+        <input type="${esc(type)}" value="${esc(value)}" data-scope="${esc(scope)}" data-id="${esc(id)}" data-field="${esc(field)}"${min}${step}>
+        ${hint}
+      </div>`;
+    }
+
+    function renderLabelGuide(title, intro, items) {
+      return `<aside class="panel card label-guide">
+        <h3>${esc(title)}</h3>
+        <p>${esc(intro)}</p>
+        <div class="label-guide-grid">
+          ${items.map(item => `<div class="label-guide-item">
+            <strong>${esc(item.label)} <code>${esc(item.field)}</code></strong>
+            <p>${esc(item.description)}</p>
+          </div>`).join("")}
+        </div>
+      </aside>`;
+    }
+
+    function nodeIsComplete(review) {
+      const base = Object.keys(nodeOptions).every(field => Boolean(review[field]));
+      if (!base) return false;
+      if (["edit", "reject"].includes(review.decision) && !review.rationale.trim()) return false;
+      return review.decision !== "edit" || Boolean(review.proposed_change.trim());
+    }
+
+    function edgeIsComplete(review, edge) {
+      const required = ["relation_validity", "type_correct", "direction_correct", "provenance_class", "decision"];
+      if (!required.every(field => Boolean(review[field]))) return false;
+      if (review.type_correct === "no" && !review.replacement_type) return false;
+      if (edge.type === "contrasts_with" && review.direction_correct !== "not_applicable") return false;
+      if (edge.type !== "contrasts_with" && review.direction_correct === "not_applicable") return false;
+      if (["edit", "delete"].includes(review.decision) && !review.rationale.trim()) return false;
+      return review.decision !== "edit" || Boolean(review.proposed_change.trim());
+    }
+
+    function coverageIsComplete(review) {
+      if (!review.task_coverage) return false;
+      if (review.task_coverage !== "sufficient") {
+        return Boolean(review.rationale.trim() && review.missing_or_redundant_content.trim());
+      }
+      return true;
+    }
+
+    function metadataIssues() {
+      const reviewer = state.reviewer;
+      return ["reviewer_id", "role", "experience_band", "introduction"]
+        .filter(field => !String(reviewer[field] || "").trim())
+        .map(field => `评审者字段 ${field} 尚未填写。`);
+    }
+
+    function validationIssues() {
+      const issues = metadataIssues().map(message => ({ section: "overview", message }));
+      packageData.nodes.forEach((node, index) => {
+        if (!nodeIsComplete(state.nodeReviews[node.id])) {
+          issues.push({ section: "nodes", message: `节点 ${index + 1} (${node.id}) 未完成或条件字段不完整。` });
+        }
+      });
+      packageData.edges.forEach((edge, index) => {
+        if (!edgeIsComplete(state.edgeReviews[edge.id], edge)) {
+          issues.push({ section: "edges", message: `边 ${index + 1} (${edge.id}) 未完成或条件字段不完整。` });
+        }
+      });
+      packageData.scope.representative_tasks.forEach((_, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        if (!coverageIsComplete(state.coverageReviews[id])) {
+          issues.push({ section: "coverage", message: `代表性任务 ${index + 1} 尚未完成；partial/insufficient 还需填写内容与理由。` });
+        }
+      });
+      if (!state.overall.decision) {
+        issues.push({ section: "coverage", message: "尚未填写总体图谱决定。" });
+      } else if (state.overall.decision !== "approve" && !state.overall.rationale.trim()) {
+        issues.push({ section: "coverage", message: "approve_after_edits / do_not_approve 必须填写总体理由。" });
+      }
+      return issues;
+    }
+
+    function updateProgress() {
+      ensureCompleteShape();
+      const nodeDone = packageData.nodes.filter(node => nodeIsComplete(state.nodeReviews[node.id])).length;
+      const edgeDone = packageData.edges.filter(edge => edgeIsComplete(state.edgeReviews[edge.id], edge)).length;
+      const coverageDone = packageData.scope.representative_tasks.filter((_, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        return coverageIsComplete(state.coverageReviews[id]);
+      }).length;
+      const overviewDone = metadataIssues().length === 0 ? 1 : 0;
+      const overallDone = state.overall.decision ? 1 : 0;
+      document.getElementById("nav-overview-count").textContent = `${overviewDone}/1`;
+      document.getElementById("nav-nodes-count").textContent = `${nodeDone}/${packageData.nodes.length}`;
+      document.getElementById("nav-edges-count").textContent = `${edgeDone}/${packageData.edges.length}`;
+      document.getElementById("nav-coverage-count").textContent = `${coverageDone + overallDone}/${packageData.scope.representative_tasks.length + 1}`;
+      document.getElementById("nav-submit-count").textContent = validationIssues().length ? "待校验" : "可导出";
+      document.querySelectorAll("[data-progress-kind]").forEach(element => {
+        const kind = element.dataset.progressKind;
+        if (kind === "nodes") element.textContent = `${nodeDone} / ${packageData.nodes.length} 完成`;
+        if (kind === "edges") element.textContent = `${edgeDone} / ${packageData.edges.length} 完成`;
+        if (kind === "coverage") element.textContent = `${coverageDone} / ${packageData.scope.representative_tasks.length} 完成`;
+      });
+    }
+
+    function renderHeader() {
+      const graph = packageData.graph;
+      document.getElementById("page-title").textContent = `${graph.domain} Candidate Knowledge Graph`;
+      document.getElementById("page-subtitle").textContent =
+        "逐项评审范围、诊断价值、L0–L5 量规与关系有效性。页面离线运行，只导入/导出 JSON。";
+      document.getElementById("binding-strip").innerHTML = `
+        <span class="binding-pill">Run · ${esc(graph.candidate_run_id)}</span>
+        <span class="binding-pill">${graph.node_count} nodes</span>
+        <span class="binding-pill">${graph.edge_count} edges</span>
+        <span class="binding-pill">${graph.representative_task_count} tasks</span>
+        <span class="binding-pill">Candidate input · not promoted</span>`;
+    }
+
+    function renderOverview() {
+      const source = packageData.source;
+      const scope = packageData.scope;
+      const reviewer = state.reviewer;
+      document.getElementById("section-overview").innerHTML = `
+        <div class="section-header">
+          <div><h2>范围与评审者</h2><p>先了解这张图谱大致覆盖什么知识，再填写评审者信息。</p></div>
+          <span class="progress-badge">${metadataIssues().length ? "信息未完整" : "信息完整"}</span>
+        </div>
+        <div class="panel card">
+          <h3>图谱知识范围 / Graph knowledge scope</h3>
+          <p class="scope-summary">${esc(scope.review_scope_summary)}</p>
+          <div class="detail-block"><h4>Source</h4><p>${esc(source.title)}</p><p class="identifier">${esc(source.citation)}</p></div>
+          <details>
+            <summary>查看冻结绑定与哈希</summary>
+            <div class="hash-list">
+              graph_fingerprint: ${esc(packageData.graph.graph_fingerprint)}<br>
+              candidate_nodes: ${esc(packageData.graph.artifact_binding.candidate_nodes.sha256)}<br>
+              candidate_edges: ${esc(packageData.graph.artifact_binding.candidate_edges.sha256)}<br>
+              source_metadata: ${esc(packageData.graph.artifact_binding.source_metadata.sha256)}<br>
+              source_content: ${esc(packageData.graph.artifact_binding.source_content_sha256)}
+            </div>
+          </details>
+        </div>
+        <div class="panel card">
+          <h3>评审者信息 / Reviewer metadata</h3>
+          <p class="identifier">专家信息只记录 ID、角色、经验区间与个人介绍。</p>
+          <div class="review-grid">
+            ${textField("评审者 ID / Reviewer ID", "reviewer", "", "reviewer_id", reviewer.reviewer_id, {type: "text", required: true})}
+            ${textField("角色 / Role", "reviewer", "", "role", reviewer.role, {type: "text", required: true})}
+            ${selectField("经验区间 / Experience band", "reviewer", "", "experience_band", reviewer.experience_band, ["0-2 years", "3-5 years", "6-10 years", "11+ years"])}
+            ${textField("个人介绍 / Introduction", "reviewer", "", "introduction", reviewer.introduction, {full: true, required: true})}
+          </div>
+        </div>`;
+    }
+
+    function renderNodeCard(node, index) {
+      const review = state.nodeReviews[node.id];
+      const done = nodeIsComplete(review);
+      const locators = node.source_locators.map(locator => `
+        <div class="locator"><strong>${esc(locator.source_id)}</strong> · ${esc(locator.locator)}
+        ${locator.note ? `<br><span class="identifier">${esc(locator.note)}</span>` : ""}</div>`).join("");
+      const levels = Object.entries(node.levels).map(([level, description]) =>
+        `<div class="rubric-row"><strong>${esc(level)}</strong> ${esc(description)}</div>`).join("");
+      const decisionNeedsRationale = ["edit", "reject"].includes(review.decision);
+      return `<article class="panel card" id="node-${esc(node.id)}">
+        <div class="card-title">
+          <div style="display:flex; gap:10px; min-width:0">
+            <span class="item-number">N${String(index + 1).padStart(2, "0")}</span>
+            <div><h3>${esc(node.name)}</h3><div class="identifier">${esc(node.id)}</div></div>
+          </div>
+          <span class="item-status ${done ? "done" : "todo"}">${done ? "已完成" : "待完成"}</span>
+        </div>
+        <div class="detail-block"><h4>Definition</h4><p>${esc(node.definition)}</p></div>
+        <details>
+          <summary>展开来源、诊断目标、L0–L5 量规与信号</summary>
+          <div class="detail-block"><h4>Source locators</h4>${locators}</div>
+          <div class="detail-block"><h4>Diagnostic goal</h4><p>${esc(node.diagnostic_goal)}</p></div>
+          <div class="detail-block"><h4>Mastery rubric</h4>${levels}</div>
+          <div class="detail-block"><h4>Diagnostic signals</h4><ul>${node.diagnostic_signals.map(item => `<li>${esc(item)}</li>`).join("")}</ul></div>
+          <div class="detail-block"><h4>Simulator behavior</h4><p>${esc(node.simulator_behavior)}</p></div>
+        </details>
+        <div class="review-grid">
+          ${selectField("范围适配 / Scope fit", "node", node.id, "scope_fit", review.scope_fit, nodeOptions.scope_fit)}
+          ${selectField("粒度 / Granularity", "node", node.id, "granularity", review.granularity, nodeOptions.granularity)}
+          ${selectField("诊断价值 / Diagnostic usefulness", "node", node.id, "diagnostic_usefulness", review.diagnostic_usefulness, nodeOptions.diagnostic_usefulness)}
+          ${selectField("量规质量 / Rubric quality", "node", node.id, "rubric_quality", review.rubric_quality, nodeOptions.rubric_quality)}
+          ${selectField("总体决定 / Decision", "node", node.id, "decision", review.decision, nodeOptions.decision)}
+          ${textField("最小必要修改 / Proposed change", "node", node.id, "proposed_change", review.proposed_change, {full: true, required: review.decision === "edit", compact: true})}
+          ${textField("评审理由 / Rationale", "node", node.id, "rationale", review.rationale, {full: true, required: decisionNeedsRationale, compact: true})}
+        </div>
+      </article>`;
+    }
+
+    function renderNodes() {
+      const labelGuide = renderLabelGuide(
+        "标签速查 / Label guide",
+        "先看字段在判断什么，再选择最贴近的选项；uncertain 表示证据不足，不能当作通过。",
+        [
+          { label: "范围适配", field: "scope_fit", description: "节点是否属于本 domain 的声明范围：in_scope 范围内；boundary 边界项；out_of_scope 范围外。" },
+          { label: "粒度", field: "granularity", description: "节点是否足够单一且适合诊断：appropriate 合适；too_broad 过宽；too_narrow 过窄；mixed 混合多个概念。" },
+          { label: "诊断价值", field: "diagnostic_usefulness", description: "该节点能否帮助区分用户掌握状态：adequate 可用；minor_issue 小问题；major_issue 严重问题。" },
+          { label: "量规质量", field: "rubric_quality", description: "L0–L5 是否有序、可区分、可从回答中观察：adequate 可用；minor_issue 小问题；major_issue 严重问题。" },
+          { label: "总体决定", field: "decision", description: "accept 原样接受；edit 修改后接受；reject 不应保留。edit 必须填写最小必要修改。" },
+          { label: "最小必要修改", field: "proposed_change", description: "只写使节点可接受所需的具体改动；选择 edit 时必填。" },
+          { label: "评审理由", field: "rationale", description: "说明判断依据；选择 edit 或 reject 时必填。" },
+        ]
+      );
+      document.getElementById("section-nodes").innerHTML = `
+        <div class="section-header">
+          <div><h2>节点评审</h2><p>检查稳定性、来源、诊断价值与 L0–L5 的有序可观察性。</p></div>
+          <span class="progress-badge" data-progress-kind="nodes"></span>
+        </div>
+        ${labelGuide}
+        ${packageData.nodes.map(renderNodeCard).join("")}`;
+    }
+
+    function renderEdgeCard(edge, index) {
+      const review = state.edgeReviews[edge.id];
+      const done = edgeIsComplete(review, edge);
+      const nodeById = Object.fromEntries(packageData.nodes.map(node => [node.id, node]));
+      const source = nodeById[edge.source];
+      const target = nodeById[edge.target];
+      const decisionNeedsRationale = ["edit", "delete"].includes(review.decision);
+      return `<article class="panel card" id="edge-${esc(edge.id)}">
+        <div class="card-title">
+          <div style="display:flex; gap:10px; min-width:0">
+            <span class="item-number">E${String(index + 1).padStart(2, "0")}</span>
+            <div>
+              <h3>${esc(source.name)} → ${esc(target.name)}</h3>
+              <div class="identifier">${esc(edge.id)}</div>
+            </div>
+          </div>
+          <span class="item-status ${done ? "done" : "todo"}">${done ? "已完成" : "待完成"}</span>
+        </div>
+        <div class="binding-strip" style="margin-top:12px">
+          <span class="binding-pill" style="background:#ece9df;color:var(--ink)">${esc(edge.type)}</span>
+          <span class="binding-pill" style="background:#ece9df;color:var(--ink)">weight ${esc(edge.weight)}</span>
+          <span class="binding-pill" style="background:#ece9df;color:var(--ink)">curation ${esc(edge.curation_confidence)}</span>
+        </div>
+        <div class="detail-block"><h4>Knowledge Edge Rationale</h4><p>${esc(edge.rationale)}</p></div>
+        <div class="review-grid">
+          ${selectField("关系有效性 / Relation validity", "edge", edge.id, "relation_validity", review.relation_validity, edgeOptions.relation_validity)}
+          ${selectField("类型正确 / Type correct", "edge", edge.id, "type_correct", review.type_correct, edgeOptions.type_correct)}
+          ${selectField("替代类型 / Replacement type", "edge", edge.id, "replacement_type", review.replacement_type, edgeOptions.replacement_type, "type_correct=no 时必填。")}
+          ${selectField("方向正确 / Direction correct", "edge", edge.id, "direction_correct", review.direction_correct, edgeOptions.direction_correct, "contrasts_with 必须选 not_applicable。")}
+          ${selectField("依据类别 / Provenance class", "edge", edge.id, "provenance_class", review.provenance_class, edgeOptions.provenance_class)}
+          ${selectField("总体决定 / Decision", "edge", edge.id, "decision", review.decision, edgeOptions.decision)}
+          ${textField("建议修改 / Proposed change", "edge", edge.id, "proposed_change", review.proposed_change, {full: true, required: review.decision === "edit", compact: true})}
+          ${textField("评审理由 / Rationale", "edge", edge.id, "rationale", review.rationale, {full: true, required: decisionNeedsRationale, compact: true})}
+        </div>
+      </article>`;
+    }
+
+    function renderEdges() {
+      const labelGuide = renderLabelGuide(
+        "标签速查 / Label guide",
+        "判断的是明确的知识关系，而不是两个概念是否大致相关；uncertain 表示证据不足。",
+        [
+          { label: "关系有效性", field: "relation_validity", description: "source 与 target 之间是否确实存在所声明的知识关系：valid 有效；uncertain 暂不能判断；invalid 无效。" },
+          { label: "类型正确", field: "type_correct", description: "当前关系类型是否准确：yes 正确；no 错误；uncertain 暂不能判断。" },
+          { label: "替代类型", field: "replacement_type", description: "类型错误时选择应替换为 part_of、prerequisite_for、supports 或 contrasts_with；type_correct=no 时必填。" },
+          { label: "方向正确", field: "direction_correct", description: "检查 source → target 的方向：yes 正确；no 反向；uncertain 不确定；contrasts_with 选 not_applicable。" },
+          { label: "依据类别", field: "provenance_class", description: "source_explicit 来源明示；source_entailed 可由来源推出；expert_pedagogical_extension 专家教学扩展；unsupported 无依据。" },
+          { label: "总体决定", field: "decision", description: "accept 原样接受；edit 修改后接受；delete 删除。edit 必须给出具体改动。" },
+          { label: "建议修改", field: "proposed_change", description: "写明关系类型、方向、端点或表述需要怎样修改；选择 edit 时必填。" },
+          { label: "评审理由", field: "rationale", description: "说明判断依据；选择 edit 或 delete 时必填。" },
+        ]
+      );
+      document.getElementById("section-edges").innerHTML = `
+        <div class="section-header">
+          <div><h2>边评审</h2><p>检查端点、规范关系类型、方向与 rationale；仅“相关”不足以保留。</p></div>
+          <span class="progress-badge" data-progress-kind="edges"></span>
+        </div>
+        ${labelGuide}
+        ${packageData.edges.map(renderEdgeCard).join("")}`;
+    }
+
+    function renderCoverage() {
+      const taskCards = packageData.scope.representative_tasks.map((task, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        const review = state.coverageReviews[id];
+        const done = coverageIsComplete(review);
+        return `<article class="panel card" id="coverage-${id}">
+          <div class="card-title">
+            <div style="display:flex; gap:10px; min-width:0">
+              <span class="item-number">T${String(index + 1).padStart(2, "0")}</span>
+              <div><h3>${esc(task)}</h3><div class="identifier">${id}</div></div>
+            </div>
+            <span class="item-status ${done ? "done" : "todo"}">${done ? "已完成" : "待完成"}</span>
+          </div>
+          <div class="review-grid">
+            ${selectField("任务覆盖 / Task coverage", "coverage", id, "task_coverage", review.task_coverage, ["sufficient", "partial", "insufficient"])}
+            ${textField("必要缺失或冗余内容", "coverage", id, "missing_or_redundant_content", review.missing_or_redundant_content, {full: true, required: review.task_coverage && review.task_coverage !== "sufficient", compact: true})}
+            ${textField("理由 / Rationale", "coverage", id, "rationale", review.rationale, {full: true, required: review.task_coverage && review.task_coverage !== "sufficient", compact: true})}
+          </div>
+        </article>`;
+      }).join("");
+      document.getElementById("section-coverage").innerHTML = `
+        <div class="section-header">
+          <div><h2>图谱覆盖度</h2><p>逐项检查 metadata 中冻结的 50 项代表性任务；这是有边界的 scope check，不是 ontology recall。</p></div>
+          <span class="progress-badge" data-progress-kind="coverage"></span>
+        </div>
+        ${taskCards}
+        <article class="panel card">
+          <h3>总体图谱决定 / Overall graph decision</h3>
+          <div class="review-grid">
+            ${selectField("总体决定", "overall", "", "decision", state.overall.decision, ["approve", "approve_after_edits", "do_not_approve"])}
+            ${textField("总体理由", "overall", "", "rationale", state.overall.rationale, {full: true, required: state.overall.decision && state.overall.decision !== "approve"})}
+          </div>
+        </article>`;
+    }
+
+    function renderSubmit() {
+      const issues = validationIssues();
+      document.getElementById("section-submit").innerHTML = `
+        <div class="section-header">
+          <div><h2>校验与 JSON 导出</h2><p>草稿可随时导出；完整提交必须通过条目、条件字段与独立评审校验。</p></div>
+          <span class="progress-badge">${issues.length ? `${issues.length} 个问题` : "校验通过"}</span>
+        </div>
+        <div class="panel card">
+          <h3>数据流</h3>
+          <div class="callout">
+            本页不会生成 CSV。两位评审者分别导出 <code>knowact.kg_review_submission.v3</code> JSON，
+            再把两份完整 JSON 导入 <code>compare_and_confirm.html</code> 进行一致性计算与仲裁确认。
+          </div>
+          <div id="validation-errors" class="error-box ${issues.length ? "visible" : ""}">
+            <strong>${issues.length ? "完整提交尚未通过校验：" : ""}</strong>
+            ${issues.length ? `<ul>${issues.slice(0, 20).map(issue => `<li>${esc(issue.message)}</li>`).join("")}${issues.length > 20 ? `<li>另有 ${issues.length - 20} 项……</li>` : ""}</ul>` : ""}
+          </div>
+          ${issues.length ? "" : '<div class="success-box"><strong>完整性校验通过。</strong> 导出仍是 candidate graph 的独立专家判断，不等于 promotion。</div>'}
+          <div class="actions">
+            <button id="export-draft">导出草稿 JSON</button>
+            <button class="primary" id="export-complete"${issues.length ? " disabled" : ""}>提交并导出完整 JSON</button>
+            <button id="import-json">导入本图谱 JSON 草稿</button>
+            <input class="file-input" id="import-file" type="file" accept="application/json,.json">
+            <button class="danger" id="reset-review">清空本机草稿</button>
+          </div>
+        </div>
+        <div class="panel card">
+          <h3>冻结输入</h3>
+          <div class="hash-list">
+            package: ${esc(packageData.graph.review_package_id)}<br>
+            fingerprint: ${esc(packageData.graph.graph_fingerprint)}<br>
+            schema: ${SUBMISSION_SCHEMA}
+          </div>
+        </div>`;
+
+      document.getElementById("export-draft").addEventListener("click", () => exportSubmission("draft"));
+      document.getElementById("export-complete").addEventListener("click", () => exportSubmission("complete"));
+      document.getElementById("import-json").addEventListener("click", () => document.getElementById("import-file").click());
+      document.getElementById("import-file").addEventListener("change", importSubmission);
+      document.getElementById("reset-review").addEventListener("click", resetReview);
+    }
+
+    function renderSection(section) {
+      if (section === "overview") renderOverview();
+      if (section === "nodes") renderNodes();
+      if (section === "edges") renderEdges();
+      if (section === "coverage") renderCoverage();
+      if (section === "submit") renderSubmit();
+      bindFormEvents();
+      updateProgress();
+    }
+
+    function switchSection(section) {
+      activeSection = section;
+      document.querySelectorAll(".section").forEach(element => element.classList.toggle("active", element.id === `section-${section}`));
+      document.querySelectorAll(".nav-button").forEach(element => element.classList.toggle("active", element.dataset.sectionTarget === section));
+      renderSection(section);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function bindFormEvents() {
+      document.querySelectorAll("[data-scope][data-field]").forEach(element => {
+        const eventName = element.tagName === "SELECT" || element.type === "checkbox" ? "change" : "input";
+        element.addEventListener(eventName, event => {
+          const input = event.currentTarget;
+          const value = input.type === "checkbox" ? input.checked : input.value;
+          const { scope, id, field } = input.dataset;
+          if (scope === "reviewer") state.reviewer[field] = value;
+          if (scope === "node") state.nodeReviews[id][field] = value;
+          if (scope === "edge") state.edgeReviews[id][field] = value;
+          if (scope === "coverage") state.coverageReviews[id][field] = value;
+          if (scope === "overall") state.overall[field] = value;
+          saveState();
+          if (input.tagName === "SELECT") renderSection(activeSection);
+        });
+      });
+    }
+
+    function buildSubmission(status) {
+      if (!state.submissionId) {
+        const randomPart = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        state.submissionId = `kg-review-${randomPart}`;
+        saveState();
+      }
+      const issues = validationIssues();
+      return {
+        schema_version: SUBMISSION_SCHEMA,
+        status,
+        submission_id: state.submissionId,
+        exported_at: new Date().toISOString(),
+        graph: structuredClone(packageData.graph),
+        reviewer: {
+          reviewer_id: state.reviewer.reviewer_id.trim(),
+          role: state.reviewer.role.trim(),
+          experience_band: state.reviewer.experience_band,
+          introduction: state.reviewer.introduction.trim(),
+        },
+        node_reviews: packageData.nodes.map((node, index) => ({
+          item_order: index + 1,
+          node_id: node.id,
+          ...structuredClone(state.nodeReviews[node.id]),
+        })),
+        edge_reviews: packageData.edges.map((edge, index) => ({
+          item_order: index + 1,
+          edge_id: edge.id,
+          ...structuredClone(state.edgeReviews[edge.id]),
+        })),
+        coverage_reviews: packageData.scope.representative_tasks.map((task, index) => {
+          const taskId = `task_${String(index + 1).padStart(3, "0")}`;
+          return {
+            item_order: index + 1,
+            task_id: taskId,
+            task_text: task,
+            ...structuredClone(state.coverageReviews[taskId]),
+          };
+        }),
+        overall_graph_review: structuredClone(state.overall),
+        validation: {
+          complete: issues.length === 0,
+          issue_count: issues.length,
+          issues: issues.map(issue => ({ section: issue.section, message: issue.message })),
+        },
+      };
+    }
+
+    function downloadJson(documentValue, filename) {
+      const blob = new Blob([JSON.stringify(documentValue, null, 2) + "\n"], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function safeFilename(value) {
+      return String(value || "anonymous").replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || "anonymous";
+    }
+
+    function exportSubmission(status) {
+      const submission = buildSubmission(status);
+      if (status === "complete" && !submission.validation.complete) {
+        switchSection("submit");
+        return;
+      }
+      const filename = `${packageData.graph.domain.toLowerCase()}_kg_review_${safeFilename(submission.reviewer.reviewer_id)}_${status}.json`;
+      downloadJson(submission, filename);
+    }
+
+    function stateFromSubmission(documentValue) {
+      const next = createBlankState();
+      next.submissionId = documentValue.submission_id || "";
+      const reviewer = documentValue.reviewer || {};
+      next.reviewer = {
+        reviewer_id: reviewer.reviewer_id || "",
+        role: reviewer.role || "",
+        experience_band: reviewer.experience_band || "",
+        introduction: reviewer.introduction || "",
+      };
+      for (const review of documentValue.node_reviews || []) {
+        if (next.nodeReviews[review.node_id]) {
+          next.nodeReviews[review.node_id] = { ...blankNodeReview(), ...review };
+        }
+      }
+      for (const review of documentValue.edge_reviews || []) {
+        if (next.edgeReviews[review.edge_id]) {
+          next.edgeReviews[review.edge_id] = { ...blankEdgeReview(), ...review };
+        }
+      }
+      for (const review of documentValue.coverage_reviews || []) {
+        if (next.coverageReviews[review.task_id]) {
+          next.coverageReviews[review.task_id] = { ...blankCoverageReview(), ...review };
+        }
+      }
+      next.overall = { decision: "", rationale: "", ...(documentValue.overall_graph_review || {}) };
+      return next;
+    }
+
+    async function importSubmission(event) {
+      const file = event.currentTarget.files?.[0];
+      event.currentTarget.value = "";
+      if (!file) return;
+      try {
+        const documentValue = JSON.parse(await file.text());
+        if (documentValue.schema_version !== SUBMISSION_SCHEMA) throw new Error("schema_version 不匹配");
+        if (documentValue.graph?.graph_fingerprint !== packageData.graph.graph_fingerprint) {
+          throw new Error("JSON 绑定的是另一张图谱或另一版 candidate artifacts");
+        }
+        state = stateFromSubmission(documentValue);
+        saveState();
+        renderSection(activeSection);
+        alert("JSON 已导入并恢复为本机草稿。");
+      } catch (error) {
+        alert(`无法导入：${error.message}`);
+      }
+    }
+
+    function resetReview() {
+      if (!confirm("确定清空此图谱在本浏览器中的全部评审草稿吗？请先导出需要保留的 JSON。")) return;
+      localStorage.removeItem(storageKey);
+      state = createBlankState();
+      renderSection(activeSection);
+    }
+
+    document.querySelectorAll("[data-section-target]").forEach(button => {
+      button.addEventListener("click", () => switchSection(button.dataset.sectionTarget));
+    });
+
+    ensureCompleteShape();
+    renderHeader();
+    sectionOrder.forEach(renderSection);
+    switchSection("overview");
+  })();
+  </script>
+</body>
+</html>

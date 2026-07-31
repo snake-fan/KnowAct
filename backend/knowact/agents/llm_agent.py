@@ -1,3 +1,6 @@
+from backend.knowact.agents.agents.evidence_calibrated import (
+    EvidenceCalibratedLLMTestedAgent,
+)
 from backend.knowact.agents.agents.simple_llm import SimpleLLMTestedAgent
 from backend.knowact.agents.providers import (
     DEFAULT_TESTED_AGENT_CLIENT_PROVIDER,
@@ -20,6 +23,23 @@ _LOGGER = get_knowact_logger("agents.llm_agent")
 
 class TestedAgentConfigurationError(RuntimeError):
     """Raised when a provider-backed tested agent cannot be configured."""
+
+
+def build_evidence_calibrated_tested_agent(
+    *,
+    model_client: ModelClient,
+    temperature: float | None = None,
+) -> EvidenceCalibratedLLMTestedAgent:
+    metadata = getattr(model_client, "metadata", None)
+    _LOGGER.info(
+        "Evidence-calibrated tested agent initialized model_provider=%s model_name=%s",
+        metadata.provider if metadata is not None else None,
+        metadata.model_name if metadata is not None else None,
+    )
+    return EvidenceCalibratedLLMTestedAgent(
+        model_client=model_client,
+        temperature=temperature,
+    )
 
 
 def build_simple_llm_tested_agent(
@@ -91,6 +111,48 @@ def build_simple_llm_tested_agent_for_provider(
         provider,
         "UnsupportedProvider",
     )
+    raise TestedAgentConfigurationError(
+        f"Unsupported tested-agent client provider: {provider}"
+    )
+
+
+def build_evidence_calibrated_tested_agent_for_provider(
+    client_provider: TestedAgentClientProvider | None = DEFAULT_TESTED_AGENT_CLIENT_PROVIDER,
+    *,
+    temperature: float | None = None,
+    openai_config: OpenAIModelConfig | None = None,
+    deepseek_config: DeepSeekModelConfig | None = None,
+) -> EvidenceCalibratedLLMTestedAgent:
+    provider = client_provider or DEFAULT_TESTED_AGENT_CLIENT_PROVIDER
+    _LOGGER.info(
+        "Evidence-calibrated tested agent provider configuration started client_provider=%s",
+        provider,
+    )
+    try:
+        if provider == "openai":
+            return build_evidence_calibrated_tested_agent(
+                model_client=OpenAIChatModelClient(
+                    openai_config or openai_config_from_env()
+                ),
+                temperature=temperature,
+            )
+        if provider == "deepseek":
+            return build_evidence_calibrated_tested_agent(
+                model_client=DeepSeekChatModelClient(
+                    deepseek_config or deepseek_config_from_env()
+                ),
+                temperature=temperature,
+            )
+    except (ValueError, ModelClientError) as exc:
+        _LOGGER.error(
+            "Evidence-calibrated tested agent provider configuration failed client_provider=%s error_type=%s",
+            provider,
+            type(exc).__name__,
+        )
+        raise TestedAgentConfigurationError(
+            "Evidence-calibrated tested agent service is not configured."
+        ) from exc
+
     raise TestedAgentConfigurationError(
         f"Unsupported tested-agent client provider: {provider}"
     )

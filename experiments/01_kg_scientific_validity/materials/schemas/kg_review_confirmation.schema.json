@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowact.local/schemas/kg_review_confirmation.schema.json",
+  "title": "KnowAct KG review comparison and confirmation",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "confirmation_id",
+    "exported_at",
+    "graph",
+    "input_reviews",
+    "comparison_summary",
+    "adjudication",
+    "item_confirmations",
+    "promotion_readiness",
+    "validation"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowact.kg_review_confirmation.v3"
+    },
+    "status": {
+      "enum": ["draft", "complete"]
+    },
+    "confirmation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "exported_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "graph": {
+      "type": "object",
+      "required": [
+        "domain",
+        "candidate_run_id",
+        "review_package_id",
+        "graph_fingerprint",
+        "node_count",
+        "edge_count",
+        "representative_task_count",
+        "artifact_binding"
+      ]
+    },
+    "input_reviews": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "role",
+          "submission_id",
+          "reviewer_id",
+          "source_filename",
+          "submission_sha256"
+        ],
+        "properties": {
+          "role": {
+            "enum": ["reviewer_1", "reviewer_2"]
+          },
+          "submission_id": { "type": "string", "minLength": 1 },
+          "reviewer_id": { "type": "string", "minLength": 1 },
+          "source_filename": { "type": "string", "minLength": 1 },
+          "submission_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "comparison_summary": {
+      "type": "object",
+      "required": [
+        "node_raw_agreement",
+        "node_cohens_kappa",
+        "edge_raw_agreement",
+        "edge_cohens_kappa",
+        "coverage_exact_agreement_count",
+        "coverage_item_count",
+        "field_disagreement_counts",
+        "items_requiring_adjudication"
+      ],
+      "properties": {
+        "node_raw_agreement": { "type": "number", "minimum": 0, "maximum": 1 },
+        "node_cohens_kappa": { "type": ["number", "null"], "minimum": -1, "maximum": 1 },
+        "edge_raw_agreement": { "type": "number", "minimum": 0, "maximum": 1 },
+        "edge_cohens_kappa": { "type": ["number", "null"], "minimum": -1, "maximum": 1 },
+        "coverage_exact_agreement_count": { "type": "integer", "minimum": 0 },
+        "coverage_item_count": { "type": "integer", "minimum": 1 },
+        "field_disagreement_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "items_requiring_adjudication": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "adjudication": {
+      "type": "object",
+      "required": [
+        "adjudicator_code",
+        "adjudication_date",
+        "adjudication_minutes",
+        "confirmed_review_inputs_and_resolutions"
+      ],
+      "properties": {
+        "adjudicator_code": { "type": "string" },
+        "adjudication_date": {
+          "type": ["string", "null"],
+          "format": "date"
+        },
+        "adjudication_minutes": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0
+        },
+        "confirmed_review_inputs_and_resolutions": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "item_confirmations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "item_type",
+          "item_id",
+          "item_label",
+          "reviewer_1_judgments",
+          "reviewer_2_judgments",
+          "disagreement_fields",
+          "critical_trigger",
+          "requires_adjudication",
+          "final_decision",
+          "final_edit",
+          "adjudication_rationale",
+          "resolution_status"
+        ],
+        "properties": {
+          "item_type": {
+            "enum": ["node", "edge", "coverage", "overall"]
+          },
+          "item_id": { "type": "string", "minLength": 1 },
+          "item_label": { "type": "string", "minLength": 1 },
+          "reviewer_1_judgments": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "reviewer_2_judgments": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "disagreement_fields": {
+            "type": "array",
+            "items": { "type": "string" },
+            "uniqueItems": true
+          },
+          "critical_trigger": { "type": "boolean" },
+          "requires_adjudication": { "type": "boolean" },
+          "final_decision": { "type": "string" },
+          "final_edit": { "type": "string" },
+          "adjudication_rationale": { "type": "string" },
+          "resolution_status": {
+            "enum": ["unresolved", "resolved", "auto_resolved_agreement"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "promotion_readiness": {
+      "type": "object",
+      "required": [
+        "status",
+        "structural_validation_required",
+        "promotion_ready",
+        "blocking_reasons"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "not_approved",
+            "edits_required",
+            "ready_for_structural_validation"
+          ]
+        },
+        "structural_validation_required": { "type": "boolean" },
+        "promotion_ready": {
+          "const": false
+        },
+        "blocking_reasons": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "validation": {
+      "type": "object",
+      "required": ["complete", "issue_count", "issues"],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "issue_count": { "type": "integer", "minimum": 0 },
+        "issues": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": { "const": "complete" }
+        }
+      },
+      "then": {
+        "properties": {
+          "validation": {
+            "properties": {
+              "complete": { "const": true },
+              "issue_count": { "const": 0 },
+              "issues": { "maxItems": 0 }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

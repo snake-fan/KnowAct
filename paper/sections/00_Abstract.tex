@@ -1,7 +1,36 @@
 \begin{abstract}
-An agent cannot adapt well to a user merely by answering the current request; it must also decide what it still needs to learn about that user. This creates a measurement problem. Static Theory-of-Mind benchmarks test inference from supplied evidence, whereas interactive benchmarks typically score downstream task or social outcomes. The former removes evidence acquisition from the tested policy, and the latter can reward success without an accurate user model.
+An agent cannot adapt to a user merely by answering the current request; it must decide what it still
+needs to learn about that user.
 
-We argue that functional user modeling should instead be evaluated as active latent-state identification: the target state must be explicit, acquiring evidence must consume a limited budget, and success must be attributable to visible interaction rather than hidden-state leakage or a favorable prior. \knowact instantiates these requirements for knowledge-grounded interaction. A public domain graph defines a shared hypothesis space; a hidden user knowledge map defines the reconstruction target; and a tested agent chooses diagnostic questions before submitting a full-map estimate.
+Static Theory-of-Mind benchmarks test inference from supplied evidence, whereas interactive benchmarks
+usually score downstream outcomes.
 
-The benchmark separates simulator, agent, and evaluation contexts to address the tension between natural interaction and experimental control. A de-identified answer blueprint constrains what the simulator may express, while deterministic node-level scoring avoids an evaluator-model confound. The initial domain is statistical learning, grounded in an authoritative textbook. This paper develops the benchmark's measurement argument and validation protocol; empirical validation remains future work.
+The former removes evidence acquisition from the tested policy. The latter can reward success without
+an accurate user model.
+
+We formulate functional user modeling as active knowledge-map reconstruction.
+
+In \knowact, a public graph defines the hypothesis space, a hidden user map assigns ordinal mastery to
+its nodes, and an agent chooses diagnostic questions under a finite turn budget.
+
+Separate simulator, agent, and evaluation contexts constrain hidden-state access. Deterministic
+node-level scoring makes the reconstruction target directly observable to the evaluator.
+
+Observations are produced by \sagesim, a scoped answer-generation workflow that grounds a question,
+abstracts only licensed epistemic state, and then realizes a de-identified answer blueprint.
+
+The central method is MapProbe, an evidence--belief--probe design. It interprets answers against
+rubrics, revises node beliefs, routes typed evidence, plans targets, and can stop or abstain.
+
+We fix matched baselines, ablations, graph perturbations, repeated-run reliability, simulator
+sensitivity, held-out state-fidelity tests, and human-transfer tests before results.
+
+The visibility boundary and simple prompted baseline are implemented. An experimental ECDA slice also
+implements node-marginal belief updates and multi-candidate question utility.
+
+Typed graph propagation, verification, calibrated stopping, and the comparative study remain
+incomplete or unrun.
+
+Accordingly, the paper contributes a falsifiable task, agent design, and evaluation contract rather
+than an empirical superiority claim.
 \end{abstract}

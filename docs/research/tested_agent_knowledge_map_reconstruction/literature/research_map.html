@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KnowAct · Knowledge-Map Reconstruction Research Map</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #121a2e;
+      --panel-2: #18233d;
+      --text: #eef3ff;
+      --muted: #9ba9c8;
+      --line: #2b3a60;
+      --state: #7dd3fc;
+      --action: #fbbf24;
+      --dialogue: #c4b5fd;
+      --eval: #86efac;
+      --risk: #fda4af;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 8% -10%, #1e3a5f 0, transparent 35%), var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header { padding: 42px clamp(20px, 5vw, 74px) 24px; }
+    h1 { max-width: 980px; margin: 0 0 12px; font-size: clamp(30px, 5vw, 62px); line-height: .98; }
+    header p { max-width: 900px; color: var(--muted); font-size: 17px; line-height: 1.6; }
+    .shell { padding: 0 clamp(20px, 5vw, 74px) 64px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 20px; }
+    button {
+      border: 1px solid var(--line); border-radius: 999px; padding: 9px 14px;
+      background: #0f172a; color: var(--text); cursor: pointer;
+    }
+    button.active, button:hover { background: #233252; border-color: #5f77aa; }
+    #relationship-graph {
+      display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 14px;
+      align-items: stretch; margin-bottom: 25px;
+    }
+    .stage {
+      min-height: 132px; border: 1px solid var(--line); border-radius: 18px;
+      padding: 18px; background: linear-gradient(145deg, #16213a, #0f1729); position: relative;
+    }
+    .stage:not(:last-child)::after {
+      content: "→"; position: absolute; right: -14px; top: 45%; color: #6f83ae; z-index: 3;
+    }
+    .stage small { text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+    .stage h2 { margin: 10px 0 7px; font-size: 17px; }
+    .stage p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .state { box-shadow: inset 0 3px var(--state); }
+    .action { box-shadow: inset 0 3px var(--action); }
+    .dialogue { box-shadow: inset 0 3px var(--dialogue); }
+    .eval { box-shadow: inset 0 3px var(--eval); }
+    .risk { box-shadow: inset 0 3px var(--risk); }
+    .content { display: grid; grid-template-columns: minmax(0, 1.6fr) 6px minmax(300px, .8fr); gap: 16px; }
+    .papers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-content: start; }
+    .paper {
+      border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: rgba(18, 26, 46, .92);
+      cursor: pointer; transition: transform .15s ease, border-color .15s ease;
+    }
+    .paper:hover { transform: translateY(-2px); border-color: #6e84b4; }
+    .paper .meta { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 12px; }
+    .paper h3 { margin: 10px 0 8px; font-size: 16px; line-height: 1.35; }
+    .paper p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    #detail-resizer { border-radius: 99px; background: var(--line); cursor: col-resize; }
+    #detail-content {
+      position: sticky; top: 18px; align-self: start; border: 1px solid var(--line); border-radius: 18px;
+      padding: 20px; background: var(--panel); max-height: calc(100vh - 36px); overflow: auto;
+    }
+    #detail-content h2 { margin-top: 0; font-size: 22px; }
+    #detail-content h4 { margin: 20px 0 6px; color: #d6e2ff; }
+    #detail-content p { margin: 0; color: var(--muted); line-height: 1.55; font-size: 14px; }
+    #detail-content a { color: #93c5fd; }
+    .tag { display: inline-block; margin: 2px 4px 2px 0; padding: 3px 7px; border-radius: 8px; background: #223151; color: #cbd7f2; font-size: 11px; }
+    .footnote { margin-top: 28px; padding: 18px; border-left: 3px solid var(--risk); background: #151a2b; color: var(--muted); line-height: 1.6; }
+    @media (max-width: 1050px) {
+      #relationship-graph { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stage::after { display: none; }
+      .content { grid-template-columns: 1fr; }
+      #detail-resizer { display: none; }
+      #detail-content { position: static; max-height: none; }
+    }
+    @media (max-width: 650px) { .papers, #relationship-graph { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Interactive Knowledge-Map Reconstruction</h1>
+    <p>
+      Supplementary 14-paper focused view, organized by the design decision each paper can support.
+      This view uses an earlier reading-depth rubric and is not added to the canonical 41-paper audited
+      count. Click a paper to inspect the evidence borrowed and the transfer boundary that prevents
+      overclaiming.
+    </p>
+  </header>
+  <main class="shell">
+    <div class="toolbar" aria-label="paper filters">
+      <button class="active" data-filter="all">All papers</button>
+      <button data-filter="state">State & update</button>
+      <button data-filter="action">Probe policy</button>
+      <button data-filter="dialogue">Dialogue memory</button>
+      <button data-filter="eval">Evaluation validity</button>
+    </div>
+
+    <section id="relationship-graph" aria-label="method relationship graph">
+      <article class="stage state"><small>1 · observe</small><h2>Evidence interpretation</h2><p>Map an answer to rubric-grounded, provenance-bearing observations.</p></article>
+      <article class="stage state"><small>2 · update</small><h2>Node beliefs</h2><p>Revise ordinal mastery beliefs; keep contradiction and abstention explicit.</p></article>
+      <article class="stage risk"><small>3 · infer</small><h2>Typed graph messages</h2><p>Attenuated direct/indirect evidence; the least established, highest-risk component.</p></article>
+      <article class="stage action"><small>4 · plan</small><h2>Diagnostic target</h2><p>Score information, coverage, boundary risk, redundancy, and cost before wording.</p></article>
+      <article class="stage eval"><small>5 · verify</small><h2>Stop and evaluate</h2><p>Full-map error, turn curves, calibration, repeated reliability, and human linkage.</p></article>
+    </section>
+
+    <section class="content">
+      <div class="papers" id="paper-list"></div>
+      <div id="detail-resizer" aria-hidden="true"></div>
+      <aside id="detail-content">
+        <h2>How to read this map</h2>
+        <p>Select a paper. The detail panel distinguishes its actual evidence from the design idea that
+        transfers to KnowAct. A top-venue paper is not treated as automatic proof for a different task.</p>
+      </aside>
+    </section>
+
+    <div class="footnote">
+      Central gap: none of these papers validates a complete agent that actively recovers ordinal user
+      mastery over a public typed graph from open-ended questions. Graph-aware propagation is therefore
+      a KnowAct hypothesis requiring no-graph, untyped-graph, and perturbed-graph controls.
+    </div>
+  </main>
+
+  <script id="paper-reports-json" type="application/json">
+  [
+    {"id":"P001","title":"Deep Knowledge Tracing","venue":"NeurIPS 2015","depth":"D2","category":"state","role":"Sequential latent-state update","evidence":"Real student sequences and predictive comparisons establish a foundational sequential baseline.","boundary":"Passive binary observations and a predictive hidden vector are not a scored full knowledge map.","url":"https://proceedings.neurips.cc/paper_files/paper/2015/hash/bac9162b47c56fc8a4d2a519803d51b3-Abstract.html"},
+    {"id":"P002","title":"pyKT","venue":"NeurIPS D&B 2022","depth":"D2","category":"eval","role":"Leakage-safe KT evaluation","evidence":"Seven datasets and ten models expose the effect of preprocessing and evaluation choices.","boundary":"Next-response prediction is not KnowAct's full-map target.","url":"https://proceedings.neurips.cc/paper_files/paper/2022/hash/75ca2b23d9794f02a92449af65a57556-Abstract-Datasets_and_Benchmarks.html"},
+    {"id":"P003","title":"BOBCAT","venue":"IJCAI 2021","depth":"D2","category":"action","role":"Learned adaptive item selection","evidence":"Five real datasets and matched test-length comparisons motivate budget curves.","boundary":"A calibrated fixed item bank does not transfer directly to generated open questions.","url":"https://www.ijcai.org/proceedings/2021/332"},
+    {"id":"P004","title":"FACD","venue":"IJCAI 2025","depth":"D2","category":"state","role":"Fast early-stage diagnosis","evidence":"Three datasets, several diagnosis and selection models, early-step analysis, and component ablations.","boundary":"Relies on historical students and binary item responses; diagnosis-selection theory remains incomplete.","url":"https://www.ijcai.org/proceedings/2025/648"},
+    {"id":"P005","title":"LongTutor","venue":"ACL 2026","depth":"D2","category":"dialogue","role":"Evidence–diagnosis–action decomposition","evidence":"Expert-annotated real learning logs and staged model evaluation expose a diagnosis/action gap.","boundary":"The tested model receives a history instead of actively selecting evidence.","url":"https://aclanthology.org/2026.acl-long.1371/"},
+    {"id":"P006","title":"ParLD","venue":"AAAI 2026","depth":"D1","category":"dialogue","role":"Turn-level conversational diagnosis","evidence":"Evaluates cognitive-state reasoning through future performance and tutoring support.","boundary":"Multiple reasoning roles do not prove that a multi-agent architecture is necessary.","url":"https://ojs.aaai.org/index.php/AAAI/article/view/40736"},
+    {"id":"P007","title":"ScaffoldLM","venue":"ACL 2026","depth":"D2","category":"dialogue","role":"Assessment-driven plan and memory","evidence":"Multi-turn tutoring comparisons and plan/assessment ablations support persistent plan–state–action structure.","boundary":"Primarily synthetic training and evaluator-dependent pedagogical quality are not hidden-map reconstruction accuracy.","url":"https://aclanthology.org/2026.acl-long.325/"},
+    {"id":"P008","title":"PENGUIN / RAISE","venue":"NeurIPS 2025","depth":"D2","category":"action","role":"Selective acquisition, cost, and abstention","evidence":"Context-rich/free controls and acquisition comparisons link selected information to safety outcome and query cost.","boundary":"Fixed user attributes and safety rewards do not define ordinal graph-mastery inference.","url":"https://proceedings.neurips.cc/paper_files/paper/2025/hash/8c2bb821410066459be64d03a4dc5719-Abstract-Conference.html"},
+    {"id":"P009","title":"RLPA","venue":"NeurIPS 2025","depth":"D2","category":"state","role":"Explicit profile and response rewards","evidence":"Prompting, retrieval, offline training, preference, RL, ablation, and transfer comparisons.","boundary":"Profile slots and response actions differ from active graph diagnostic questions.","url":"https://proceedings.neurips.cc/paper_files/paper/2025/hash/2fbc1ea60e215275e823c86338417162-Abstract-Conference.html"},
+    {"id":"P010","title":"PERSONAMEM","venue":"COLM 2025","depth":"D1","category":"state","role":"Evolving long-horizon profiles","evidence":"More than 180 histories, up to 60 sessions, 15 scenarios, and time-indexed profile queries.","boundary":"Passive history use does not test which evidence an agent chooses to acquire.","url":"https://openreview.net/forum?id=6ox8XZGOqP"},
+    {"id":"P011","title":"SimulatorArena","venue":"EMNLP 2025","depth":"D1","category":"eval","role":"Human-linked simulator validity","evidence":"909 human–LLM conversations test behavior similarity and preservation of assistant rankings.","boundary":"Agreement on two tasks does not certify KnowAct's user simulator.","url":"https://aclanthology.org/2025.emnlp-main.1786/"},
+    {"id":"P012","title":"τ-bench","venue":"ICLR 2025","depth":"D2","category":"eval","role":"Deterministic end-state and repeated reliability","evidence":"Dynamic user interaction, policy/tool constraints, deterministic checks, and pass^k repeated trials.","boundary":"A database goal is observable; user knowledge is a latent construct requiring calibration evidence.","url":"https://proceedings.iclr.cc/paper_files/paper/2025/hash/1b126cc38b8638e07bef37e7b2bb72bf-Abstract-Conference.html"},
+    {"id":"P013","title":"AgentBoard","venue":"NeurIPS D&B 2024","depth":"D2","category":"eval","role":"Process and trajectory metrics","evidence":"A progress-rate metric, human validation, and cross-environment analysis reveal failures hidden by final success.","boundary":"Human-annotated subgoals and generic task progress must be redesigned as turn-level full-map reconstruction quality.","url":"https://proceedings.neurips.cc/paper_files/paper/2024/hash/877b40688e330a0e2a3fc24084208dfa-Abstract-Datasets_and_Benchmarks_Track.html"},
+    {"id":"P014","title":"BigToM","venue":"NeurIPS D&B 2023","depth":"D2","category":"eval","role":"Causal controls and human quality validation","evidence":"Twenty-five controls, 5,000 evaluations, and human comparison isolate mental-state inferences.","boundary":"Static supplied evidence does not test active querying or persistent map reconstruction.","url":"https://proceedings.neurips.cc/paper_files/paper/2023/hash/2b9efb085d3829a2aadffab63ba206de-Abstract-Datasets_and_Benchmarks.html"}
+  ]
+  </script>
+  <script>
+    const researchData = JSON.parse(document.getElementById("paper-reports-json").textContent);
+    const list = document.getElementById("paper-list");
+    const detail = document.getElementById("detail-content");
+    const labels = { state: "State & update", action: "Probe policy", dialogue: "Dialogue memory", eval: "Evaluation" };
+
+    function renderPapers(filter = "all") {
+      const rows = researchData.filter(p => filter === "all" || p.category === filter);
+      list.innerHTML = rows.map(p => `
+        <article class="paper" tabindex="0" data-id="${p.id}">
+          <div class="meta"><span>${p.id} · ${p.venue}</span><span>${p.depth}</span></div>
+          <h3>${p.title}</h3>
+          <p>${p.role}</p>
+        </article>`).join("");
+      document.querySelectorAll(".paper").forEach(card => {
+        const show = () => showDetail(card.dataset.id);
+        card.addEventListener("click", show);
+        card.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") show(); });
+      });
+    }
+
+    function showDetail(id) {
+      const p = researchData.find(row => row.id === id);
+      detail.innerHTML = `
+        <div><span class="tag">${p.id}</span><span class="tag">${p.venue}</span><span class="tag">${p.depth}</span><span class="tag">${labels[p.category]}</span></div>
+        <h2>${p.title}</h2>
+        <h4>Role in the design</h4><p>${p.role}</p>
+        <h4>Evidence actually borrowed</h4><p>${p.evidence}</p>
+        <h4>Transfer boundary</h4><p>${p.boundary}</p>
+        <h4>Primary source</h4><p><a href="${p.url}" target="_blank" rel="noreferrer">Open official archival page ↗</a></p>`;
+    }
+
+    document.querySelectorAll("button[data-filter]").forEach(button => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("button[data-filter]").forEach(b => b.classList.remove("active"));
+        button.classList.add("active");
+        renderPapers(button.dataset.filter);
+      });
+    });
+    renderPapers();
+  </script>
+</body>
+</html>

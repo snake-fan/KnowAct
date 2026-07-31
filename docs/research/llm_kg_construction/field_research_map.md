@@ -38,6 +38,10 @@ Key limitations are:
 
 The three current reviewed v1.2 graphs require a separate caveat. Their manifests identify a direct prompt-guided authoring run rather than the reusable four-stage workflow, and candidate/reviewed snapshots are byte-identical. They must be treated as development artifacts until complete extraction and expert-review evidence is recorded.
 
+The executable expert-review protocol, forms, and result template are maintained
+under
+[`../../../experiments/01_kg_scientific_validity/`](../../../experiments/01_kg_scientific_validity/README.md).
+
 ## Full EDGA research direction beyond runnable v1
 
 ### Stage 0 — Freeze the graph specification

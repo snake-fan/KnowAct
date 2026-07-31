@@ -158,7 +158,6 @@ class ProfileContextCandidateAuthoringRequest(BaseModel):
 
     benchmark_domain: str
     rough_description: str
-    domain_summary: str | None = None
     run_id: str | None = None
     client_provider: GraphAuthoringClientProvider = DEFAULT_GRAPH_AUTHORING_CLIENT_PROVIDER
 
@@ -167,10 +166,10 @@ class ProfileContextCandidateAuthoringRequest(BaseModel):
     def _benchmark_domain_must_be_safe(cls, value: str) -> str:
         return _validate_safe_id(value, "benchmark_domain")
 
-    @field_validator("rough_description", "domain_summary")
+    @field_validator("rough_description")
     @classmethod
-    def _text_must_not_be_blank(cls, value: str | None) -> str | None:
-        if value is not None and not value.strip():
+    def _text_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
             raise ValueError("must not be blank")
         return value
 
@@ -381,6 +380,7 @@ class BenchmarkDomainListResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     benchmark_domains: tuple[str, ...]
+    domain_summaries: dict[str, str] = Field(default_factory=dict)
 
 
 class SourceMaterialInfo(BaseModel):
@@ -494,12 +494,29 @@ def build_authoring_router(
         domains_dir = root / "benchmark" / "domains"
         if not domains_dir.exists():
             return BenchmarkDomainListResponse(benchmark_domains=())
-        return BenchmarkDomainListResponse(
-            benchmark_domains=tuple(
-                entry.name
-                for entry in sorted(domains_dir.iterdir())
-                if entry.is_dir() and _SAFE_ID_PATTERN.fullmatch(entry.name)
+        benchmark_domains = tuple(
+            entry.name
+            for entry in sorted(domains_dir.iterdir())
+            if entry.is_dir() and _SAFE_ID_PATTERN.fullmatch(entry.name)
+        )
+        try:
+            configured_sources = list_graph_authoring_source_metadata(
+                storage_root=storage_root
             )
+        except GraphAuthoringSourceConfigurationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        configured_summaries = {
+            metadata.benchmark_domain: metadata.domain_summary
+            for metadata in configured_sources
+            if metadata.domain_summary is not None
+        }
+        return BenchmarkDomainListResponse(
+            benchmark_domains=benchmark_domains,
+            domain_summaries={
+                domain: configured_summaries[domain]
+                for domain in benchmark_domains
+                if domain in configured_summaries
+            },
         )
 
     @router.get(
@@ -734,6 +751,14 @@ def build_authoring_router(
         run_id = request.run_id or default_graph_authoring_run_id()
         output_dir = _candidate_profile_context_output_dir(root, request.benchmark_domain, run_id)
         try:
+            try:
+                source_metadata = load_graph_authoring_source_metadata(
+                    storage_root=storage_root,
+                    source_id=request.benchmark_domain,
+                )
+                domain_summary = source_metadata.domain_summary
+            except MaterialFileNotFoundError:
+                domain_summary = None
             workflow = _build_profile_context_authoring_workflow(
                 profile_context_authoring_workflow_factory,
                 client_provider=request.client_provider,
@@ -742,7 +767,7 @@ def build_authoring_router(
                 ProfileContextAuthoringInput(
                     benchmark_domain=request.benchmark_domain,
                     rough_description=request.rough_description,
-                    domain_summary=request.domain_summary,
+                    domain_summary=domain_summary,
                 )
             )
             artifact_paths = write_candidate_profile_context_run(
@@ -755,6 +780,8 @@ def build_authoring_router(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         except ModelClientError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except GraphAuthoringSourceConfigurationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         except OSError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 

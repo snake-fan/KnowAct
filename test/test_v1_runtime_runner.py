@@ -262,7 +262,14 @@ class V1RuntimeRunnerTest(unittest.TestCase):
             observed_artifacts: list[tuple[dict, dict]] = []
 
             def inspect_artifacts_before_scoring(**kwargs):
-                run_dir = workspace_root / "experiments" / "runs" / "run_incremental"
+                run_dir = (
+                    workspace_root
+                    / "experiments"
+                    / "03_agent_reconstruction"
+                    / "results"
+                    / "runs"
+                    / "run_incremental"
+                )
                 observed_artifacts.append(
                     (
                         _read_json(run_dir / "turns" / "turn_001.json"),
@@ -296,7 +303,14 @@ class V1RuntimeRunnerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             _write_runnable_episode(workspace_root, max_turns=1)
-            existing_run_dir = workspace_root / "experiments" / "runs" / "run_001"
+            existing_run_dir = (
+                workspace_root
+                / "experiments"
+                / "03_agent_reconstruction"
+                / "results"
+                / "runs"
+                / "run_001"
+            )
             existing_run_dir.mkdir(parents=True)
             runner, _ = _runner_with_fake_simple_llm(
                 workspace_root,

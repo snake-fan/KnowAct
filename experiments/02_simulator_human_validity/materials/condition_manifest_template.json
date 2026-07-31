@@ -1,0 +1,35 @@
+{
+  "study_id": "sage_human_validity_v1",
+  "protocol_version": "TO_FREEZE",
+  "benchmark_domain": "ISLP",
+  "graph_version": "TO_BIND_AFTER_REVIEW",
+  "question_set_a_version": "islp_set_a_draft_v1",
+  "question_set_b_version": "islp_set_b_draft_v1",
+  "profile_context_schema_version": "TO_FREEZE",
+  "sage_code_revision": "TO_FREEZE",
+  "simulator_provider": "TO_FREEZE",
+  "simulator_model": "TO_FREEZE",
+  "temperature": null,
+  "seed_policy": {
+    "seed_count_per_participant_question_condition": 3,
+    "seed_values": []
+  },
+  "conditions": [
+    "monolithic_role_prompt",
+    "persona_only",
+    "sage_without_blueprint",
+    "sage_without_evidence",
+    "sage_without_style",
+    "template_realization",
+    "full_map_isolated",
+    "full_sage"
+  ],
+  "primary_endpoints": [
+    "state_fidelity_error",
+    "participant_representation_item_sf10",
+    "participant_replacement_acceptability"
+  ],
+  "exclusion_rules_version": "TO_FREEZE",
+  "analysis_plan_version": "TO_FREEZE",
+  "frozen_at": null
+}

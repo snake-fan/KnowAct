@@ -72,8 +72,14 @@ Authoritative Source
 │   ├── fixtures/
 │   └── runtime/
 ├── experiments/
-│   ├── runs/
-│   └── reports/
+│   ├── 01_kg_scientific_validity/
+│   ├── 02_simulator_human_validity/
+│   └── 03_agent_reconstruction/
+│       ├── design/
+│       ├── materials/
+│       ├── results/
+│       │   └── runs/
+│       └── runtime/
 └── test/
 ```
 
@@ -81,7 +87,9 @@ Authoritative Source
 
 - `backend/knowact/` 是 benchmark 的 Python package 主体。
 - `benchmark/` 存放 benchmark artifacts，包括 development fixtures、candidate review data、reviewed graph/map data 和 runtime episode manifests。`benchmark/runtime/episodes/` 是跨 domain 的 `Runtime Episode Registry`。`benchmark/domains/` 可以继续被默认 ignore；只有明确要发布或保留的 reviewed artifacts 才应有意加入版本库。
-- `experiments/` 存放 episode run outputs、agent outputs、scoring reports 和分析结果。是否全部提交到版本库后续再定；默认应避免提交大体积或敏感实验输出。
+- `experiments/` 按三个研究实验分别存放设计、执行材料和结果。Experiment
+  03 的 `results/runs/` 保存 Episode Run outputs，`runtime/` 保存队列控制
+  状态；默认不提交大体积、敏感或可重新识别参与者的输出。
 - `Reference/` 中的 PDF 或源材料可以作为本地工作资料，但正式 benchmark data 应通过 `Source Locator` 和 source metadata 保持可审计，不依赖把大型原始 PDF 强绑定进 runtime。
 
 ## Backend Architecture
@@ -178,14 +186,14 @@ core
 - `logging.py`: authoring run log schemas and helpers for structured, redacted `Graph Authoring Run Log` records, including links to external agent-step raw model outputs and parser outputs for local debugging.
 - `output.py`: candidate graph file export, especially `candidate_nodes.json` and `candidate_edges.json`, plus sidecar `workflow_log.json` export.
 - `storage/source_material_catalog.py`: filesystem-managed Markdown catalog. It resolves stable source identities and verifies the recorded size and SHA-256 hash before an authoring run; source texts are placed under `storage/source_materials/` by the benchmark author rather than uploaded through the frontend.
-- `authoring/source_configuration.py`: validates the complete fixed-source metadata contract for `Economy`, `ISLP`, and `OSTEP`, including `benchmark_domain == source_id`, the aspect scope, at least 50 reference-grounded representative questions, domain-specific exclusions, and node budgets.
+- `authoring/source_configuration.py`: validates the complete fixed-source metadata contract for `Economy`, `ISLP`, and `OSTEP`, including `benchmark_domain == source_id`, a user-facing domain summary, the aspect scope, at least 50 reference-grounded representative questions, domain-specific exclusions, and node budgets.
 - `segments.py`: deterministic local Markdown to `Parsed Source Segments` derivation, including shallow heading-path parsing, adjacent-section packing into bounded context windows, paragraph-level splitting for oversized sections, `char_count`, and source locator preservation. Segmentation stays outside the `llm/` completion boundary.
 - `openai_workflow.py`: shared graph authoring workflow wiring behind the `ModelClient` interface, with provider selection for OpenAI and DeepSeek clients.
 - `map_authoring.py` and `map_authoring_output.py`: initial Candidate Knowledge Map generation workflow, deterministic assembly, blocking validation, and debug artifact export. Reviewed-map promotion support lives with the shared `review_promotion.py` promotion orchestration and reviewed-map storage helpers. The initial map-authoring contract is intentionally single-map: one generation run receives `benchmark_domain`, one reviewed `graph_version`, one confirmed `user_id`, optional `run_id`, and `client_provider`. `map_id` is assigned only during reviewed-map promotion. The normal orchestration starts from a benchmark-author supplied rough user description, generates a reviewable `Profile Context`, and applies separate `Profile Context Validation` and explicit benchmark-author `Profile Context Confirmation` gates before invoking candidate-map generation. Candidate-map generation remains an independently callable authoring capability for focused debugging. Cohort generation remains an outer orchestration concern that can repeat the single-map contract.
 - Candidate Knowledge Map generation now supports reviewed-graph scale through contiguous evidence-authoring batches in stable reviewed-node order. It exposes identity-based generation, artifact inspection, and explicit promotion, defaults to `evidence_batch_size = 5` with a positive request-level override, applies one request-level `sampling_temperature` to the outline step and every evidence batch, and writes generation-time edge-consistency warnings. Candidate-map run ids do not overwrite existing run directories; retry creates a new run id.
 - `Profile Context` is a structured JSON artifact with `user_id`, `benchmark_domain`, readable `summary`, `background`, `prior_experience`, `goals`, and `preferences`. It carries coherence inputs for map authoring and later simulation, not node-level mastery values.
 - Initial profile-context validation is deterministic structural validation: nonblank summary, at least one nonblank background item, present optionally empty prior-experience list, at least one nonblank goal, present optionally empty preferences list, benchmark-domain equality with the artifact path, and forbidden extra fields. It does not call an LLM validator or use brittle text blacklists.
-- Profile-context authoring receives the rough user description, benchmark-domain identity, and optional domain summary only. It does not receive graph nodes, node rubrics, or edges. Candidate-map generation is the first map-authoring step that receives the confirmed `Profile Context` together with the complete reviewed `Authored Knowledge Graph`.
+- Profile-context authoring receives the rough user description, benchmark-domain identity, and the domain summary resolved by the backend from versioned source/domain metadata. The workbench displays this summary read-only before the author writes the rough description; clients cannot override it. Profile-context authoring does not receive graph nodes, node rubrics, or edges. Candidate-map generation is the first map-authoring step that receives the confirmed `Profile Context` together with the complete reviewed `Authored Knowledge Graph`.
 - Candidate-map generation identifies its graph input by `benchmark_domain` and `graph_version`, then loads the reviewed snapshot from `benchmark/domains/{benchmark_domain}/graphs/{graph_version}/`. Standalone debugging uses the same reviewed-graph lookup path and must not accept uploaded or inline node and edge JSON payloads.
 - Candidate-map generation identifies profile input by `user_id`, then loads a saved and confirmed `Profile Context` artifact. Standalone debugging uses the same lookup and confirmation boundary and must not accept inline profile-context JSON payloads.
 - `Profile Context Confirmation` publishes an immutable snapshot under `benchmark/domains/{benchmark_domain}/users/{user_id}/profile_context.json`. Any later edit must publish a new domain-unique `user_id`; map generation and episodes keep referring to their original snapshot.
@@ -263,6 +271,17 @@ core
 - rubric authoring 的 LLM output 只包含 node-level rubric patch；`id`、`name`、`type`、`definition` 和 `source_locators` 由 workflow 按 source-grounded skeleton `id` 确定性合并，避免让模型重复拷贝 source-grounded 字段。
 - Large node-rubric authoring can be batched inside the concrete step implementation. The workflow still records one `node_rubric_authoring` entry, while the step trace may contain per-batch raw/parser artifacts.
 
+Current three-domain expert-review execution lives under
+`experiments/01_kg_scientific_validity/`. It generates one frozen offline HTML
+review package for each of the `Economy`, `ISLP`, and `OSTEP` candidate graphs.
+Each independent reviewer exports a `knowact.kg_review_submission.v1` JSON
+bound to the candidate node, edge, source-metadata, and source-content hashes.
+The separate comparison page accepts two complete submissions with the same
+graph fingerprint, computes agreement, records triggered adjudications, and
+exports `knowact.kg_review_confirmation.v1` JSON. These JSON files are
+experiment audit records: they do not turn a candidate into reviewed benchmark
+data or bypass structural validation and explicit non-overwriting promotion.
+
 ### `llm/`
 
 职责：隔离模型调用，避免 authoring、simulator、agents 各自散落 SDK 调用。
@@ -283,7 +302,7 @@ core
 - hidden map、hidden evidence、visible transcript 的边界在调用前显式构造。
 - Phase 2 初始实现使用 OpenAI Python SDK-compatible adapters，通过 `.env.example` 中记录的环境变量配置 OpenAI 或 DeepSeek API key、model、base URL 和 timeout；`POST /api/authoring/graph-candidates`、`POST /api/simulator/turn` 和 `POST /api/tested-agents/simple-llm/turn-test` 通过 `client_provider` 在请求级选择 provider，默认 `openai`。
 - v1 graph authoring 只读取 benchmark author 手工放入 `storage/source_materials/{source_id}/` 的 UTF-8 Markdown。三本书的格式转换在项目外完成；KnowAct 不实现上传、文档转换或临时对象存储链路。
-- `Economy`、`ISLP`、`OSTEP` 各自的 `metadata.json` 固定保存 aspect name/description、至少 50 道有公开参考来源的 original representative questions、领域排除项、target node count 和 maximum node count，并要求 `benchmark_domain == source_id`。每次 run 不再重复传这些配置。默认研究设计以约 20 个节点为目标、24 个为上限；目标不是配额，不允许用弱节点凑数。
+- `Economy`、`ISLP`、`OSTEP` 各自的 `metadata.json` 固定保存 user-facing `domain_summary`、aspect name/description、至少 50 道有公开参考来源的 original representative questions、领域排除项、target node count 和 maximum node count，并要求 `benchmark_domain == source_id`。每次 run 不再重复传这些配置。默认研究设计以约 20 个节点为目标、24 个为上限；目标不是配额，不允许用弱节点凑数。
 - Node extraction 必须返回可在 source segment 中机械核对的短 `evidence_excerpt`。Reconciliation 在全局预算下选择代表性节点，独立 verifier 再检查 source support、scope fit 与 diagnostic value，之后才进入 rubric 和 edge authoring。
 - 测试和 development fixture 默认使用 fake 或 deterministic model clients，不应在普通 validation checks 中调用真实 OpenAI API。
 
@@ -337,8 +356,10 @@ Decision reference: `docs/adr/0051-v1-tested-agents-use-working-map-semantic-too
 - `agents/simple_llm.py`: `Simple LLM Agent`。
 - `templates/`: prompt/message builders for tested-agent implementations.
 - `providers.py`: tested-agent LLM provider vocabulary.
-- `llm_agent.py`: provider-backed simple LLM tested-agent wiring.
-- `working_map.py`: agent-owned full-graph working map schemas and update helpers for assessed mastery, diagnostic confidence, and assessment notes.
+- `llm_agent.py`: provider-backed simple LLM and experimental evidence-calibrated tested-agent wiring.
+- `belief.py`: optional checkpoint-safe L0-L5 marginal belief and deterministic Bayesian-style evidence update for experimental agents.
+- `question_selection.py`: typed diagnostic candidates and inspectable deterministic acquisition utility.
+- `working_map.py`: agent-owned full-graph working map schemas and update helpers for assessed mastery, diagnostic confidence, assessment notes, and optional experimental mastery belief.
 - `tools.py`: semantic tested-agent tool boundary for reading visible context, updating the working map, asking diagnostic questions, and finalizing reconstruction.
 - `question_bank.py`: fixed baseline 的问题来源。
 - `reconstruction.py`: final reconstructed map assembly helpers。
@@ -348,8 +369,9 @@ Decision reference: `docs/adr/0051-v1-tested-agents-use-working-map-semantic-too
 - tested agents 只能看到 authored graph、episode rules、visible transcript 和 visible observations。
 - tested agents start each episode with an `Agent Working Knowledge Map` shell covering every node in the episode graph; node and edge identities come from the visible authored graph and are not agent-created.
 - The initial working-map state per node contains `node_id`, `assessed_mastery_level`, `diagnostic_confidence`, `assessment_note`, and `supporting_turn_ids` only. Defer structured misconception and unknown reconstruction until after the mastery-focused active diagnosis loop works.
+- Experimental agents may later attach an optional `mastery_belief` over L0-L5 to a node assessment. The field is agent-owned, checkpointed, and ignored by shared finalization except through the agent-selected categorical projection; it must not be initialized from hidden truth.
 - tested-agent map mutation uses semantic operations such as `read_working_map`, `update_node_assessments`, and `finalize_reconstructed_map`; do not expose generic JSON patch or CRUD tools over graph/map artifacts.
-- `update_node_assessments` accepts a batch of node-level assessment updates. Each item changes only one node's assessed mastery, diagnostic confidence, assessment note, and `supporting_turn_ids`; it must not add, delete, or mutate authored nodes or edges.
+- `update_node_assessments` accepts a batch of node-level assessment updates. Each item changes only one node's assessed mastery, diagnostic confidence, assessment note, `supporting_turn_ids`, and optional agent-owned `mastery_belief`; it must not add, delete, or mutate authored nodes or edges.
 - Non-unknown assessment updates require a nonblank assessment note and at least one visible `supporting_turn_id`. Unknown assessments may leave both fields empty.
 - `update_node_assessments` is atomic: if any item is invalid, the whole batch is rejected and the working map remains unchanged.
 - A rejected working-map tool call does not consume an interaction turn. The tested agent may inspect the validation error, reorganize its update batch, and call the tool again within the same agent decision phase.
@@ -368,7 +390,8 @@ Decision reference: `docs/adr/0051-v1-tested-agents-use-working-map-semantic-too
 - If forced finalization fails or times out, the runner may mechanically export the current working map into a fallback full-graph final reconstruction submission. Mark the run output with `forced_finalization_fallback = true`.
 - Fixed, random, and simple LLM baselines all use the same working-map and finalization tool path; fixed-question exists as a deterministic floor for regression and smoke testing.
 - Simple LLM agents may update multiple node assessments after a turn, including indirectly inferred nodes, but they must still use the semantic working-map tools rather than producing final reconstructed-map JSON directly from the transcript.
-- Simple LLM question selection is full-graph and budget-aware: it should maximize expected information gain rather than scan nodes in authored order. One coherent Integrated Diagnostic Question may target a primary node and multiple graph-related secondary nodes. The private `diagnostic_plan` records those targets, the mastery boundary, and the selection reason in the tested-agent decision trace; it is not sent to the simulator as hidden state.
+- The experimental `evidence_calibrated_agent` uses the same runtime and visibility boundary. An LLM proposes answer likelihoods and competing questions; deterministic code updates the persisted belief, projects mastery/confidence, and selects the highest-utility valid question. This is a research candidate, not an accepted replacement for the v1 baselines.
+- Simple LLM question selection is full-graph and budget-aware: it should maximize expected information gain rather than scan nodes in authored order. One coherent Integrated Diagnostic Question may target a primary node and multiple graph-related secondary nodes. The private `diagnostic_plan` records those targets, the mastery boundary, and the selection reason in the tested-agent decision trace; experimental selectors may also attach a typed `utility_trace`. Neither is sent to the simulator as hidden state.
 - Assessment calibration uses each node's authored mastery rubric. Observable task correctness, reasoning, transfer, and self-correction determine assessed mastery, while verbal hesitation primarily affects diagnostic confidence. A single visible answer may support multiple node updates when the answer genuinely demonstrates those concepts; graph edges remain soft inference structure and never copy mastery automatically.
 - v1 baseline set 不包含 oracle、passive summarization、teaching agent 或复杂 ToM agent。
 
@@ -547,7 +570,7 @@ The old synchronous `POST /api/runtime/episodes/{episode_id}/runs` route is reti
 
 Phase 7 的 development/test surface 允许 `POST /api/tested-agents/simple-llm/turn-test` 直接调用 `Simple LLM Agent` 做人工调试。该 route stateless 地加载 reviewed graph，接收 tested-agent-visible `VisibleDialogueContext` 和可选 `AgentWorkingKnowledgeMap`，必要时初始化 working map，应用本轮 working-map updates，然后返回下一步 tested-agent decision。它不读取 hidden map、不调用 simulator、不写 transcript、不注册 runtime run，也不产生 scoring report。
 
-`POST /api/authoring/profile-context-candidates` 接收 required `benchmark_domain`、required `rough_description`、optional limited `domain_summary`、optional `run_id` 和 request-level `client_provider`。首版允许 inline `domain_summary`，但其中不得包含 node 或 rubric 明细；后续可由 domain manifest 提供稳定 summary。
+`GET /api/authoring/benchmark-domains` 返回可用 domain identities 及其由 versioned source/domain metadata 提供的 `domain_summary`。`POST /api/authoring/profile-context-candidates` 接收 required `benchmark_domain`、required `rough_description`、optional `run_id` 和 request-level `client_provider`；backend 根据 `benchmark_domain` 解析同一份 metadata summary 并传给 profile-context workflow，client 不得 inline 覆盖。
 
 ## Benchmark Data Layout
 
@@ -615,22 +638,32 @@ benchmark/
 
 ```text
 experiments/
-├── runtime/
-│   └── run_queue.json
-├── runs/
-│   └── run_2026_...
-│       ├── episode_manifest_snapshot.json
-│       ├── checkpoint.json
-│       ├── turns/
-│       │   ├── turn_001.json
-│       │   └── turn_002.json
-│       ├── transcript.json
-│       ├── working_map.json
-│       ├── agent_tool_trace.json
-│       ├── agent_output.json
-│       └── scoring_report.json
-└── reports/
-    └── v1_baseline_report.md
+├── 01_kg_scientific_validity/
+│   ├── design/
+│   ├── materials/
+│   └── results/
+├── 02_simulator_human_validity/
+│   ├── design/
+│   ├── materials/
+│   └── results/
+└── 03_agent_reconstruction/
+    ├── design/
+    ├── materials/
+    ├── runtime/
+    │   └── run_queue.json
+    └── results/
+        └── runs/
+            └── run_2026_...
+                ├── episode_manifest_snapshot.json
+                ├── checkpoint.json
+                ├── turns/
+                │   ├── turn_001.json
+                │   └── turn_002.json
+                ├── transcript.json
+                ├── working_map.json
+                ├── agent_tool_trace.json
+                ├── agent_output.json
+                └── scoring_report.json
 ```
 
 Artifact policy:
@@ -640,9 +673,9 @@ Artifact policy:
 - `graphs/{version}/` 和 `maps/` 是 reviewed benchmark data；只有明确要发布或保留时才应加入版本库。
 - `runtime/episodes/` 是 `Runtime Episode Registry`；它可以收集跨 benchmark domain 的 runnable episodes，但每个 manifest 仍只绑定一个 benchmark domain、一个 reviewed graph version 和一个 hidden reviewed map。
 - Phase 3 graph promotion 将重新校验后的 candidate snapshot 复制到 `graphs/{version}/`，保留原 candidate run，并生成只绑定 metadata 与 node/edge 文件引用的 `graph_manifest.json`。Reviewed graph version 不允许覆盖；修订必须发布新的 version。
-- `experiments/runtime/run_queue.json` 是 generated runtime control state，原子保存 global concurrency、stable FIFO order、episode execution status、current/prior run references、cooperative-cancel request 和 safe failure summary。它不是 benchmark authored data，也不建模为 batch history。
-- `experiments/runs/` 是 generated output，应避免混入人工 authored ground truth。
-- Episode Run 在任何 model/provider call 前创建 `experiments/runs/{run_id}/`，保存 manifest snapshot、初始 `working_map.json` 和 initial `checkpoint.json`。一个 runtime turn 包含 diagnostic question、simulator answer 和随后基于该回答执行的 working-map update；只有这三部分全部完成才 commit 该 turn，原子写入 `turns/{turn_id}.json`、顶层 `working_map.json` 与新 checkpoint。不默认复制完整 per-turn map snapshot。
+- `experiments/03_agent_reconstruction/runtime/run_queue.json` 是 generated runtime control state，原子保存 global concurrency、stable FIFO order、episode execution status、current/prior run references、cooperative-cancel request 和 safe failure summary。它不是 benchmark authored data，也不建模为 batch history。
+- `experiments/03_agent_reconstruction/results/runs/` 是 generated output，应避免混入人工 authored ground truth。
+- Episode Run 在任何 model/provider call 前创建 `experiments/03_agent_reconstruction/results/runs/{run_id}/`，保存 manifest snapshot、初始 `working_map.json` 和 initial `checkpoint.json`。一个 runtime turn 包含 diagnostic question、simulator answer 和随后基于该回答执行的 working-map update；只有这三部分全部完成才 commit 该 turn，原子写入 `turns/{turn_id}.json`、顶层 `working_map.json` 与新 checkpoint。不默认复制完整 per-turn map snapshot。
 - `checkpoint.json` 是 resume-only transient state；它保存 visible context、working map、runner phase、remaining turn budget、trace progress 和 immutable execution configuration。中断在 turn 中间时丢弃未 commit turn，从上一个 checkpoint 重放，因此 provider call 是 at-least-once，不保证 exactly-once。
 - Latest valid `checkpoint.json` 是 resumable progress 的 authoritative commit marker。Crash 若留下超前于 checkpoint 的 turn、working-map 或 trace 内容，这些内容属于 uncommitted progress，resume 时必须忽略或确定性覆盖。
 - `failed` 和 `cancelled` 保留 checkpoint 以便同一 run id 续跑。`completed` 先写完 transcript、tool trace、agent output 和 scoring report，再删除 `checkpoint.json` 与该 run 的 resume-only scheduling state；formal audit artifacts 继续保留。
@@ -736,8 +769,10 @@ make check
 2. 是否接受 `benchmark/` 作为 reviewed benchmark data 和 development fixtures 的根目录？
    - 推荐：接受。它比 `data/` 更明确表达这些文件是 benchmark artifacts，不是普通应用数据。
 
-3. 是否接受 `experiments/` 作为 run output 和 report 的根目录？
-   - 推荐：接受，但默认不要提交大体积 run outputs；只提交精选 reports 或小型 fixture outputs。
+3. 是否接受 `experiments/` 作为三个研究实验的设计、材料和结果根目录？
+   - 推荐：接受。Experiment 03 的 generated runs 单独进入
+     `results/runs/`，队列状态进入 `runtime/`；默认只提交协议、空白材料、
+     去标识化 aggregate reports 或小型 fixture outputs。
 
 4. authoring workflow 是否应该通过 API 暴露？
    - 推荐：暴露一条窄的 source-backed candidate graph run API，用于真实运行和人工检查生成质量；请求只包含固定 `source_id` 与会随 run 改变的 `run_id`、`client_provider`，后端从该 source 的 versioned metadata 加载 Graph Authoring Scope，再派生 Parsed Source Segments。LLM steps 只消费 bounded segment text 或 structured intermediate artifacts，并将 scope、evidence、verification decisions 和 traces 写入 candidate run。它只能写 candidate artifacts，不能自动 promote reviewed graph data。

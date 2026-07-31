@@ -3,27 +3,122 @@
 
 \subsection{From Mental-State Inference to Functional Use}
 
-Machine-ToM benchmarks have made latent-state inference increasingly controlled and difficult. ToMi exposes shortcuts in false-belief question answering \citep{le2019revisiting}; BigToM uses causal templates \citep{gandhi2023bigtom}; and FANToM tests consistency across questions that depend on the same information asymmetry \citep{kim2023fantom}. Hi-ToM, OpenToM, and ToMBench broaden reasoning order, narrative variation, and the taxonomy of social-cognitive abilities \citep{wu2023hitom,xu2024opentom,chen2024tombench}.
+Machine-ToM benchmarks have made latent-state inference increasingly controlled and difficult.
 
-These advances strengthen the validity of inference from \emph{supplied} evidence. They do not make evidence acquisition part of the tested policy. SimpleToM identifies a related boundary: explicitly inferring a mental state does not guarantee that a model will use it when predicting or judging behavior \citep{gu2024simpletom}. \knowact takes this boundary as a design requirement. A user model must affect the next diagnostic action, and the result of that process must remain directly scoreable.
+ToMi exposes false-belief shortcuts \citep{le2019revisiting}; BigToM uses causal templates
+\citep{gandhi2023bigtom}; and FANToM tests consistency under shared information asymmetry
+\citep{kim2023fantom}.
 
-Interactive social benchmarks test behavior in richer loops. SOTOPIA and AgentSense evaluate social goals, strategic communication, and private-information reasoning in multi-turn scenarios \citep{zhou2024sotopia,mou2025agentsense}. Applied-ToM agents explicitly insert mental-state hypotheses into social, persuasive, or software-engineering policies \citep{hwang2026infusing,wang2026tomelp,zhou2026tomswe}.
+Hi-ToM, OpenToM, and ToMBench broaden reasoning order, narratives, and social-cognitive abilities
+\citep{wu2023hitom,xu2024opentom,chen2024tombench}.
 
-Their question is whether user modeling improves an external outcome. Ours is whether the user model itself is acquired accurately and adaptively. These are complementary claims: downstream success establishes usefulness, whereas direct reconstruction establishes what was learned about the user. Broader agent evaluation likewise shows that single-turn ability and final success can obscure multi-turn and trajectory-level differences \citep{wang2024mint,ma2024agentboard}.
+These advances strengthen inference from \emph{supplied} evidence. They do not make evidence acquisition
+part of the tested policy.
+
+SimpleToM shows that explicit mental-state inference need not affect later behavior
+\citep{gu2024simpletom}. \knowact turns this boundary into a design requirement.
+
+A user model must affect the next diagnostic action, and its reconstruction must remain directly
+scoreable.
+
+Interactive social benchmarks test behavior in richer loops.
+
+SOTOPIA and AgentSense evaluate social goals, strategic communication, and private-information reasoning
+\citep{zhou2024sotopia,mou2025agentsense}.
+
+Applied-ToM agents insert mental-state hypotheses into social, persuasive, or software-engineering
+policies \citep{hwang2026infusing,wang2026tomelp,zhou2026tomswe}.
+
+Their question is whether user modeling improves an external outcome. Ours is whether the user model is
+acquired accurately and adaptively.
+
+These claims are complementary: downstream success establishes usefulness, while reconstruction
+establishes what was learned.
+
+Agent evaluation also shows that final success can obscure multi-turn trajectory differences
+\citep{wang2024mint,ma2024agentboard}.
 
 \subsection{Passive User Modeling and Active Diagnosis}
 
-Personalization benchmarks infer preferences and traits from user histories. LaMP evaluates whether profile information improves personalized outputs \citep{salemi2024lamp}; PERSONAMEM asks whether models track profiles that evolve across long interaction histories \citep{jiang2025personamem}. In both cases, the history is evidence to be interpreted. The tested model does not decide which observation would most reduce uncertainty about the user.
+Personalization benchmarks infer preferences and traits from user histories.
 
-Knowledge tracing provides the closest formal analogue. Bayesian and neural tracing methods estimate latent mastery from sequences of item responses \citep{corbett1994knowledgetracing,piech2015dkt,ghosh2020akt}. LongTutor further separates historical evidence acquisition, knowledge diagnosis, and adaptive teaching, revealing that strength at one stage need not transfer to the next \citep{li2026longtutor}.
+LaMP tests profile-conditioned outputs \citep{salemi2024lamp}; PERSONAMEM tests evolving profiles over
+long histories \citep{jiang2025personamem}.
 
-\knowact changes who controls the evidence. The tested agent asks open-ended questions and is scored on the full latent state after a bounded number of observations. The benchmark is therefore an active diagnosis problem rather than next-response prediction over a fixed curriculum.
+In both cases, the history is supplied evidence. The tested model does not choose the observation that
+would most reduce user uncertainty.
+
+Knowledge tracing provides the closest formal analogue. Bayesian and neural methods estimate latent
+mastery from item-response sequences \citep{corbett1994knowledgetracing,piech2015dkt,ghosh2020akt}.
+
+Standardized re-evaluation shows that preprocessing and question--skill protocols can create leakage or
+inflate small gains \citep{liu2022pykt}.
+
+LongTutor separates historical evidence, diagnosis, and adaptive teaching, showing that strength at one
+stage need not transfer to the next \citep{li2026longtutor}.
+
+\knowact changes who controls the evidence. The tested agent asks open-ended questions and is scored on
+the full latent state after bounded observations.
+
+The benchmark is therefore active diagnosis, not next-response prediction over a fixed curriculum.
+
+\subsection{Planning and Information Acquisition}
+
+Computerized adaptive testing treats observations as costly and selects items that improve an estimate.
+
+BOBCAT learns selection from historical responses, while FACD targets inaccurate early diagnosis
+\citep{ghosh2021bobcat,liu2025facd}.
+
+Their fixed items and binary responses support clean objectives but do not resolve open-ended diagnostic
+language.
+
+Language-agent work makes user-state acquisition and memory more explicit.
+
+RAISE selects user attributes under cost and can abstain \citep{wu2025raise}. RLPA separates profile and
+response rewards \citep{zhao2025rlpa}.
+
+ParLD and ScaffoldLM maintain turn-level assessments or tutoring memory
+\citep{yao2026parld,li2026scaffoldlm}.
+
+They motivate explicit state and selective acquisition, but target item abilities, profile slots, or
+local tutoring steps rather than a scored full map.
+
+The missing combination is explicit full-map reconstruction, agent-controlled open evidence,
+non-deterministic graph inference, and process attribution under matched budgets.
 
 \subsection{LLM-Based User Simulation}
 
-User simulation trades experimental control for behavioral fidelity. Agenda-based simulators are reproducible but narrow; LLM simulators are expressive but can invent goals, leak hidden state, or impose model-specific artifacts. DuetSim separates generation and verification to improve response quality \citep{luo2024duetsim}. SimulatorArena instead evaluates the proxy assumption directly, comparing simulated behavior and assistant rankings with human interaction \citep{dou2025simulatorarena}. Earlier simulator research makes the same conceptual point: fluency is not fidelity to task-relevant behavior \citep{shi2019usersimulators}.
+User simulation trades experimental control for behavioral fidelity.
 
-\knowact does not treat an LLM simulator as ground truth about human conversation. It uses simulation to hold a reviewed latent state fixed while agents choose evidence. Structural access controls limit what can be expressed, deterministic scoring prevents the simulator from judging success, and matched human episodes test whether conclusions transfer beyond the proxy. Simulator validation is therefore part of the benchmark claim, not an optional naturalness check.
+Agenda-based simulators are reproducible but narrow. LLM simulators are expressive, yet may invent
+goals, erase user limitations, or impose model-specific artifacts.
+
+Direct simulator quality and downstream utility are distinct evaluation targets
+\citep{shi2019usersimulators}.
+
+Task decompositions expose preference and behavior deviations hidden by holistic judgments
+\citep{yoon2024generativeusers}. DuetSim likewise separates generation and verification
+\citep{luo2024duetsim}.
+
+Knowledge simulation adds a specific failure: helpful models may make low-ability students too capable
+\citep{wu2025imperfection}.
+
+Prompted student simulators can remain weak on cognitive fidelity even when their language is plausible
+\citep{scarlatos2026simulated}.
+
+Ability alignment against real response data can improve a narrower item-difficulty proxy, but does not
+establish free-text dialogue fidelity \citep{scarlatos2025smart}.
+
+Persona prompts are not a substitute for epistemic state. Their measured effects can be limited, and
+group steering can retain substantial human misalignment
+\citep{hu2024personaeffect,santurkar2023opinions}.
+
+\knowact therefore uses \sagesim: ground the public question, retrieve only licensed hidden state,
+create a de-identified epistemic blueprint, then realize its surface form.
+
+This staged contract is a design motivation, not fidelity evidence. Held-out human answers test state
+expression; matched human episodes test whether comparative agent conclusions transfer
+\citep{dou2025simulatorarena}.
 
 \begin{table}[t]
 \caption{Positioning of \knowact relative to adjacent evaluation paradigms. ``Active probes'' means the tested model chooses what evidence to request.}

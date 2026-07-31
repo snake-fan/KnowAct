@@ -29,7 +29,30 @@ class V1AuthoringApiTest(unittest.TestCase):
 
             self.assertEqual(200, response.status_code)
             self.assertEqual(
-                {"benchmark_domains": ["research_methods", "statistical_learning"]},
+                {
+                    "benchmark_domains": ["research_methods", "statistical_learning"],
+                    "domain_summaries": {},
+                },
+                response.json(),
+            )
+
+    def test_authoring_api_lists_domain_summary_from_versioned_source_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            (workspace_root / "benchmark/domains/ISLP").mkdir(parents=True)
+            _configure_source(workspace_root)
+            client = _test_client(workspace_root)
+
+            response = client.get("/api/authoring/benchmark-domains")
+
+            self.assertEqual(200, response.status_code)
+            self.assertEqual(
+                {
+                    "benchmark_domains": ["ISLP"],
+                    "domain_summaries": {
+                        "ISLP": "Statistical learning and linear regression foundations."
+                    },
+                },
                 response.json(),
             )
 
@@ -381,8 +404,9 @@ def _configure_source(
     }
     metadata = {
         **record,
-        "metadata_version": "1.0",
+        "metadata_version": "1.1",
         "benchmark_domain": "ISLP",
+        "domain_summary": "Statistical learning and linear regression foundations.",
         "question_bank_method": "reference_grounded_original_questions",
         "question_bank_sources": [
             {

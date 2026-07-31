@@ -1,0 +1,309 @@
+\section{Knowledge-Map Reconstruction Agent}
+\label{sec:reconstruction-agent}
+
+The benchmark makes active user modeling measurable, but it does not by itself determine how an agent
+should reconstruct the hidden map.
+
+The central method question is how to turn sparse, open-ended answers into an explicit state estimate
+and how to choose the next question from that estimate.
+
+We propose \emph{MapProbe}, an evidence--belief--probe control loop that separates these decisions into
+inspectable objects.
+
+MapProbe is the full research design. The experimental Evidence-Calibrated Diagnostic Agent (ECDA)
+implements a narrower slice at the time of writing.
+
+The implemented system already enforces the visibility boundary, initializes a full-graph working-map
+shell, validates node updates, records visible support, and provides a simple prompt-based LLM agent.
+
+ECDA additionally persists independent per-node mastery marginals, applies deterministic Bayesian-style
+updates to model-proposed likelihoods, and selects deterministically among multiple model-proposed
+question candidates.
+
+The full direct/indirect evidence ledger, typed graph messages, target-before-language verifier, and
+calibrated stopping rule described below are not yet implemented. No MapProbe or ECDA mechanism has
+been comparatively or empirically validated.
+
+We specify them now so that missing results leave a falsifiable method contract rather than being
+replaced by benchmark-description prose.
+
+\subsection{External Protocol and Current Baseline}
+\label{sec:agent}
+
+The agent protocol constrains what must be observable, not how a policy must reason internally.
+
+Every tested agent maintains an assessment for each node,
+
+\begin{equation}
+    \hat{s}_{i,t} = (\hat{m}_{i,t}, c_{i,t}, n_{i,t}, R_{i,t}),
+\end{equation}
+where $\hat{m}_{i,t} \in \{\unknown,0,\ldots,5\}$ is assessed mastery, $c_{i,t}$ is confidence,
+$n_{i,t}$ is an optional note, and $R_{i,t}$ contains supporting visible turns.
+
+All nodes begin as \unknown. The schema is not claimed to be cognitively privileged; it makes the
+update trajectory inspectable and keeps unsupported estimates scoreable.
+
+The runtime exposes only benchmark-relevant operations: read the public graph or current working map,
+update node assessments with visible support, ask one diagnostic question, and finalize the full map.
+
+These operations expose two links: answers should change the working map, and that map should influence
+later probes.
+
+The runtime enforces turn order and visibility but performs no diagnosis for the tested agent.
+
+The implemented simple LLM baseline uses this interface through two structured prompts.
+
+One interprets the latest answer and emits hard node updates. The other emits a primary target, optional
+connected targets, a mastery boundary, a selection reason, and one question.
+
+It provides a strong schema-aware prompting control, but it has no explicit probabilistic uncertainty,
+observation likelihood, formal graph propagation, or target-utility calculation.
+
+ECDA adds an experimental observation-likelihood and node-marginal update path. It also validates at
+least three complete question candidates and selects one with a deterministic utility over
+model-estimated information gain, coverage, graph leverage, redundancy, complexity, and outcome-model
+confidence. This is candidate-level selection after language generation, not the full MapProbe
+target-first planner and verifier.
+
+MapProbe is evaluated as a mechanism change relative to this baseline, not merely as a larger prompt.
+
+\subsection{Design Objective and State}
+
+At turn $t$, MapProbe maintains a belief object for every public node $v$:
+
+\begin{equation}
+    B_t(v) = \langle p_t(\ell\mid v), D_t(v), I_t(v), C_t(v) \rangle,
+\end{equation}
+where $p_t(\ell\mid v)$ is a distribution over mastery levels $\ell\in\{0,\ldots,5\}$,
+$D_t(v)$ and $I_t(v)$ are direct and graph-inferred evidence ledgers, and $C_t(v)$ records
+contradictions, ambiguity, and missing coverage.
+
+This extends the benchmark's externally visible hard assessment without changing the required
+submission schema. A submitted level is a projection of the belief state, not the entire state itself.
+
+Sequential state maintenance is motivated by knowledge tracing, but the prediction target is different.
+
+Knowledge-tracing models update a latent state to predict future item responses
+\citep{piech2015dkt,liu2022pykt}; \knowact directly scores the reconstructed state over every graph
+node.
+
+Dynamic profiling similarly supports explicit profile updates, while showing why reconstruction
+quality should be separated from a downstream response \citep{zhao2025rlpa}.
+
+MapProbe therefore retains the belief and its evidence even when a later answer would be plausible
+without it.
+
+All priors are fixed before test interaction.
+
+A uniform prior is the default zero-shot condition. An empirical prior estimated from permitted
+training episodes is a separate baseline.
+
+Test profiles, simulator traces, and scorer outputs never affect initialization. A node may remain
+\unknown when evidence is insufficient, but its abstention threshold is frozen on development data.
+
+\subsection{Rubric-Grounded Evidence Update}
+
+After observing $(q_t,a_t)$, an evidence interpreter receives the visible turn, its diagnostic plan,
+and the public definitions and rubrics of the targeted nodes.
+
+It produces typed observations containing the implicated node, mastery boundary, polarity, strength,
+visible turn identifier, and direct or indirect provenance.
+
+It must distinguish demonstrated reasoning from self-reported confidence and preserve uncertainty for
+incomplete, off-target, or internally inconsistent answers.
+
+This decomposition follows the empirical separation between evidence acquisition, diagnosis, and
+action in LongTutor \citep{li2026longtutor}.
+
+Conversational diagnosis and assessment-driven tutoring also motivate persistent turn-level state
+rather than a regenerated whole-dialogue judgment \citep{yao2026parld,li2026scaffoldlm}.
+
+We do not infer from these works that multiple LLM agents are necessary. MapProbe uses a typed boundary
+because it can be checked and ablated, not because role multiplicity is itself a contribution.
+
+For a direct observation $o_t$ about node $v$, the belief update is
+
+\begin{equation}
+    p_t(\ell\mid v)
+    \propto p_{t-1}(\ell\mid v) P(o_t\mid \ell,v).
+\end{equation}
+The current ECDA slice asks the model for a six-level observation-likelihood vector and applies the
+update deterministically. The likelihoods are zero-shot estimates, not calibrated or learned
+probabilities. A frozen ordinal table remains a reproducible baseline, and a learned observation model
+becomes eligible only after adjudicated training interactions exist.
+
+New evidence does not overwrite conflicting evidence. Contradiction increases uncertainty and remains a
+candidate for follow-up.
+
+Repeated semantically equivalent observations receive a redundancy discount, so verbosity is not
+treated as independent support.
+
+A bounded verifier checks node identity, rubric compatibility, visible provenance, and whether the cited
+answer supports the claimed boundary.
+
+Its value must be tested against the same interpreter without verification and against human evidence
+annotations. Agreement between two prompts from the same model is not independent semantic validation.
+
+\subsection{Graph-Aware Soft Inference}
+
+The graph can make a probe informative beyond one node, but it can also amplify an authored error.
+
+MapProbe therefore treats edges as evidence-routing priors rather than deterministic mastery rules. For
+an edge $(u,r,v)$, it forms an attenuated relation-specific message:
+
+\begin{equation}
+    m_{u\rightarrow v}^{(r)}(\ell)
+    = \alpha_r q_r(\ell\mid B_t(u)),
+    \qquad 0\leq\alpha_r<1,
+\end{equation}
+Here, $q_r$ follows the declared semantics of relation $r$.
+
+A mastered prerequisite may increase the plausibility of downstream mastery, but it cannot copy a
+level. Negative evidence may motivate probing a prerequisite without proving downstream non-mastery.
+
+Direct and propagated evidence remain separate, and the initial method allows only one propagation hop.
+
+This restriction is substantive: multi-hop messages can create confident correlated errors when graph
+edges or node granularity are imperfect.
+
+Unlike sequential state update and adaptive item selection, typed propagation over an authored
+diagnostic graph lacks a direct complete precedent in the focused literature.
+
+It is a \knowact hypothesis that requires no-graph, untyped-graph, and deliberately perturbed-graph
+controls before supporting a graph-aware diagnosis claim.
+
+\subsection{Diagnostic Target Planning}
+
+MapProbe selects a target before generating question language. For a node or small connected target set
+$S$, the planner scores
+
+\begin{align}
+    U_t(S) ={}& \lambda_1 \widehat{\mathrm{IG}}_t(S)
+    + \lambda_2 \operatorname{Coverage}_t(S)
+    + \lambda_3 \operatorname{BoundaryRisk}_t(S) \nonumber\\
+    &+ \lambda_4 \operatorname{GraphReach}_t(S)
+    - \lambda_5 \operatorname{Redundancy}_t(S)
+    - \lambda_6 \operatorname{Cost}_t(S).
+\end{align}
+Expected information gain estimates the reduction in full-map uncertainty under plausible answers.
+
+Coverage rewards direct evidence for untouched nodes. Boundary risk prioritizes posterior mass around
+a high-loss adjacent-level decision.
+
+Graph reach is attenuated by relation type. Redundancy discounts repeated probes, and cost reflects
+remaining turns and expected answer burden.
+
+Adaptive testing establishes that question selection should be compared at matched lengths, not judged
+only by the final test score \citep{ghosh2021bobcat,liu2025facd}.
+
+Selective user-information acquisition further motivates reporting outcome, query cost, and an explicit
+insufficiency decision \citep{wu2025raise}.
+
+These results do not validate MapProbe's information-gain estimate: fixed items and user attributes are
+simpler than open diagnostic questions. Maximum-entropy and entropy-plus-coverage remain controls.
+
+The plan is written into the existing visible action schema: a primary node, optional secondary nodes,
+the mastery boundary to discriminate, and a concise selection reason.
+
+Exposing this object permits an independent check of whether later language and updates follow the
+claimed decision.
+
+\subsection{Question Realization, Stopping, and Submission}
+
+The realizer converts the selected plan into one natural diagnostic question.
+
+The question should elicit reasoning, application, transfer, comparison, or self-correction. It avoids
+revealing rubrics or expected answers and does not bundle unrelated targets.
+
+A verifier can accept, rewrite, or reject the question based on plan alignment and answerability. Its
+extra model calls and correlated-judge risk are reported, not hidden inside the method.
+
+The agent stops when the turn budget is exhausted or the best estimated marginal utility falls below a
+frozen threshold.
+
+Early stopping also requires high-priority coverage or explicit abstention. Remaining contradictions
+must not be profitably separable within the available budget.
+
+This decision is compared with fixed-turn policies at every budget. Fewer questions count as improved
+efficiency only if reconstruction quality is preserved.
+
+At finalization, MapProbe projects every node belief to $0$--$5$ or \unknown, a diagnostic-confidence
+category, a note, and visible supporting turns.
+
+The endpoint score remains deterministic. Selective-risk and calibration measures distinguish a
+cautious agent from one that improves mean error with unsupported confident predictions.
+
+\subsection{Failure Handling and Audit Trail}
+
+MapProbe treats invalid intermediate output as an experimental event rather than silently repairing it
+with hidden benchmark logic.
+
+A structurally invalid evidence record is retried within a fixed call budget. If the retry fails, the turn
+is an interpretation failure and the previous belief is preserved.
+
+A weak observation may reduce no entropy. A rejected question receives one bounded rewrite and then
+falls back to the next ranked target.
+
+Provider failure, schema failure, verifier rejection, and voluntary abstention remain distinct trace
+outcomes.
+
+Every accepted update records the pre-update belief, cited visible turn, direct observation, likelihood
+rule, post-update belief, and any outgoing graph message.
+
+Every action records candidate scores, the selected target, rejected alternatives, generated question,
+verifier decision, and remaining budget.
+
+The post-episode trace never reveals hidden map or simulator state to the tested policy. It distinguishes
+a poor observation model from a poor planner, plan, or linguistic realization.
+
+The method also places explicit limits on self-correction. A verifier may reject an unsupported record,
+but it may not invent evidence, query the hidden profile, or replace a node belief.
+
+Graph propagation can change an indirect belief component but cannot add a direct supporting turn.
+These restrictions keep the provenance claim mechanically testable.
+
+The following claim contract determines how the agent may be described after experiments:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item explicit state is beneficial only if the hard-label ablation is worse under matched calls;
+    \item graph-aware diagnosis is beneficial only if no-graph and perturbed-graph controls support it;
+    \item planning is informative only if it beats random, fixed, and maximum-entropy target policies;
+    \item verification improves quality only if its ablation and human annotations agree; and
+    \item stopping is efficient only if it reduces interaction without degrading reconstruction.
+\end{itemize}
+
+Absent the corresponding evidence, the paper will describe each item as an implemented mechanism, not
+as an explanation for performance.
+
+\subsection{Implementation and Claim Boundary}
+
+\begin{table}[t]
+\caption{Method status. ECDA implements a narrow experimental slice; unimplemented MapProbe
+components retain paper space, and no component supports a benefit claim before matched comparison.}
+\label{tab:agent-status}
+\centering
+\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}Xcc}
+\toprule
+\textbf{Component} & \textbf{Implemented} & \textbf{Empirically tested} \\
+\midrule
+Visibility boundary, full-map shell, validated hard updates & Yes & Unit/runtime checks only \\
+Simple prompt-based LLM update and target-plan baseline & Yes & No comparative study \\
+Checkpointed node-marginal belief and likelihood update & ECDA slice & No comparative study \\
+Deterministic multi-candidate question utility & ECDA slice & No comparative study \\
+Direct/indirect evidence ledger and verifier & No & No \\
+Typed, attenuated graph messages & No & No \\
+Target-before-language planner and question verifier & No & No \\
+Calibrated stopping and selective submission analysis & No & No \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Accordingly, this section contributes a concrete, testable agent design rather than evidence of improved
+performance.
+
+The next section fixes the comparisons that would justify stronger claims and the results that would
+falsify them.
+
+Future implementation detail may refine these modules, but it may not erase the explicit state,
+acquisition, graph-use, and stopping hypotheses that define the method contribution.

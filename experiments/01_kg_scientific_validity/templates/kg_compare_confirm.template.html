@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{PAGE_TITLE}}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17211b;
+      --muted: #66716b;
+      --paper: #f1eee6;
+      --panel: #fffdf8;
+      --line: #d9d4c7;
+      --accent: #176b51;
+      --accent-soft: #e4f0e9;
+      --warn: #9a5a14;
+      --warn-soft: #fff4df;
+      --danger: #9d3531;
+      --danger-soft: #fff0ef;
+      --blue-soft: #e9f0f6;
+      --shadow: 0 12px 38px rgba(38, 47, 40, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    button {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--ink);
+      cursor: pointer;
+      padding: 9px 13px;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+    button:disabled { cursor: not-allowed; opacity: 0.5; }
+    input, select, textarea {
+      background: white;
+      border: 1px solid #bbb7aa;
+      border-radius: 8px;
+      color: var(--ink);
+      padding: 9px 10px;
+      width: 100%;
+    }
+    textarea { min-height: 76px; resize: vertical; }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(23, 107, 81, 0.12);
+      outline: none;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+    .masthead {
+      background: #12251d;
+      color: white;
+      padding: 28px max(22px, calc((100vw - 1280px) / 2));
+    }
+    .eyebrow {
+      color: #9ed7c0;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      margin: 0 0 6px;
+      text-transform: uppercase;
+    }
+    h1 { font-size: clamp(25px, 4vw, 39px); line-height: 1.15; margin: 0; }
+    .subtitle { color: #c8d5cf; margin: 9px 0 0; max-width: 900px; }
+    main { margin: 0 auto; max-width: 1280px; padding: 22px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+      padding: 20px;
+    }
+    h2 { font-size: 23px; margin: 0 0 5px; }
+    h3 { font-size: 18px; margin: 0; }
+    p { margin: 5px 0; }
+    .muted { color: var(--muted); }
+    .input-grid, .metric-grid, .reviewer-grid, .resolution-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .file-drop {
+      background: #f5f2e9;
+      border: 1px dashed #aaa596;
+      border-radius: 11px;
+      min-height: 145px;
+      padding: 17px;
+    }
+    .file-drop.loaded { background: var(--accent-soft); border-color: #87b5a2; }
+    .file-input { display: none; }
+    .file-status {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 8px 0;
+      overflow-wrap: anywhere;
+    }
+    .callout {
+      background: var(--warn-soft);
+      border: 1px solid #ebcf9d;
+      border-radius: 10px;
+      color: #674316;
+      margin: 12px 0;
+      padding: 12px 14px;
+    }
+    .error {
+      background: var(--danger-soft);
+      border: 1px solid #e0aaa7;
+      border-radius: 10px;
+      color: #75211d;
+      margin: 12px 0;
+      padding: 12px 14px;
+    }
+    .success {
+      background: var(--accent-soft);
+      border: 1px solid #a7cbbb;
+      border-radius: 10px;
+      color: #154f3e;
+      margin: 12px 0;
+      padding: 12px 14px;
+    }
+    .metric {
+      background: #f5f2e9;
+      border-radius: 10px;
+      padding: 13px;
+    }
+    .metric strong { display: block; font-size: 22px; line-height: 1.2; }
+    .metric span { color: var(--muted); font-size: 12px; }
+    .binding {
+      font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+    .section-heading {
+      align-items: start;
+      display: flex;
+      justify-content: space-between;
+      margin: 28px 0 12px;
+    }
+    .badge {
+      background: var(--warn-soft);
+      border-radius: 999px;
+      color: var(--warn);
+      font-size: 12px;
+      font-weight: 800;
+      padding: 5px 9px;
+      white-space: nowrap;
+    }
+    .resolution-card { border-left: 5px solid var(--warn); }
+    .resolution-card.critical { border-left-color: var(--danger); }
+    .item-header {
+      align-items: start;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+    }
+    .identifier {
+      color: var(--muted);
+      font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+    .comparison-table {
+      border-collapse: collapse;
+      margin: 15px 0;
+      table-layout: fixed;
+      width: 100%;
+    }
+    .comparison-table th, .comparison-table td {
+      border: 1px solid var(--line);
+      padding: 8px 9px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    .comparison-table th { background: #f0ede5; font-size: 12px; }
+    .comparison-table tr.diff td { background: var(--warn-soft); }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 5px;
+    }
+    .required::after { color: var(--danger); content: " *"; }
+    .field.full { grid-column: 1 / -1; }
+    .hint { color: var(--muted); display: block; font-size: 11px; margin-top: 4px; }
+    .reviewer-box { background: var(--blue-soft); border-radius: 10px; padding: 12px; }
+    .reviewer-box p { white-space: pre-wrap; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .checkbox-line { align-items: flex-start; display: flex; gap: 9px; }
+    .checkbox-line input { margin-top: 4px; width: auto; }
+    .hidden { display: none !important; }
+    @media (max-width: 800px) {
+      main { padding: 13px; }
+      .input-grid, .metric-grid, .reviewer-grid, .resolution-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+      .comparison-table { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <script id="review-packages" type="application/json">{{REVIEW_PACKAGES_JSON}}</script>
+  <header class="masthead">
+    <p class="eyebrow">KnowAct · JSON review workflow</p>
+    <h1>KG 评审比对与确认</h1>
+    <p class="subtitle">导入同一冻结 candidate graph 的两份完整评审 JSON，计算一致性、定位需仲裁条目，并导出确认 JSON。页面不读取 CSV，也不直接执行 promotion。</p>
+  </header>
+  <main>
+    <section class="panel">
+      <h2>1. 导入独立评审 JSON</h2>
+      <p class="muted">两份输入都必须是 <code>knowact.kg_review_submission.v3</code>、状态为 <code>complete</code>，且 graph fingerprint 完全相同。</p>
+      <div class="input-grid">
+        <div class="file-drop" id="drop-r1">
+          <h3>Reviewer 1</h3>
+          <p class="file-status" id="status-r1">尚未导入</p>
+          <button data-pick="r1">选择 JSON</button>
+          <input class="file-input" id="file-r1" type="file" accept="application/json,.json">
+        </div>
+        <div class="file-drop" id="drop-r2">
+          <h3>Reviewer 2</h3>
+          <p class="file-status" id="status-r2">尚未导入</p>
+          <button data-pick="r2">选择 JSON</button>
+          <input class="file-input" id="file-r2" type="file" accept="application/json,.json">
+        </div>
+      </div>
+      <div id="import-message"></div>
+    </section>
+
+    <section id="comparison-root" class="hidden"></section>
+  </main>
+
+  <script>
+  (() => {
+    "use strict";
+
+    const packages = JSON.parse(document.getElementById("review-packages").textContent);
+    const packagesByFingerprint = Object.fromEntries(packages.map(item => [item.graph.graph_fingerprint, item]));
+    const REVIEW_SCHEMA = "knowact.kg_review_submission.v3";
+    const CONFIRMATION_SCHEMA = "knowact.kg_review_confirmation.v3";
+    const inputs = { r1: null, r2: null };
+    let rows = [];
+    let metrics = null;
+    let resolutions = {};
+    let confirmationId = "";
+    let adjudicator = {
+      adjudicator_code: "",
+      adjudication_date: "",
+      adjudication_minutes: "",
+      confirmed_review_inputs_and_resolutions: false,
+    };
+
+    const fieldSets = {
+      node: ["scope_fit", "granularity", "diagnostic_usefulness", "rubric_quality", "decision"],
+      edge: ["relation_validity", "type_correct", "replacement_type", "direction_correct", "provenance_class", "decision"],
+      coverage: ["task_coverage"],
+      overall: ["decision"],
+    };
+    const allowedValues = {
+      scope_fit: ["in_scope", "boundary", "out_of_scope"],
+      granularity: ["appropriate", "too_broad", "too_narrow", "mixed"],
+      diagnostic_usefulness: ["adequate", "minor_issue", "major_issue"],
+      rubric_quality: ["adequate", "minor_issue", "major_issue"],
+      node_decision: ["accept", "edit", "reject"],
+      relation_validity: ["valid", "uncertain", "invalid"],
+      type_correct: ["yes", "no", "uncertain"],
+      replacement_type: ["", "part_of", "prerequisite_for", "supports", "contrasts_with"],
+      direction_correct: ["yes", "no", "not_applicable", "uncertain"],
+      provenance_class: ["source_explicit", "source_entailed", "expert_pedagogical_extension", "unsupported"],
+      edge_decision: ["accept", "edit", "delete"],
+      task_coverage: ["sufficient", "partial", "insufficient"],
+      overall_decision: ["approve", "approve_after_edits", "do_not_approve"],
+    };
+    const criticalValues = new Set([
+      "out_of_scope", "major_issue", "invalid",
+      "edit", "reject", "delete", "partial", "insufficient",
+      "approve_after_edits", "do_not_approve",
+    ]);
+
+    function esc(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function safeFilename(value) {
+      return String(value || "unknown").replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || "unknown";
+    }
+
+    async function sha256(text) {
+      if (!globalThis.crypto?.subtle) throw new Error("当前浏览器不支持 Web Crypto SHA-256");
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+      return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+    }
+
+    function exactIds(actual, expected, label) {
+      const actualIds = actual.map(item => item[label]);
+      if (actualIds.length !== expected.length || actualIds.some((id, index) => id !== expected[index])) {
+        throw new Error(`${label} 集合或顺序与冻结 review package 不一致`);
+      }
+    }
+
+    function canonicalJson(value) {
+      if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+      if (value && typeof value === "object") {
+        return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+      }
+      return JSON.stringify(value);
+    }
+
+    function requireNonblank(value, label) {
+      if (typeof value !== "string" || !value.trim()) throw new Error(`${label} 必须是非空字符串`);
+    }
+
+    function requireAllowed(value, allowed, label) {
+      if (!allowed.includes(value)) throw new Error(`${label} 包含不允许的值: ${String(value)}`);
+    }
+
+    function requireExactFields(value, fields, label) {
+      if (canonicalJson(Object.keys(value || {}).sort()) !== canonicalJson([...fields].sort())) {
+        throw new Error(`${label} 必须且只能包含 ${fields.join(", ")}`);
+      }
+    }
+
+    function validateCompleteContent(documentValue, packageData) {
+      if (canonicalJson(documentValue.graph) !== canonicalJson(packageData.graph)) {
+        throw new Error("graph binding 与 fingerprint 对应的冻结 package 不完全一致");
+      }
+      const reviewer = documentValue.reviewer || {};
+      const reviewerFields = ["reviewer_id", "role", "experience_band", "introduction"];
+      requireExactFields(reviewer, reviewerFields, "reviewer");
+      reviewerFields.forEach(field => requireNonblank(reviewer[field], `reviewer.${field}`));
+      if (documentValue.validation?.issue_count !== 0 || (documentValue.validation?.issues || []).length !== 0) {
+        throw new Error("complete 提交不得保留 validation issues");
+      }
+
+      documentValue.node_reviews.forEach(review => {
+        requireExactFields(review, [
+          "item_order", "node_id", "scope_fit", "granularity",
+          "diagnostic_usefulness", "rubric_quality", "decision",
+          "proposed_change", "rationale",
+        ], review.node_id || "node_review");
+        requireAllowed(review.scope_fit, allowedValues.scope_fit, `${review.node_id}.scope_fit`);
+        requireAllowed(review.granularity, allowedValues.granularity, `${review.node_id}.granularity`);
+        requireAllowed(review.diagnostic_usefulness, allowedValues.diagnostic_usefulness, `${review.node_id}.diagnostic_usefulness`);
+        requireAllowed(review.rubric_quality, allowedValues.rubric_quality, `${review.node_id}.rubric_quality`);
+        requireAllowed(review.decision, allowedValues.node_decision, `${review.node_id}.decision`);
+        if (["edit", "reject"].includes(review.decision)) requireNonblank(review.rationale, `${review.node_id}.rationale`);
+        if (review.decision === "edit") requireNonblank(review.proposed_change, `${review.node_id}.proposed_change`);
+      });
+
+      const edgeById = Object.fromEntries(packageData.edges.map(edge => [edge.id, edge]));
+      documentValue.edge_reviews.forEach(review => {
+        const edge = edgeById[review.edge_id];
+        requireExactFields(review, [
+          "item_order", "edge_id", "relation_validity", "type_correct",
+          "replacement_type", "direction_correct", "provenance_class",
+          "decision", "proposed_change", "rationale",
+        ], review.edge_id || "edge_review");
+        requireAllowed(review.relation_validity, allowedValues.relation_validity, `${review.edge_id}.relation_validity`);
+        requireAllowed(review.type_correct, allowedValues.type_correct, `${review.edge_id}.type_correct`);
+        requireAllowed(review.replacement_type, allowedValues.replacement_type, `${review.edge_id}.replacement_type`);
+        requireAllowed(review.direction_correct, allowedValues.direction_correct, `${review.edge_id}.direction_correct`);
+        requireAllowed(review.provenance_class, allowedValues.provenance_class, `${review.edge_id}.provenance_class`);
+        requireAllowed(review.decision, allowedValues.edge_decision, `${review.edge_id}.decision`);
+        if (review.type_correct === "no" && !review.replacement_type) throw new Error(`${review.edge_id}.replacement_type 必填`);
+        if (edge.type === "contrasts_with" && review.direction_correct !== "not_applicable") {
+          throw new Error(`${review.edge_id}.direction_correct 必须为 not_applicable`);
+        }
+        if (edge.type !== "contrasts_with" && review.direction_correct === "not_applicable") {
+          throw new Error(`${review.edge_id}.direction_correct 不得为 not_applicable`);
+        }
+        if (["edit", "delete"].includes(review.decision)) requireNonblank(review.rationale, `${review.edge_id}.rationale`);
+        if (review.decision === "edit") requireNonblank(review.proposed_change, `${review.edge_id}.proposed_change`);
+      });
+
+      documentValue.coverage_reviews.forEach((review, index) => {
+        requireAllowed(review.task_coverage, allowedValues.task_coverage, `${review.task_id}.task_coverage`);
+        if (review.task_text !== packageData.scope.representative_tasks[index]) {
+          throw new Error(`${review.task_id}.task_text 与冻结 package 不一致`);
+        }
+        if (review.task_coverage !== "sufficient") {
+          requireNonblank(review.missing_or_redundant_content, `${review.task_id}.missing_or_redundant_content`);
+          requireNonblank(review.rationale, `${review.task_id}.rationale`);
+        }
+      });
+
+      const overall = documentValue.overall_graph_review || {};
+      requireAllowed(overall.decision, allowedValues.overall_decision, "overall_graph_review.decision");
+      if (overall.decision !== "approve") requireNonblank(overall.rationale, "overall_graph_review.rationale");
+    }
+
+    function validateSubmission(documentValue) {
+      if (documentValue.schema_version !== REVIEW_SCHEMA) throw new Error(`schema_version 必须为 ${REVIEW_SCHEMA}`);
+      if (documentValue.status !== "complete" || documentValue.validation?.complete !== true) {
+        throw new Error("只接受已通过完整性校验的 complete 评审 JSON");
+      }
+      const fingerprint = documentValue.graph?.graph_fingerprint;
+      const packageData = packagesByFingerprint[fingerprint];
+      if (!packageData) throw new Error("输入 graph fingerprint 不属于当前三份冻结 KG review packages");
+      if (!documentValue.reviewer?.reviewer_id) throw new Error("reviewer_id 为空");
+      exactIds(documentValue.node_reviews || [], packageData.nodes.map(node => node.id), "node_id");
+      exactIds(documentValue.edge_reviews || [], packageData.edges.map(edge => edge.id), "edge_id");
+      exactIds(
+        documentValue.coverage_reviews || [],
+        packageData.scope.representative_tasks.map((_, index) => `task_${String(index + 1).padStart(3, "0")}`),
+        "task_id"
+      );
+      validateCompleteContent(documentValue, packageData);
+      return packageData;
+    }
+
+    async function loadFile(slot, file) {
+      if (!file) return;
+      try {
+        const rawText = await file.text();
+        const documentValue = JSON.parse(rawText);
+        const packageData = validateSubmission(documentValue);
+        inputs[slot] = {
+          filename: file.name,
+          rawText,
+          sha256: await sha256(rawText),
+          document: documentValue,
+          packageData,
+        };
+        document.getElementById(`drop-${slot}`).classList.add("loaded");
+        document.getElementById(`status-${slot}`).textContent =
+          `${documentValue.reviewer.reviewer_id} · ${packageData.graph.domain} · ${file.name}`;
+        showImportMessage("", "none");
+        if (inputs.r1 && inputs.r2) compareInputs();
+      } catch (error) {
+        inputs[slot] = null;
+        document.getElementById(`drop-${slot}`).classList.remove("loaded");
+        document.getElementById(`status-${slot}`).textContent = "导入失败";
+        document.getElementById("comparison-root").classList.add("hidden");
+        showImportMessage(error.message, "error");
+      }
+    }
+
+    function showImportMessage(message, kind) {
+      const element = document.getElementById("import-message");
+      element.className = kind === "error" ? "error" : kind === "success" ? "success" : "";
+      element.textContent = message;
+    }
+
+    function rowKey(type, id) {
+      return `${type}:${id}`;
+    }
+
+    function valuesDiffer(first, second, fields) {
+      return fields.filter(field => String(first?.[field] ?? "") !== String(second?.[field] ?? ""));
+    }
+
+    function makeRow(type, id, label, first, second, fields, finalOptions) {
+      const disagreementFields = valuesDiffer(first, second, fields);
+      const critical = fields.some(field => criticalValues.has(first?.[field]) || criticalValues.has(second?.[field]));
+      const requiresAdjudication = disagreementFields.length > 0 || critical;
+      const finalField = type === "coverage" ? "task_coverage" : "decision";
+      const agreedFinal = String(first?.[finalField] ?? "") === String(second?.[finalField] ?? "")
+        ? String(first?.[finalField] ?? "")
+        : "";
+      return {
+        type, id, label, first, second, fields, finalOptions,
+        disagreementFields, critical, requiresAdjudication, agreedFinal,
+      };
+    }
+
+    function buildRows(packageData, first, second) {
+      const firstNodes = Object.fromEntries(first.node_reviews.map(item => [item.node_id, item]));
+      const secondNodes = Object.fromEntries(second.node_reviews.map(item => [item.node_id, item]));
+      const firstEdges = Object.fromEntries(first.edge_reviews.map(item => [item.edge_id, item]));
+      const secondEdges = Object.fromEntries(second.edge_reviews.map(item => [item.edge_id, item]));
+      const firstCoverage = Object.fromEntries(first.coverage_reviews.map(item => [item.task_id, item]));
+      const secondCoverage = Object.fromEntries(second.coverage_reviews.map(item => [item.task_id, item]));
+
+      const result = [];
+      packageData.nodes.forEach(node => result.push(makeRow(
+        "node", node.id, node.name, firstNodes[node.id], secondNodes[node.id],
+        fieldSets.node, ["accept", "edit", "reject"]
+      )));
+      packageData.edges.forEach(edge => result.push(makeRow(
+        "edge", edge.id, `${edge.source} → ${edge.target} (${edge.type})`,
+        firstEdges[edge.id], secondEdges[edge.id],
+        fieldSets.edge, ["accept", "edit", "delete"]
+      )));
+      packageData.scope.representative_tasks.forEach((task, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        result.push(makeRow(
+          "coverage", id, task, firstCoverage[id], secondCoverage[id],
+          fieldSets.coverage, ["sufficient", "partial", "insufficient"]
+        ));
+      });
+      result.push(makeRow(
+        "overall", "overall_graph", "Overall graph decision",
+        first.overall_graph_review, second.overall_graph_review,
+        fieldSets.overall, ["approve", "approve_after_edits", "do_not_approve"]
+      ));
+      return result;
+    }
+
+    function cohenKappa(first, second) {
+      if (!first.length || first.length !== second.length) return null;
+      const categories = [...new Set([...first, ...second])];
+      const observed = first.filter((value, index) => value === second[index]).length / first.length;
+      const expected = categories.reduce((sum, category) => {
+        const firstRate = first.filter(value => value === category).length / first.length;
+        const secondRate = second.filter(value => value === category).length / second.length;
+        return sum + firstRate * secondRate;
+      }, 0);
+      if (expected === 1) return observed === 1 ? 1 : null;
+      return (observed - expected) / (1 - expected);
+    }
+
+    function agreement(valuesA, valuesB) {
+      return valuesA.filter((value, index) => value === valuesB[index]).length / valuesA.length;
+    }
+
+    function calculateMetrics(resultRows) {
+      const nodeRows = resultRows.filter(row => row.type === "node");
+      const edgeRows = resultRows.filter(row => row.type === "edge");
+      const coverageRows = resultRows.filter(row => row.type === "coverage");
+      const nodeA = nodeRows.map(row => row.first.decision);
+      const nodeB = nodeRows.map(row => row.second.decision);
+      const edgeA = edgeRows.map(row => row.first.decision);
+      const edgeB = edgeRows.map(row => row.second.decision);
+      const fieldDisagreements = {};
+      for (const type of ["node", "edge", "coverage", "overall"]) {
+        for (const field of fieldSets[type]) {
+          fieldDisagreements[`${type}.${field}`] = resultRows
+            .filter(row => row.type === type && row.disagreementFields.includes(field)).length;
+        }
+      }
+      return {
+        node_raw_agreement: agreement(nodeA, nodeB),
+        node_cohens_kappa: cohenKappa(nodeA, nodeB),
+        edge_raw_agreement: agreement(edgeA, edgeB),
+        edge_cohens_kappa: cohenKappa(edgeA, edgeB),
+        coverage_exact_agreement_count: coverageRows.filter(row => !row.disagreementFields.length).length,
+        coverage_item_count: coverageRows.length,
+        field_disagreement_counts: fieldDisagreements,
+        items_requiring_adjudication: resultRows.filter(row => row.requiresAdjudication).length,
+      };
+    }
+
+    function compareInputs() {
+      const first = inputs.r1.document;
+      const second = inputs.r2.document;
+      if (first.graph.graph_fingerprint !== second.graph.graph_fingerprint) {
+        showImportMessage("两份 JSON 的 graph fingerprint 不一致，不能比对。", "error");
+        document.getElementById("comparison-root").classList.add("hidden");
+        return;
+      }
+      if (first.reviewer.reviewer_id === second.reviewer.reviewer_id) {
+        showImportMessage("两份 JSON 的 reviewer_id 相同，不能作为两份独立评审。", "error");
+        document.getElementById("comparison-root").classList.add("hidden");
+        return;
+      }
+      rows = buildRows(inputs.r1.packageData, first, second);
+      metrics = calculateMetrics(rows);
+      resolutions = {};
+      rows.forEach(row => {
+        resolutions[rowKey(row.type, row.id)] = {
+          final_decision: row.agreedFinal,
+          final_edit: "",
+          adjudication_rationale: "",
+        };
+      });
+      adjudicator = {
+        adjudicator_code: "",
+        adjudication_date: new Date().toISOString().slice(0, 10),
+        adjudication_minutes: "",
+        confirmed_review_inputs_and_resolutions: false,
+      };
+      confirmationId = "";
+      showImportMessage(
+        `已验证 ${inputs.r1.packageData.graph.domain} 的两份独立完整评审；下方仅要求处理分歧、缺陷与修改请求。`,
+        "success"
+      );
+      renderComparison();
+    }
+
+    function formatMetric(value) {
+      return value === null || Number.isNaN(value) ? "N/A" : value.toFixed(3);
+    }
+
+    function renderMetricPanel(packageData) {
+      return `<section class="panel">
+        <h2>2. 一致性摘要</h2>
+        <p class="binding">${esc(packageData.graph.domain)} · ${esc(packageData.graph.candidate_run_id)}<br>${esc(packageData.graph.graph_fingerprint)}</p>
+        <div class="metric-grid">
+          <div class="metric"><strong>${formatMetric(metrics.node_raw_agreement)}</strong><span>Node raw agreement</span></div>
+          <div class="metric"><strong>${formatMetric(metrics.node_cohens_kappa)}</strong><span>Node Cohen's kappa</span></div>
+          <div class="metric"><strong>${formatMetric(metrics.edge_raw_agreement)}</strong><span>Edge raw agreement</span></div>
+          <div class="metric"><strong>${formatMetric(metrics.edge_cohens_kappa)}</strong><span>Edge Cohen's kappa</span></div>
+          <div class="metric"><strong>${metrics.coverage_exact_agreement_count}/${metrics.coverage_item_count}</strong><span>Coverage exact agreement</span></div>
+          <div class="metric"><strong>${metrics.items_requiring_adjudication}</strong><span>Items requiring adjudication</span></div>
+        </div>
+        <div class="reviewer-grid" style="margin-top:14px">
+          <div class="reviewer-box"><strong>R1 · ${esc(inputs.r1.document.reviewer.reviewer_id)}</strong><p>${esc(inputs.r1.filename)}</p><p class="identifier">sha256:${esc(inputs.r1.sha256)}</p></div>
+          <div class="reviewer-box"><strong>R2 · ${esc(inputs.r2.document.reviewer.reviewer_id)}</strong><p>${esc(inputs.r2.filename)}</p><p class="identifier">sha256:${esc(inputs.r2.sha256)}</p></div>
+        </div>
+      </section>`;
+    }
+
+    function criticalLabel(row) {
+      if (row.disagreementFields.length && row.critical) return "分歧 + 缺陷触发";
+      if (row.disagreementFields.length) return "字段分歧";
+      return "缺陷/修改触发";
+    }
+
+    function renderResolutionCard(row, index) {
+      const resolution = resolutions[rowKey(row.type, row.id)];
+      const firstCode = inputs.r1.document.reviewer.reviewer_id;
+      const secondCode = inputs.r2.document.reviewer.reviewer_id;
+      const comparisonRows = row.fields.map(field => {
+        const differs = row.disagreementFields.includes(field);
+        return `<tr class="${differs ? "diff" : ""}">
+          <td><code>${esc(field)}</code></td>
+          <td>${esc(row.first?.[field] ?? "")}</td>
+          <td>${esc(row.second?.[field] ?? "")}</td>
+        </tr>`;
+      }).join("");
+      const options = ['<option value="">请选择最终决定</option>']
+        .concat(row.finalOptions.map(option =>
+          `<option value="${esc(option)}"${resolution.final_decision === option ? " selected" : ""}>${esc(option)}</option>`
+        )).join("");
+      const actionRequired = !["accept", "sufficient", "approve"].includes(resolution.final_decision);
+      return `<article class="panel resolution-card ${row.critical ? "critical" : ""}" id="resolution-${index}">
+        <div class="item-header">
+          <div><h3>${esc(row.label)}</h3><div class="identifier">${esc(row.type)} · ${esc(row.id)}</div></div>
+          <span class="badge">${esc(criticalLabel(row))}</span>
+        </div>
+        <table class="comparison-table">
+          <thead><tr><th>字段</th><th>${esc(firstCode)}</th><th>${esc(secondCode)}</th></tr></thead>
+          <tbody>${comparisonRows}</tbody>
+        </table>
+        <div class="reviewer-grid">
+          <div class="reviewer-box"><strong>${esc(firstCode)} 的修改与理由</strong><p>${esc(row.first?.proposed_change || row.first?.missing_or_redundant_content || "—")}</p><p>${esc(row.first?.rationale || "—")}</p></div>
+          <div class="reviewer-box"><strong>${esc(secondCode)} 的修改与理由</strong><p>${esc(row.second?.proposed_change || row.second?.missing_or_redundant_content || "—")}</p><p>${esc(row.second?.rationale || "—")}</p></div>
+        </div>
+        <div class="resolution-grid" style="margin-top:14px">
+          <div class="field">
+            <label class="required">最终决定 / Final decision</label>
+            <select data-resolution-key="${esc(rowKey(row.type, row.id))}" data-resolution-field="final_decision">${options}</select>
+          </div>
+          <div class="field full">
+            <label class="${actionRequired ? "required" : ""}">精确修改或处理 / Exact edit or action</label>
+            <textarea data-resolution-key="${esc(rowKey(row.type, row.id))}" data-resolution-field="final_edit">${esc(resolution.final_edit)}</textarea>
+            <span class="hint">最终决定不是 accept / sufficient / approve 时必填；修改后的 graph 需要重新冻结哈希。</span>
+          </div>
+          <div class="field full">
+            <label class="required">仲裁理由 / Adjudication rationale</label>
+            <textarea data-resolution-key="${esc(rowKey(row.type, row.id))}" data-resolution-field="adjudication_rationale">${esc(resolution.adjudication_rationale)}</textarea>
+          </div>
+        </div>
+      </article>`;
+    }
+
+    function confirmationIssues() {
+      const issues = [];
+      if (!adjudicator.adjudicator_code.trim()) issues.push("adjudicator_code 未填写。");
+      if (!adjudicator.adjudication_date) issues.push("adjudication_date 未填写。");
+      if (!(Number(adjudicator.adjudication_minutes) > 0)) issues.push("adjudication_minutes 必须大于 0。");
+      if (!adjudicator.confirmed_review_inputs_and_resolutions) issues.push("必须确认已核对两份输入与全部仲裁结果。");
+      rows.filter(row => row.requiresAdjudication).forEach(row => {
+        const resolution = resolutions[rowKey(row.type, row.id)];
+        if (!resolution.final_decision) issues.push(`${row.type}:${row.id} 尚无最终决定。`);
+        if (!resolution.adjudication_rationale.trim()) issues.push(`${row.type}:${row.id} 尚无仲裁理由。`);
+        if (resolution.final_decision && !["accept", "sufficient", "approve"].includes(resolution.final_decision) && !resolution.final_edit.trim()) {
+          issues.push(`${row.type}:${row.id} 的最终决定要求精确修改或处理。`);
+        }
+      });
+      return issues;
+    }
+
+    function renderConfirmationPanel() {
+      const issues = confirmationIssues();
+      return `<section class="panel" id="confirmation-panel">
+        <h2>4. 确认并导出 JSON</h2>
+        <p class="muted">确认 JSON 是可审计的 review decision record。只有“无修改接受”才可进入结构验证；有修改时必须更新 candidate artifacts 并重新冻结哈希。</p>
+        <div class="resolution-grid" style="margin-top:14px">
+          <div class="field">
+            <label class="required">仲裁者代码 / Adjudicator code</label>
+            <input value="${esc(adjudicator.adjudicator_code)}" data-adjudicator-field="adjudicator_code">
+          </div>
+          <div class="field">
+            <label class="required">仲裁日期 / Adjudication date</label>
+            <input type="date" value="${esc(adjudicator.adjudication_date)}" data-adjudicator-field="adjudication_date">
+          </div>
+          <div class="field">
+            <label class="required">仲裁时间（分钟）</label>
+            <input type="number" min="0.1" step="0.1" value="${esc(adjudicator.adjudication_minutes)}" data-adjudicator-field="adjudication_minutes">
+          </div>
+          <div class="field">
+            <label class="required">确认</label>
+            <label class="checkbox-line">
+              <input type="checkbox" data-adjudicator-field="confirmed_review_inputs_and_resolutions"${adjudicator.confirmed_review_inputs_and_resolutions ? " checked" : ""}>
+              <span>我已核对两份完整评审 JSON、输入 SHA-256、所有触发项及最终处理。</span>
+            </label>
+          </div>
+        </div>
+        ${issues.length
+          ? `<div class="error"><strong>尚有 ${issues.length} 个确认问题：</strong><ul>${issues.slice(0, 20).map(issue => `<li>${esc(issue)}</li>`).join("")}${issues.length > 20 ? `<li>另有 ${issues.length - 20} 项……</li>` : ""}</ul></div>`
+          : '<div class="success"><strong>确认数据完整。</strong> 可以导出 complete confirmation JSON。</div>'}
+        <div class="actions">
+          <button id="export-confirmation-draft">导出确认草稿 JSON</button>
+          <button class="primary" id="export-confirmation-complete"${issues.length ? " disabled" : ""}>导出完整确认 JSON</button>
+        </div>
+      </section>`;
+    }
+
+    function renderComparison() {
+      const packageData = inputs.r1.packageData;
+      const requiredRows = rows.filter(row => row.requiresAdjudication);
+      const autoResolved = rows.length - requiredRows.length;
+      const root = document.getElementById("comparison-root");
+      root.classList.remove("hidden");
+      root.innerHTML = `
+        ${renderMetricPanel(packageData)}
+        <div class="section-heading">
+          <div><h2>3. 分歧、缺陷与修改请求</h2><p class="muted">${autoResolved} 个无触发条目按一致决定自动记录；以下 ${requiredRows.length} 个条目必须逐项确认。</p></div>
+          <span class="badge">${requiredRows.length} items</span>
+        </div>
+        ${requiredRows.length
+          ? requiredRows.map(renderResolutionCard).join("")
+          : '<section class="panel"><div class="success">两位评审者对全部条目一致无修改接受；仍需填写下方仲裁/确认元数据。</div></section>'}
+        ${renderConfirmationPanel()}`;
+      bindComparisonEvents();
+    }
+
+    function bindComparisonEvents() {
+      document.querySelectorAll("[data-resolution-key]").forEach(element => {
+        const eventName = element.tagName === "SELECT" ? "change" : "input";
+        element.addEventListener(eventName, event => {
+          const target = event.currentTarget;
+          resolutions[target.dataset.resolutionKey][target.dataset.resolutionField] = target.value;
+          if (target.tagName === "SELECT") renderComparison();
+        });
+      });
+      document.querySelectorAll("[data-adjudicator-field]").forEach(element => {
+        const eventName = element.type === "checkbox" ? "change" : "input";
+        element.addEventListener(eventName, event => {
+          const target = event.currentTarget;
+          adjudicator[target.dataset.adjudicatorField] = target.type === "checkbox" ? target.checked : target.value;
+          if (target.type === "checkbox") renderComparison();
+        });
+      });
+      document.getElementById("export-confirmation-draft").addEventListener("click", () => exportConfirmation("draft"));
+      document.getElementById("export-confirmation-complete").addEventListener("click", () => exportConfirmation("complete"));
+    }
+
+    function readiness(itemConfirmations) {
+      const overall = itemConfirmations.find(item => item.item_type === "overall")?.final_decision;
+      if (overall === "do_not_approve") {
+        return {
+          status: "not_approved",
+          structural_validation_required: false,
+          promotion_ready: false,
+          blocking_reasons: ["The adjudicated overall decision is do_not_approve."],
+        };
+      }
+      const changed = itemConfirmations.filter(item => {
+        if (item.item_type === "node") return item.final_decision !== "accept";
+        if (item.item_type === "edge") return item.final_decision !== "accept";
+        if (item.item_type === "coverage") return item.final_decision !== "sufficient";
+        return item.final_decision !== "approve";
+      });
+      if (changed.length) {
+        return {
+          status: "edits_required",
+          structural_validation_required: true,
+          promotion_ready: false,
+          blocking_reasons: [
+            `${changed.length} adjudicated items require edits, deletion, rejection, scope handling, or conditional approval.`,
+            "Apply the changes, rebuild the frozen review package, and bind any later promotion to the updated artifact hashes.",
+          ],
+        };
+      }
+      return {
+        status: "ready_for_structural_validation",
+        structural_validation_required: true,
+        promotion_ready: false,
+        blocking_reasons: ["Repository structural validation and explicit benchmark-author promotion are still required."],
+      };
+    }
+
+    function buildConfirmation(status) {
+      if (!confirmationId) {
+        const randomPart = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        confirmationId = `kg-review-confirmation-${randomPart}`;
+      }
+      const validation = confirmationIssues();
+      const itemConfirmations = rows.map(row => {
+        const resolution = resolutions[rowKey(row.type, row.id)];
+        return {
+          item_type: row.type,
+          item_id: row.id,
+          item_label: row.label,
+          reviewer_1_judgments: Object.fromEntries(row.fields.map(field => [field, row.first?.[field] ?? ""])),
+          reviewer_2_judgments: Object.fromEntries(row.fields.map(field => [field, row.second?.[field] ?? ""])),
+          disagreement_fields: row.disagreementFields,
+          critical_trigger: row.critical,
+          requires_adjudication: row.requiresAdjudication,
+          final_decision: resolution.final_decision,
+          final_edit: resolution.final_edit.trim(),
+          adjudication_rationale: resolution.adjudication_rationale.trim(),
+          resolution_status: row.requiresAdjudication ? (resolution.final_decision ? "resolved" : "unresolved") : "auto_resolved_agreement",
+        };
+      });
+      return {
+        schema_version: CONFIRMATION_SCHEMA,
+        status,
+        confirmation_id: confirmationId,
+        exported_at: new Date().toISOString(),
+        graph: structuredClone(inputs.r1.packageData.graph),
+        input_reviews: [
+          {
+            role: "reviewer_1",
+            submission_id: inputs.r1.document.submission_id,
+            reviewer_id: inputs.r1.document.reviewer.reviewer_id,
+            source_filename: inputs.r1.filename,
+            submission_sha256: inputs.r1.sha256,
+          },
+          {
+            role: "reviewer_2",
+            submission_id: inputs.r2.document.submission_id,
+            reviewer_id: inputs.r2.document.reviewer.reviewer_id,
+            source_filename: inputs.r2.filename,
+            submission_sha256: inputs.r2.sha256,
+          },
+        ],
+        comparison_summary: structuredClone(metrics),
+        adjudication: {
+          adjudicator_code: adjudicator.adjudicator_code.trim(),
+          adjudication_date: adjudicator.adjudication_date || null,
+          adjudication_minutes: adjudicator.adjudication_minutes === "" ? null : Number(adjudicator.adjudication_minutes),
+          confirmed_review_inputs_and_resolutions: Boolean(adjudicator.confirmed_review_inputs_and_resolutions),
+        },
+        item_confirmations: itemConfirmations,
+        promotion_readiness: readiness(itemConfirmations),
+        validation: {
+          complete: validation.length === 0,
+          issue_count: validation.length,
+          issues: validation,
+        },
+      };
+    }
+
+    function downloadJson(documentValue, filename) {
+      const blob = new Blob([JSON.stringify(documentValue, null, 2) + "\n"], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function exportConfirmation(status) {
+      const documentValue = buildConfirmation(status);
+      if (status === "complete" && !documentValue.validation.complete) {
+        renderComparison();
+        document.getElementById("confirmation-panel").scrollIntoView({ behavior: "smooth" });
+        return;
+      }
+      const filename = `${inputs.r1.packageData.graph.domain.toLowerCase()}_kg_review_confirmation_${safeFilename(adjudicator.adjudicator_code)}_${status}.json`;
+      downloadJson(documentValue, filename);
+    }
+
+    document.querySelectorAll("[data-pick]").forEach(button => {
+      button.addEventListener("click", () => document.getElementById(`file-${button.dataset.pick}`).click());
+    });
+    for (const slot of ["r1", "r2"]) {
+      document.getElementById(`file-${slot}`).addEventListener("change", event => {
+        const file = event.currentTarget.files?.[0];
+        event.currentTarget.value = "";
+        loadFile(slot, file);
+      });
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -132,6 +132,7 @@ export type GraphCandidateResponse = {
 
 export type BenchmarkDomainListResponse = {
   benchmark_domains: string[];
+  domain_summaries: Record<string, string>;
 };
 
 export type CandidateProfileContext = {
@@ -306,8 +307,12 @@ export class ApiRequestError extends Error {
 }
 
 export async function listBenchmarkDomains(): Promise<string[]> {
-  const payload = await requestJson<BenchmarkDomainListResponse>("/api/authoring/benchmark-domains");
+  const payload = await readBenchmarkDomains();
   return payload.benchmark_domains;
+}
+
+export async function readBenchmarkDomains(): Promise<BenchmarkDomainListResponse> {
+  return requestJson<BenchmarkDomainListResponse>("/api/authoring/benchmark-domains");
 }
 
 export async function listSourceMaterials(): Promise<SourceMaterialRecord[]> {
@@ -450,7 +455,6 @@ export async function promoteCandidateGraph(
 export async function generateProfileContextCandidate(input: {
   benchmarkDomain: string;
   roughDescription: string;
-  domainSummary?: string;
   clientProvider: "openai" | "deepseek";
 }): Promise<ProfileContextCandidateResponse> {
   return requestJson<ProfileContextCandidateResponse>("/api/authoring/profile-context-candidates", {
@@ -459,7 +463,6 @@ export async function generateProfileContextCandidate(input: {
     body: JSON.stringify({
       benchmark_domain: input.benchmarkDomain,
       rough_description: input.roughDescription,
-      domain_summary: input.domainSummary?.trim() || null,
       client_provider: input.clientProvider
     })
   });

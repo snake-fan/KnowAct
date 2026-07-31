@@ -1,14 +1,43 @@
 \section{Introduction}
 
-In collaborative interaction, the most informative action is often not an answer but a question. A tutor must locate the boundary of a learner's understanding; a research assistant must discover which assumptions its collaborator already accepts; a decision-support agent must identify which uncertainty is blocking progress. In each case, assistance depends on an internal estimate of the user and on choosing an action that improves that estimate.
+In collaborative interaction, the most informative action is often not an answer but a question.
 
-This is more demanding than describing a mental state after the relevant evidence has been supplied. The agent must decide which uncertainty matters, acquire evidence under a budget, revise its estimate, and let that estimate change what it does next. User modeling is therefore part of the control loop, not merely an explanatory annotation attached to a completed dialogue.
+A tutor locates the boundary of a learner's understanding. A research assistant discovers accepted
+assumptions. A decision-support agent identifies the uncertainty blocking progress.
 
-Existing evaluations illuminate different parts of this problem but do not identify the full loop. Machine Theory-of-Mind (ToM) benchmarks ask models to infer beliefs, intentions, or emotions from fixed narratives and conversations \citep{le2019revisiting,gandhi2023bigtom,kim2023fantom,xu2024opentom,chen2024tombench}. Their controlled questions make inference measurable, yet the benchmark---not the tested model---chooses the evidence. The model is never accountable for asking an uninformative question or for failing to resolve an uncertainty.
+In each case, assistance depends on an internal estimate of the user and an action that improves it.
 
-Interactive social-agent environments restore action, but usually score a holistic outcome such as goal completion, persuasion, or task success \citep{zhou2024sotopia,mou2025agentsense,hwang2026infusing,wang2026tomelp,zhou2026tomswe}. Such outcomes intentionally combine user modeling with planning, domain competence, language generation, and strategy. A successful trajectory may therefore reflect an accurate user model, a strong generic policy, environmental shortcuts, or some combination of them. The inference--application gap observed in explicit ToM evaluation makes this ambiguity consequential \citep{gu2024simpletom}.
+This is more demanding than describing a mental state after its evidence has been supplied.
 
-The resulting gap is one of \emph{measurement}, not simply coverage. Static tasks isolate inference by removing evidence acquisition; interactive tasks restore action but often make the latent user state unobservable to the evaluator. Neither setting directly tests whether an agent can improve an explicit user model by choosing what evidence to request.
+The agent must decide which uncertainty matters, acquire evidence under a budget, revise its estimate,
+and let that estimate change its next action.
+
+User modeling is therefore part of the control loop, not an annotation attached to a completed dialogue.
+
+Existing evaluations illuminate parts of this problem but do not identify the full loop.
+
+Machine Theory-of-Mind (ToM) benchmarks infer beliefs, intentions, or emotions from fixed narratives
+and conversations \citep{le2019revisiting,gandhi2023bigtom,kim2023fantom,xu2024opentom,chen2024tombench}.
+
+Their controlled questions make inference measurable, yet the benchmark chooses the evidence. The model
+is not accountable for an uninformative question or unresolved uncertainty.
+
+Interactive social-agent environments restore action, but usually score goal completion, persuasion, or
+task success \citep{zhou2024sotopia,mou2025agentsense,hwang2026infusing,wang2026tomelp,zhou2026tomswe}.
+
+These outcomes combine user modeling with planning, domain competence, language generation, and
+strategy. Success may reflect an accurate user model, a generic policy, or environmental shortcuts.
+
+The inference--application gap in explicit ToM evaluation makes this ambiguity consequential
+\citep{gu2024simpletom}.
+
+The resulting gap is one of \emph{measurement}, not simply coverage.
+
+Static tasks remove evidence acquisition. Interactive tasks restore action but often hide the latent
+user state from the evaluator.
+
+Neither setting tests whether an agent improves an explicit user model by choosing what evidence to
+request.
 
 We study the following question:
 
@@ -16,19 +45,58 @@ We study the following question:
 \emph{Can an agent actively infer a user's hidden knowledge state through limited natural-language interaction, and use that evolving estimate to choose subsequent diagnostic actions?}
 \end{quote}
 
-We call the target behavior \emph{functional ToM for knowledge-grounded interaction}. \emph{Functional} means that a user model earns credit through an infer--update--act loop, not through a verbal claim that the model understands the user. \emph{Knowledge-grounded} narrows the latent state to reviewed, diagnosable concepts. This operational definition does not assert a human-like cognitive mechanism; it identifies behavior that a useful user model should support.
+We call the target behavior \emph{functional ToM for knowledge-grounded interaction}.
 
-A valid test of this behavior requires three commitments. First, the latent state must be explicit enough to score directly; otherwise task success cannot establish that the user was modeled accurately. Second, evidence must be selected under a finite budget; otherwise an agent need not prioritize uncertainty. Third, the interaction must be auditable; otherwise leakage, unsupported inference, or simulator artifacts can masquerade as diagnosis.
+\emph{Functional} means that a user model earns credit through an infer--update--act loop, not through a
+claim that the model understands the user.
 
-\knowact turns these commitments into a controlled benchmark. A public knowledge graph defines the shared hypothesis space, while a hidden user-specific map defines the target. The agent spends a fixed number of turns asking diagnostic questions, maintains a full-graph working estimate, and submits a mastery prediction for every node. The simulator can express partial knowledge and misconceptions, but receives hidden information only after the current question has been grounded. The final map is scored deterministically against the hidden map.
+\emph{Knowledge-grounded} narrows the latent state to reviewed, diagnosable concepts. The definition
+identifies useful behavior without asserting a human-like cognitive mechanism.
 
-This design makes several competing explanations testable. Fixed and random policies reveal whether interaction alone is sufficient. Working-map and graph ablations test whether explicit state maintenance guides action. Simulator variations reveal whether rankings depend on one generative proxy. Evidence references distinguish accurate reconstruction supported by the dialogue from accurate guesses.
+A valid test requires three commitments.
 
-Our contributions are therefore methodological rather than empirical at this stage:
+First, the latent state must be explicit and directly scoreable. Second, evidence must be selected under
+a finite budget. Third, the interaction must be auditable.
+
+Without these commitments, task success, exhaustive questions, leakage, or simulator artifacts can
+masquerade as diagnosis.
+
+\knowact turns these commitments into a controlled benchmark.
+
+A public graph defines the shared hypothesis space, while a hidden user map defines the target. The
+agent asks diagnostic questions under a fixed turn budget and submits a prediction for every node.
+
+The \sagesim simulator grounds a question before reading hidden state, abstracts only licensed
+epistemic content, and realizes it separately. The final map is scored deterministically.
+
+This design makes competing explanations testable.
+
+Fixed and random policies test whether interaction alone is sufficient. Working-map and graph ablations
+test whether explicit state guides action.
+
+Simulator variations test proxy dependence. Evidence references separate dialogue-supported
+reconstruction from accurate guesses.
+
+It also creates a technical agent problem that the benchmark alone does not solve.
+
+The agent must represent node uncertainty, ground open answers in rubrics, use graph relations without
+copying mastery, value the next probe, and decide when evidence is not worth its cost.
+
+We propose MapProbe as an explicit evidence--belief--probe loop. It exposes evidence, beliefs, target
+plans, and stopping decisions so a final score can be attributed to a mechanism.
+
+Our contributions are therefore design and protocol contributions rather than empirical claims at this stage:
+
 \begin{itemize}[leftmargin=1.5em]
-    \item We formulate active knowledge-state diagnosis as an identifiable target for functional user modeling, separating reconstruction quality from downstream task success.
-    \item We derive a benchmark design in which the public graph, hidden map, turn budget, and visibility boundary each control a specific alternative explanation for apparent success.
-    \item We specify a validation protocol that separates adaptivity, explicit state maintenance, simulator dependence, and transfer to human interaction instead of collapsing them into one leaderboard score.
+    \item We formulate active knowledge-state diagnosis as an identifiable target for functional user modeling, with \sagesim as a scoped and independently testable observation model.
+    \item We specify MapProbe, a graph-aware, evidence-backed reconstruction agent whose belief update, diagnostic target policy, question realization, and stopping rule are independently inspectable and ablatable.
+    \item We predefine a paired evaluation that separates active acquisition, explicit state use, graph use, simulator robustness, repeated reliability, and human transfer instead of collapsing them into one leaderboard score.
 \end{itemize}
 
-The present paper establishes the construct, artifacts, and tests needed to evaluate these claims. It does not yet provide the empirical evidence required to conclude that any agent exhibits the target behavior. That distinction is deliberate: \knowact is intended to make such a claim falsifiable before it is made.
+The visibility boundary, full-map shell, and simple prompted agent baseline are implemented.
+
+An experimental ECDA slice implements node-marginal belief updates and multi-candidate question
+utility. The full MapProbe design and comparative experiments remain incomplete or unrun.
+
+The paper therefore does not provide evidence that an agent exhibits the target behavior. This
+distinction is deliberate: \knowact makes the claim falsifiable before it is made.

@@ -47,6 +47,7 @@ from backend.knowact.runtime.execution_repository import (
     EpisodeExecutionTransitionError,
     EpisodeRunQueueState,
 )
+from backend.knowact.runtime.experiment_paths import episode_run_dir
 from backend.knowact.runtime.queue_scheduler import (
     EpisodeEnqueueSelection,
     EpisodeRunQueueScheduler,
@@ -97,7 +98,7 @@ class RuntimeEpisodeRegistrationRequest(BaseModel):
     graph_version: str
     hidden_map_id: str
     max_turns: int = Field(gt=0)
-    agent_kind: Literal["simple_llm_agent"]
+    agent_kind: Literal["simple_llm_agent", "evidence_calibrated_agent"]
     tested_agent_client_provider: Literal["openai", "deepseek"]
     tested_agent_model: str
     simulator_client_provider: Literal["openai", "deepseek"]
@@ -861,7 +862,7 @@ def _relative_path(root: Path, path: Path) -> str:
 
 def _run_transcript_path(root: Path, run_id: str) -> Path:
     safe_run_id = _validate_runtime_run_id(run_id)
-    return root / "experiments" / "runs" / safe_run_id / "transcript.json"
+    return episode_run_dir(root, safe_run_id) / "transcript.json"
 
 
 def _validate_runtime_run_id(run_id: str) -> str:

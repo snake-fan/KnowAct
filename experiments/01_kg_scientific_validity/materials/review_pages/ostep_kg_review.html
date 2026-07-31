@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OSTEP Candidate KG Expert Review</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17211b;
+      --muted: #637068;
+      --paper: #f4f1e9;
+      --panel: #fffdf7;
+      --line: #d9d4c7;
+      --accent: #176b51;
+      --accent-soft: #e4f0e9;
+      --warn: #9a5a14;
+      --danger: #a13732;
+      --shadow: 0 12px 36px rgba(38, 47, 40, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    button, select, input, textarea { border-radius: 8px; }
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      padding: 9px 13px;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+    button.danger { color: var(--danger); }
+    button:disabled { cursor: not-allowed; opacity: 0.52; }
+
+    .app-shell { min-height: 100vh; }
+    .masthead {
+      background: #12251d;
+      color: white;
+      padding: 28px max(24px, calc((100vw - 1440px) / 2));
+    }
+    .eyebrow {
+      color: #9ed7c0;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      margin: 0 0 7px;
+      text-transform: uppercase;
+    }
+    h1 { font-size: clamp(24px, 4vw, 40px); line-height: 1.13; margin: 0; }
+    .subtitle { color: #c8d5cf; margin: 10px 0 0; max-width: 900px; }
+    .binding-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 18px;
+    }
+    .binding-pill {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px;
+      font-size: 12px;
+      padding: 6px 10px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+      gap: 22px;
+      margin: 0 auto;
+      max-width: 1440px;
+      padding: 22px;
+    }
+    .sidebar {
+      align-self: start;
+      position: sticky;
+      top: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+    }
+    .nav-panel { overflow: hidden; }
+    .nav-title {
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      padding: 14px 16px 10px;
+      text-transform: uppercase;
+    }
+    .nav-button {
+      align-items: center;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 13px 16px;
+      text-align: left;
+      width: 100%;
+    }
+    .nav-button.active { background: var(--accent-soft); color: var(--accent); font-weight: 750; }
+    .count {
+      background: #ece9df;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 11px;
+      padding: 2px 7px;
+    }
+    .nav-button.active .count { background: white; color: var(--accent); }
+    .save-state {
+      color: var(--muted);
+      font-size: 12px;
+      padding: 12px 16px;
+    }
+
+    .content { min-width: 0; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .section-header {
+      align-items: start;
+      display: flex;
+      justify-content: space-between;
+      margin: 5px 0 16px;
+    }
+    .section-header h2 { font-size: 25px; line-height: 1.25; margin: 0 0 4px; }
+    .section-header p { color: var(--muted); margin: 0; }
+    .progress-badge {
+      background: var(--accent-soft);
+      border-radius: 999px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 750;
+      padding: 6px 10px;
+      white-space: nowrap;
+    }
+
+    .card { margin-bottom: 15px; padding: 20px; }
+    .card-title { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
+    .card h3 { font-size: 19px; line-height: 1.3; margin: 0; }
+    .label-guide {
+      background: #f8f6ef;
+      border-color: #c9c4b7;
+    }
+    .label-guide > p { color: var(--muted); margin: 5px 0 14px; }
+    .label-guide-grid {
+      display: grid;
+      gap: 9px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .label-guide-item {
+      background: white;
+      border: 1px solid #dfdbcf;
+      border-radius: 9px;
+      padding: 10px 12px;
+    }
+    .label-guide-item strong { display: block; font-size: 13px; margin-bottom: 3px; }
+    .label-guide-item p { color: var(--muted); font-size: 12px; margin: 0; }
+    .label-guide-item code { color: var(--accent); font-size: 11px; }
+    .identifier {
+      color: var(--muted);
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+    .item-number {
+      background: #ece9df;
+      border-radius: 7px;
+      color: var(--muted);
+      flex: 0 0 auto;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 7px;
+    }
+    .item-status {
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 8px;
+    }
+    .item-status.done { background: var(--accent-soft); color: var(--accent); }
+    .item-status.todo { background: #f7e9d3; color: var(--warn); }
+    details {
+      border-top: 1px solid var(--line);
+      margin-top: 15px;
+      padding-top: 12px;
+    }
+    summary { color: var(--accent); cursor: pointer; font-weight: 750; }
+    .detail-block { margin-top: 13px; }
+    .detail-block h4 {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      margin: 0 0 5px;
+      text-transform: uppercase;
+    }
+    .detail-block p { margin: 0; white-space: pre-wrap; }
+    .locator, .rubric-row {
+      background: #f4f1e8;
+      border-left: 3px solid #a9b9b1;
+      margin: 7px 0;
+      padding: 9px 11px;
+    }
+    .rubric-row strong { color: var(--accent); display: inline-block; min-width: 30px; }
+    ul { margin: 7px 0; padding-left: 20px; }
+
+    .review-grid {
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 16px;
+      padding-top: 16px;
+    }
+    .field { min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 5px;
+    }
+    .required::after { color: var(--danger); content: " *"; }
+    .hint { color: var(--muted); display: block; font-size: 11px; margin-top: 4px; }
+    input, select, textarea {
+      background: white;
+      border: 1px solid #bbb7aa;
+      color: var(--ink);
+      padding: 9px 10px;
+      width: 100%;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(23, 107, 81, 0.12);
+      outline: none;
+    }
+    textarea { min-height: 84px; resize: vertical; }
+    .compact-textarea { min-height: 62px; }
+
+    .scope-summary { font-size: 16px; line-height: 1.8; margin: 8px 0 0; }
+    .callout {
+      background: #fff7e8;
+      border: 1px solid #ecd1a6;
+      border-radius: 10px;
+      color: #664216;
+      margin: 14px 0;
+      padding: 12px 14px;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .file-input { display: none; }
+    .error-box {
+      background: #fff0ef;
+      border: 1px solid #e0aaa7;
+      border-radius: 10px;
+      color: #75211d;
+      display: none;
+      margin: 14px 0;
+      padding: 13px 15px;
+    }
+    .error-box.visible { display: block; }
+    .success-box {
+      background: var(--accent-soft);
+      border: 1px solid #a7cbbb;
+      border-radius: 10px;
+      color: #154f3e;
+      margin: 14px 0;
+      padding: 13px 15px;
+    }
+    .checkbox-line { align-items: flex-start; display: flex; gap: 9px; }
+    .checkbox-line input { margin-top: 4px; width: auto; }
+    .hash-list {
+      background: #f0ede5;
+      border-radius: 9px;
+      font: 11px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+      padding: 11px 13px;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; padding: 14px; }
+      .sidebar { position: static; }
+      .nav-panel { display: grid; grid-template-columns: repeat(3, 1fr); }
+      .nav-title, .save-state { grid-column: 1 / -1; }
+      .nav-button { border-right: 1px solid var(--line); }
+      .review-grid, .label-guide-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+    }
+    @media print {
+      .sidebar, .actions { display: none !important; }
+      .layout { display: block; max-width: none; padding: 0; }
+      .section { display: block !important; }
+      .panel { box-shadow: none; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <script id="review-package" type="application/json">{"schema_version":"knowact.kg_review_package.v1","review_input_kind":"candidate_graph","graph":{"domain":"OSTEP","candidate_run_id":"kg_metadata_v1_ostep_20260730_robust_v2","review_package_id":"OSTEP:kg_metadata_v1_ostep_20260730_robust_v2","graph_fingerprint":"sha256:b2856932f15866ae3156688ddc508377bf3eef5937b062265ce6d9752434a245","node_count":24,"edge_count":28,"representative_task_count":50,"artifact_binding":{"domain":"OSTEP","candidate_run_id":"kg_metadata_v1_ostep_20260730_robust_v2","candidate_nodes":{"repository_path":"benchmark/domains/OSTEP/candidate_graphs/kg_metadata_v1_ostep_20260730_robust_v2/candidate_nodes.json","sha256":"c39c48227a4b8b00e6d2ea844755bc961bd9a2b209bf158205d5aa47ae5fb8bb"},"candidate_edges":{"repository_path":"benchmark/domains/OSTEP/candidate_graphs/kg_metadata_v1_ostep_20260730_robust_v2/candidate_edges.json","sha256":"6ddcbdfa7eca7d49868512d37d61bc7064688c48b27e18f2fb3bac00bc2e6cf0"},"source_metadata":{"repository_path":"storage/source_materials/OSTEP/metadata.json","sha256":"ecb6c861993b62c81d214ac3f4138d4dbc4f6eddb0be3049842e9e98d1ae53f9"},"source_content_sha256":"0c23b9b82596fd10de0db88620d74ef2dbecccb9ebf77a905f88953d5f2331fd"}},"source":{"source_id":"OSTEP","title":"Operating Systems: Three Easy Pieces — CPU Virtualization Foundations","citation":"Arpaci-Dusseau and Arpaci-Dusseau, Operating Systems: Three Easy Pieces, Chapters 2 and 4-8.","storage_uri":"storage/source_materials/OSTEP/experiment_scope.md","content_sha256":"0c23b9b82596fd10de0db88620d74ef2dbecccb9ebf77a905f88953d5f2331fd"},"scope":{"aspect_name":"Operating systems and CPU virtualization foundations","aspect_description":"Diagnosable concepts from OSTEP Chapter 2 and Chapters 4-8: operating-system goals, process abstraction and API, limited direct execution, basic CPU scheduling metrics and policies, and multi-level feedback queues.","review_scope_summary":"这张图谱聚焦《Operating Systems: Three Easy Pieces》中操作系统与 CPU 虚拟化的基础内容，覆盖操作系统目标、进程抽象与进程 API、受限直接执行、上下文切换，以及周转时间和响应时间等调度指标、典型调度策略与多级反馈队列。评审重点是这些概念、机制和策略之间的关系是否准确，并能否用于诊断学习者对进程执行与 CPU 调度的理解。","representative_tasks":["Explain how an operating system turns physical resources into easier-to-use virtual abstractions.","Distinguish the operating system's roles as virtual machine, standard interface provider, and resource manager.","Explain why protection is necessary when multiple programs share CPU, memory, and devices.","Distinguish mechanism from policy using CPU virtualization as an example.","Explain why a running program is not the same thing as its executable file.","Identify the major components of a process's machine state.","Distinguish running, ready, and blocked process states in an execution trace.","Predict legal process-state transitions after dispatch, I/O initiation, I/O completion, and preemption.","Explain why a process list or process control block is needed by the operating system.","Use process identifiers and parent-child relationships to interpret a process tree.","Predict the possible outputs of a program that calls fork without assuming a fixed parent-child execution order.","Explain how fork creates a new process while preserving distinct return values in parent and child.","Explain how exec changes a process image without creating a new process identifier.","Explain how wait supports ordering and resource collection between parent and child processes.","Distinguish normal process termination from a zombie or orphan process situation.","Choose among fork, exec, wait, and exit for a stated process-management goal.","Explain how a shell uses fork, exec, and wait to launch a foreground command.","Explain why unrestricted direct execution would prevent the OS from retaining control.","Distinguish user mode from kernel mode and identify operations that require privileged execution.","Trace a system call through trap entry, kernel handling, and return to user mode.","Distinguish a system call trap from a hardware interrupt and from a program exception.","Explain why a timer interrupt is needed to regain control from a CPU-bound process.","Trace the steps of a context switch between two processes.","Identify which process state must be saved and restored across a context switch.","Explain the difference between cooperative and preemptive approaches to CPU sharing.","Diagnose why disabling interrupts is not a safe general solution for untrusted user programs.","Calculate turnaround time for a workload under a specified schedule.","Calculate response time and distinguish it from turnaround time.","Explain why a policy that minimizes turnaround time may provide poor interactive response.","Schedule a set of jobs under first-in-first-out and compute completion metrics.","Construct a convoy-effect example and explain why FIFO performs poorly on it.","Schedule known jobs under shortest-job-first and explain its optimality assumptions.","Explain why non-preemptive shortest-job-first struggles when job lengths are unknown or arrivals differ.","Schedule jobs under shortest-time-to-completion-first with staggered arrivals.","Explain how preemption changes shortest-job-first into shortest-time-to-completion-first.","Simulate round-robin scheduling for a given time slice and arrival sequence.","Predict how a smaller round-robin quantum affects response time and context-switch overhead.","Compare FIFO, SJF, STCF, and round robin for batch and interactive workloads.","Explain why an online scheduler cannot generally know a job's future CPU demand.","State the goals of a multi-level feedback queue when job behavior is not known in advance.","Apply MLFQ priority rules to select the next runnable job.","Trace how a CPU-bound job's priority changes as it consumes its time allotment.","Explain why an interactive or I/O-bound job may remain at high priority in MLFQ.","Diagnose starvation in an MLFQ workload containing a stream of interactive jobs.","Explain how periodic priority boosting addresses starvation.","Construct a gaming attack against a naive MLFQ rule and explain why it works.","Explain how cumulative allotment accounting reduces MLFQ gaming opportunities.","Predict the effect of changing queue allotments and time quanta on scheduler behavior.","Compare scheduler fairness with optimization of turnaround and response time.","Integrate process abstraction, protected execution, context switching, and scheduling into one CPU-virtualization trace."],"excluded_topics":["Virtual-memory address spaces, paging, segmentation, TLBs, and swapping","Threads, synchronization, locks, condition variables, semaphores, and concurrency bugs","I/O devices, disks, RAID, filesystems, persistence, and distributed systems","Security chapters and cryptographic mechanisms","Lottery scheduling and multiprocessor scheduling beyond brief contrast","Linux CFS and production-kernel implementation details not developed in Chapters 2 and 4-8","Architecture-specific register layouts and assembly details","Programming-project setup and simulator command-line memorization","Historical anecdotes that do not support a reusable operating-system concept","Performance claims that ignore the workload assumptions stated in the selected chapters"],"target_node_count":20,"max_node_count":24},"nodes":[{"id":"operating_system_virtualization","name":"Operating System Virtualization","type":"concept","definition":"The operating system transforms physical resources such as CPUs, memory, and disks into easier-to-use virtual resources and abstractions.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 2, Introduction to Operating Systems, pp. 2-4","note":"Introduces virtualization as a central OS technique."}],"diagnostic_goal":"Diagnose whether the learner understands virtualization as a central operating-system technique for transforming physical machine resources into easier-to-use virtual resources and abstractions.","levels":{"L0":"Does not recognize operating-system virtualization in this sense, or treats it as unrelated to CPUs, memory, or disks; may confuse it with only running virtual machines or with any generic software feature.","L1":"Can recall that an operating system virtualizes resources, or can repeat examples such as CPU, memory, or disk, but cannot explain what is transformed or why the abstraction matters.","L2":"Can explain in basic terms that the OS makes physical resources easier for programs to use by presenting virtual resources, but gives only simple examples and may blur the difference between the physical resource and the virtual abstraction.","L3":"Can relate virtualization to the OS role of making shared hardware appear as usable abstractions, such as creating virtual CPUs from one physical CPU, and can distinguish this technique from merely exposing APIs or making allocation decisions.","L4":"Can apply the idea to new scenarios by identifying which physical resource is being virtualized and what virtual abstraction the OS provides, while recognizing limits such as virtualization being a technique rather than the entire purpose of an OS.","L5":"Can reflectively explain why virtualization is a powerful OS design technique, generate and analyze examples and counterexamples involving CPU, memory, and disk abstractions, and critique oversimplified claims such as equating OS virtualization only with full-machine virtual machines."},"diagnostic_signals":["Mentions transformation of physical resources into virtual resources or abstractions rather than only naming hardware components.","Correctly uses examples such as processor, memory, disk, or virtual CPUs to illustrate the concept.","Distinguishes virtualization from system calls, resource allocation policy, and protection, while recognizing they can be related OS concerns.","Explains the user-facing benefit as making resources easier to use or appear more convenient to programs.","Common misconception: treats virtualization only as cloud or hypervisor virtual machines, with no connection to ordinary OS abstractions."],"simulator_behavior":"When this concept is known, answers describe how the OS presents easier-to-use virtual abstractions over physical CPU, memory, or disk resources and can supply concrete examples; when weak, answers rely on vague hardware-management language or confuse the term with full-machine virtualization only."},{"id":"operating_system_as_standard_interface_provider","name":"Operating System as Standard Interface Provider","type":"concept","definition":"The operating system exposes interfaces, including system calls, through which applications request OS services and use machine resources indirectly.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 2, Introduction to Operating Systems, p. 2","note":"Describes OS APIs and system calls."}],"diagnostic_goal":"Diagnose whether the learner understands that an operating system provides standard interfaces, especially system calls, through which applications request services and use machine resources indirectly.","levels":{"L0":"Does not recognize the OS as an interface provider; may claim applications directly control hardware without OS mediation or confuse system calls with ordinary function calls unrelated to the OS.","L1":"Can recall terms such as API or system call and may state that the OS provides them, but cannot explain how applications use these interfaces to request OS services.","L2":"Can explain that applications ask the OS to do things through system calls or APIs, but may give only simple examples and may not clearly distinguish this interface role from the OS internally managing resources.","L3":"Can connect system calls to the idea that applications use virtual-machine features and machine resources indirectly through OS-provided interfaces, and can contrast interface provision with resource virtualization or allocation decisions.","L4":"Can apply the concept by identifying when an application must use an OS interface rather than directly manipulating a protected resource, and can reason about why a standard interface is useful across many OS services.","L5":"Can reflectively analyze the OS interface role, generate examples of service requests that would go through system calls, and critique misconceptions such as treating system calls as merely library conveniences with no privileged OS mediation."},"diagnostic_signals":["Explicitly identifies system calls or OS APIs as the path by which applications request OS services.","Describes indirect use of machine resources through the OS rather than direct unrestricted hardware access by applications.","Recognizes that a typical OS exposes many such calls or interfaces without needing an exact count.","Distinguishes the interface-provider role from the OS deciding allocation policies or creating virtual resources.","Common misconception: describes system calls as normal application subroutines only, with no special role in crossing to OS services."],"simulator_behavior":"When this concept is known, answers explain that programs invoke OS-provided interfaces such as system calls to request services and access resources indirectly; when weak, answers omit the application-OS boundary or portray applications as directly controlling hardware."},{"id":"operating_system_as_resource_manager","name":"Operating System as Resource Manager","type":"concept","definition":"The operating system manages shared resources such as CPU, memory, and disk by deciding how to allocate them according to goals such as efficiency and fairness.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 2, Introduction to Operating Systems, pp. 2-4","note":"Connects sharing and allocation decisions to the resource manager role."}],"diagnostic_goal":"Diagnose whether the learner understands the operating system as a manager of shared CPU, memory, and disk resources that decides how to allocate them according to goals such as efficiency and fairness.","levels":{"L0":"Does not recognize the OS as a resource manager; may view it only as a program launcher or user interface and cannot connect it to allocating CPU, memory, or disk resources.","L1":"Can recall the phrase resource manager or list resources such as CPU, memory, and disk, but cannot explain that the OS makes allocation decisions among competing programs.","L2":"Can state that the OS manages resources for programs, but gives a broad or one-sided explanation and may not mention sharing, decision-making, efficiency, or fairness.","L3":"Can explain that virtualization and sharing create the need for the OS to decide which programs receive resources, and can relate those decisions to goals such as efficient use and fair treatment.","L4":"Can apply the resource-manager idea to scenarios involving multiple programs competing for CPU, memory, or disk, identifying the allocation choice the OS must make and the possible efficiency or fairness tradeoff.","L5":"Can reflectively analyze resource management as an objective OS role, generate examples of competing allocation goals, and critique simplistic claims such as 'the OS just gives every program whatever it asks for'."},"diagnostic_signals":["Mentions shared resources and allocation decisions, not just hardware ownership.","Uses examples such as CPU time, memory, or disk to explain what is managed.","Connects the role to goals such as efficiency and fairness where appropriate.","Distinguishes resource management from merely providing a system-call interface or merely virtualizing a single resource.","Common misconception: claims resource management means only monitoring resources, with no decisions about which program gets what."],"simulator_behavior":"When this concept is known, answers frame the OS as deciding how to allocate shared CPU, memory, and disk resources among programs, often noting efficiency and fairness; when weak, answers list hardware components without explaining allocation or sharing."},{"id":"protection_and_isolation","name":"Protection and Isolation","type":"concept","definition":"Protection is the OS goal of preventing a program's accidental or malicious behavior from harming other programs or the operating system, with isolation as a central principle.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 2, section 2.5 Design Goals, p. 11","note":"Discusses protection as an OS design goal."}],"diagnostic_goal":"Diagnose whether the learner understands protection as an OS design goal that uses isolation to prevent one program's accidental or malicious behavior from harming other programs or the operating system.","levels":{"L0":"Does not recognize protection or isolation as an OS concern; may think any running program can freely affect other programs or the OS without restriction.","L1":"Can recall words such as protection, isolation, or security, but cannot explain what is being protected from what or why multiple programs make this necessary.","L2":"Can explain that the OS keeps programs from interfering with each other, but may describe only accidental bugs or only malicious attacks and may not include protection of the OS itself.","L3":"Can articulate that protection applies both between applications and between applications and the operating system, and that isolation is a central principle for containing accidental or malicious bad behavior.","L4":"Can apply the idea to scenarios by identifying when one program's actions should be isolated to prevent harm to other programs or the OS, and can distinguish protection from resource allocation or interface provision.","L5":"Can reflectively reason about protection as an OS design goal, generate examples and counterexamples of isolation failures, and critique overly broad claims such as equating protection only with passwords or user authentication."},"diagnostic_signals":["States that one program's bad behavior should not harm other programs or the operating system.","Includes both accidental and malicious behavior as relevant sources of harm.","Uses isolation as the principle for separating applications from each other and from the OS.","Distinguishes OS protection from general user authentication or from fairness in resource allocation.","Common misconception: treats protection as only antivirus, login security, or encryption, without program isolation."],"simulator_behavior":"When this concept is known, answers emphasize isolating programs so accidental or malicious behavior cannot damage other programs or the OS; when weak, answers use generic security terms without explaining isolation or the protected parties."},{"id":"mechanism_and_policy_separation","name":"Mechanism and Policy Separation","type":"concept","definition":"A mechanism is low-level machinery for how an OS function is performed, while a policy is the algorithm or rule for deciding which action to take.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 4, The Abstraction: The Process, pp. 1-3","note":"Contrasts context switching as mechanism with scheduling as policy."}],"diagnostic_goal":"Diagnose whether the learner understands the distinction between OS mechanisms as low-level 'how' machinery and policies as rules or algorithms deciding 'which' action to take.","levels":{"L0":"Does not distinguish mechanism from policy and may use the terms interchangeably or assign them to unrelated concepts.","L1":"Can recall that mechanism answers 'how' and policy answers 'which' or 'what decision,' but cannot explain the distinction using an OS example.","L2":"Can give a basic explanation that mechanisms perform actions while policies decide among actions, but may misclassify examples or fail to connect the distinction to operating-system design.","L3":"Can correctly contrast context switching as a mechanism with scheduling as a policy, and can explain why separating how an action is performed from which action is chosen matters conceptually.","L4":"Can apply the separation to new OS situations by identifying the low-level machinery and the decision rule or algorithm, while recognizing that a policy may rely on mechanisms to be carried out.","L5":"Can reflectively analyze the benefits and limits of separating mechanism from policy, generate examples and counterexamples, and critique designs or explanations that entangle implementation machinery with decision rules."},"diagnostic_signals":["Uses the how-versus-which distinction accurately.","Correctly identifies context switching as a mechanism and scheduling as a policy when those examples arise.","Explains policy as a rule or algorithm for deciding among possible actions, not as a general political rule.","Explains mechanism as low-level machinery for carrying out an OS function, not as the reason for choosing it.","Common misconception: says scheduling is the mechanism and context switching is the policy, or treats both as synonyms for OS behavior."],"simulator_behavior":"When this concept is known, answers separate the machinery that performs an operation from the decision rule selecting an action, often using context switching and scheduling correctly; when weak, answers conflate the two or rely only on memorized slogans."},{"id":"process_abstraction","name":"Process Abstraction","type":"concept","definition":"A process is the operating system abstraction of a running program, distinct from the inactive program code and data stored on disk before execution.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 4, The Abstraction: The Process, p. 1","note":"Defines a process as a running program."}],"diagnostic_goal":"Diagnose whether the learner understands a process as the operating-system abstraction of a running program, distinct from inactive program code and data stored on disk.","levels":{"L0":"Does not recognize what a process is; may confuse a process with any file, source code, CPU, or generic program concept without the idea of execution.","L1":"Can recall that a process is a running program, but cannot explain the contrast with an executable or program stored on disk.","L2":"Can explain that a process is a program in execution, but may give a simple description that omits the OS abstraction aspect or still blurs process with static program contents.","L3":"Can clearly distinguish the living execution abstraction from the lifeless on-disk program and can explain that the OS uses the process abstraction to reason about running programs.","L4":"Can apply the distinction to examples, identifying when a stored executable becomes a process and when multiple running instances should count as distinct processes rather than one static program.","L5":"Can reflectively explain why the process abstraction is fundamental for the OS, generate edge cases involving programs versus running instances, and critique definitions that omit execution state or OS abstraction."},"diagnostic_signals":["States that a process is a running program or program in execution.","Contrasts a process with inactive program code and data stored on disk.","Recognizes the process as an OS abstraction rather than merely a filename or executable file.","Can reason that starting an executable creates a running process, while the file itself remains just a program.","Common misconception: treats 'program' and 'process' as exact synonyms in all contexts."],"simulator_behavior":"When this concept is known, answers define a process as the OS abstraction of a running program and contrast it with a static program on disk; when weak, answers equate processes with files or use 'program' without the execution distinction."},{"id":"process_machine_state","name":"Process Machine State","type":"concept","definition":"A process's machine state consists of the execution state the OS must understand or preserve, including addressable memory, registers such as program counter and stack pointer, and I/O-related state such as open files.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 4, section 4.1 The Abstraction: A Process, pp. 2-3","note":"Lists major pieces of process state."}],"diagnostic_goal":"Diagnose whether the learner understands a process's machine state as the execution state the OS must understand or preserve, including memory, registers, and I/O-related state such as open files.","levels":{"L0":"Does not recognize process machine state or treats it as only the program's source code, the CPU hardware itself, or unrelated user data.","L1":"Can recall one or two components such as memory or registers, but cannot explain that these are the state a running process can read or update and that the OS must track or preserve.","L2":"Can describe process state as information needed to run a process, but gives an incomplete list or omits important categories such as addressable memory, registers, or open-file information.","L3":"Can organize the major pieces of process machine state, including address space or memory, registers such as program counter and stack pointer, and I/O-related state such as open files, and explain why they matter during execution.","L4":"Can apply the concept to scenarios such as stopping and resuming a process by identifying which state must be preserved or restored for execution to continue correctly.","L5":"Can reflectively analyze the boundaries of process machine state, generate examples across memory, register, and I/O categories, and critique incomplete accounts that reduce a process only to its code or only to CPU registers."},"diagnostic_signals":["Mentions addressable memory or address space as part of process state.","Mentions registers, especially program counter or stack pointer, as execution state.","Mentions I/O-related state such as open files when describing what the OS tracks.","Explains that the OS must understand or preserve what the program can read or update during execution.","Common misconception: lists only the executable code and ignores dynamic execution state."],"simulator_behavior":"When this concept is known, answers describe process machine state as the memory, register, and I/O-related information needed to represent and preserve a running process; when weak, answers give a partial list or confuse state with static program files."},{"id":"process_creation_and_loading","name":"Process Creation and Loading","type":"concept","definition":"Process creation turns an executable into a running process by loading program code and data, allocating runtime structures such as stack and heap, initializing I/O-related state, and starting execution at the entry point.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 4, section 4.3 Process Creation: A Little More Detail, pp. 4-5","note":"Describes loading and initialization steps for starting a process."}],"diagnostic_goal":"Diagnose whether the learner understands process creation as the OS transformation of an executable into a running process by loading code and data, setting up runtime state, initializing I/O-related state, and starting execution at the entry point.","levels":{"L0":"Does not recognize process creation as an OS activity; may think a program runs directly from disk without loading or setup, or confuse creation with merely writing source code.","L1":"Can recall that the OS loads a program to run it, but cannot describe the major setup steps that turn an executable into a process.","L2":"Can give a basic account that the OS loads code and starts the program, but may omit data, stack, heap, I/O state, or the entry point and may not distinguish the executable from the resulting process.","L3":"Can describe the sequence at a structured level: load program code and data into memory, allocate or initialize runtime structures such as stack and heap, set up I/O-related state, and begin execution at the entry point such as main().","L4":"Can apply the concept to new examples by explaining what must happen before an on-disk executable can execute as a process and identifying which missing setup step would prevent correct execution.","L5":"Can reflectively analyze process creation as a transformation from static executable to running process, generate detailed examples or counterexamples, and critique oversimplified accounts that say the OS merely 'opens' a program."},"diagnostic_signals":["Describes loading program code from an executable into memory as an OS step.","Includes program data and runtime structures such as stack or heap in the setup when giving a fuller answer.","Mentions initialization of I/O-related state such as open-file defaults or related process state.","Identifies starting execution at an entry point, such as main(), after setup.","Common misconception: says the CPU simply executes the file directly from disk with no OS loading or initialization."],"simulator_behavior":"When this concept is known, answers explain that the OS creates a process by loading executable contents, preparing runtime and I/O state, and starting execution at the entry point; when weak, answers reduce creation to clicking a program or vaguely 'starting it' without transformation or setup steps."},{"id":"process_states_and_transitions","name":"Process States and Transitions","type":"concept","definition":"A process may be running, ready, or blocked, and events such as dispatch, descheduling, I/O initiation, and I/O completion move it among these states.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 4, section 4.4 Process States, pp. 5-7","note":"Defines simplified process states and legal transitions."}],"diagnostic_goal":"Diagnose whether the learner understands the simplified running, ready, and blocked process states and the events that legally move a process among them.","levels":{"L0":"Cannot identify the three simplified process states or confuses process states with unrelated ideas such as files, programs on disk, or CPU hardware components; gives transitions that do not reflect execution or waiting behavior.","L1":"Can recall the labels running, ready, and blocked, and may repeat that processes move between states, but cannot reliably say what each state means or what events cause movement among them.","L2":"Can explain in basic terms that running means executing, ready means able to run but not currently on the CPU, and blocked means waiting for something such as I/O; recognizes simple transitions but has weak boundaries between ready and blocked.","L3":"Can accurately relate each state to CPU availability and waiting conditions, and can describe source-grounded transitions such as ready-to-running by dispatch, running-to-ready by descheduling, running-to-blocked on I/O initiation, and blocked-to-ready on I/O completion; avoids common illegal or vague transitions.","L4":"Can apply the state model to new execution traces, deciding which state a process enters after scheduling decisions or I/O events and explaining why a process cannot run while blocked even if the CPU is free.","L5":"Can teach or critique the simplified three-state model, generate valid and invalid transition examples, explain what assumptions the simplification makes, and use the model to reason clearly about process behavior without treating it as a user-specific state record."},"diagnostic_signals":["Correctly distinguishes ready from blocked by whether the process could run if scheduled versus whether it is waiting for an event such as I/O completion.","Names events that cause transitions, including dispatch, descheduling, I/O initiation, and I/O completion.","Avoids saying that I/O completion moves a process directly to running unless scheduling also occurs.","Explains running-to-ready as removal from the CPU rather than process termination or failure.","Can trace a short sequence of events and assign a state after each step.","Common misconception: treats blocked as simply lower priority or paused by the scheduler rather than waiting for an external event."],"simulator_behavior":"When answering about this node, responses should reflect the learner's ability to name the three states, define their execution or waiting conditions, and reason about legal transitions caused by scheduling and I/O events."},{"id":"process_list_and_process_control_block","name":"Process List and Process Control Block","type":"concept","definition":"The operating system records per-process information in structures such as a process list and process control blocks, including state, saved context, process identifiers, parent relationships, open files, and other metadata.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 4, section 4.5 Data Structures, pp. 7-9","note":"Explains OS data structures for tracking processes."}],"diagnostic_goal":"Diagnose whether the learner understands that the operating system tracks per-process information in process lists and process control blocks, including state, saved context, identifiers, relationships, open files, and metadata.","levels":{"L0":"Does not recognize that the OS maintains per-process data structures, or confuses a process control block with the process's executable code, memory image, or user-visible command.","L1":"Can recall terms such as process list or process control block but gives only a memorized phrase and cannot describe what information is stored or why the OS needs it.","L2":"Can explain that the OS keeps a record for each process and that this record includes information such as process state or identifiers, but omits important categories such as saved context or open files and has unclear separation between the list and the per-process record.","L3":"Can describe that the OS uses a process list to track all processes and per-process structures such as PCBs to hold state, saved register or context information, process identifiers, parent relationships, open files, and other metadata needed to manage running, ready, and blocked processes.","L4":"Can apply the idea to operational scenarios, explaining what PCB or process-list information the OS would consult or update during a state change, context save, process relationship query, or open-file management task.","L5":"Can abstractly explain why explicit OS data structures are necessary for process management, critique incomplete PCB descriptions, and generate examples of metadata needed to resume, identify, relate, or account for processes while keeping the structure objective and not user-specific."},"diagnostic_signals":["Mentions that the process list contains information about all processes in the system.","Identifies the process control block as a per-process OS structure rather than the process itself.","Lists source-grounded examples of stored information: state, saved context, process identifiers, parent relationships, open files, and metadata.","Connects PCB contents to management of running, ready, and blocked processes.","Avoids claiming that a PCB stores only program instructions or only memory contents.","Can explain why saved context is needed for stopping and later resuming a process."],"simulator_behavior":"When answering about this node, responses should show whether the learner can identify process-tracking structures, name representative fields, and explain how those fields support OS process management."},{"id":"fork_process_creation","name":"fork Process Creation","type":"concept","definition":"fork() creates a new child process that is almost an exact copy of the calling parent, with parent and child continuing from the fork call but receiving distinct return values.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 5, section 5.1 The fork() System Call, pp. 1-3","note":"Explains fork behavior and parent-child return values."}],"diagnostic_goal":"Diagnose whether the learner understands fork() as creating an almost exact child copy of the calling process, with both parent and child continuing from the fork call and receiving different return values.","levels":{"L0":"Does not recognize fork() as process creation or confuses it with replacing a program, waiting for a child, or starting an unrelated program without parent-child continuity.","L1":"Can state that fork() creates a child process, but cannot explain what is copied, where execution resumes, or how parent and child are distinguished after the call.","L2":"Can explain that fork() makes a new process similar to the parent and that both keep running, but is uncertain about the return values or may think only the child continues after the call.","L3":"Can accurately describe that fork() creates an almost exact copy of the calling process, that both parent and child continue from the fork call, and that the parent receives the child PID while the child receives zero.","L4":"Can apply fork() semantics to short code or execution traces, predicting which statements can run in both processes and using the distinct return values to distinguish parent and child behavior.","L5":"Can generate and analyze fork() examples, explain why the return-value asymmetry is useful for process-control logic, and critique misconceptions such as fork() immediately loading a different program or returning only once globally."},"diagnostic_signals":["States that the child is an almost exact copy of the calling process.","Recognizes that execution continues in both parent and child from the fork call.","Correctly identifies the parent return value as the child's PID and the child return value as zero.","Avoids conflating fork() with exec() image replacement.","Can predict that code after fork() may execute in both processes.","Common misconception: says fork() creates a new thread rather than a new child process."],"simulator_behavior":"When answering about this node, responses should reveal whether the learner can reason about fork-created parent and child processes, continuation point, copying behavior, and distinct return values."},{"id":"unix_fork_exec_and_wait_process_api","name":"UNIX fork, exec, and wait Process API","type":"concept","definition":"UNIX process control combines fork() to create a process, exec() to run a different program in a process, and wait() to let a parent order itself with a child process's completion.","source_locators":[{"source_id":"OSTEP","locator":"Chapter 5, Interlude: Process API, pp. 1-5","note":"Introduces the core process-management calls together."}],"diagnostic_goal":"Diagnose whether the learner understands the combined role of fork(), exec(), and wait() in UNIX process control: creating a process, running a different program, and ordering a parent with a child's completion.","levels":{"L0":"Cannot distinguish fork(), exec(), and wait(), or treats them as interchangeable commands for simply starting or ending a program.","L1":"Can recall the names fork, exec, and wait as UNIX process API calls, but cannot assign their separate roles or explain why they are used together.","L2":"Can give a basic role for one or two calls, such as fork creates a process or wait pauses a parent, but has incomplete or confused understanding of exec() or the parent-child ordering purpose.","L3":"Can explain the combined API: fork() creates a child process, exec() runs a different program within a process, and wait() lets a parent order itself with the completion of a child process.","L4":"Can apply the combined API to scenarios such as a parent launching a child program and needing to continue only after the child finishes, selecting which call is responsible for creation, image change, and ordering.","L5":"Can explain why separating these calls provides flexible process control, generate correct sequences using fork, exec, and wait, and critique designs or explanations that collapse creation, program replacement, and synchronization into one indistinct operation."},"diagnostic_signals":["Correctly assigns fork() to creating a child process.","Correctly assigns exec() to running a different program in an existing process rather than creating the process.","Correctly assigns wait() to a parent ordering itself with a child's completion.","Describes how the calls work together rather than as isolated vocabulary.","Avoids saying wait() creates or replaces a process.","Can identify which call would be missing if a parent launches a child but does not wait for foreground-style completion."],"simulator_behavior":"When answering about this node, responses should reflect the learner's ability to separate and combine the roles of fork(), exec(), and wait() in UNIX process management."},{"id":"exec_process_image_replacement","name":"exec Process Image Replacement","type":"concept","definition":"exec() replaces the current program image by loading code and static data from an executable into the existing process, without creating a new process identifier.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 5, Section 5.4","note":"Describes exec as transforming the current process image."}],"diagnostic_goal":"Diagnose whether the learner understands exec() as replacing the current program image by loading a different executable into the same process, without creating a new process identifier, and that successful exec() does not return.","levels":{"L0":"Does not recognize exec() as program image replacement, or confuses it with fork() creating a new child process or wait() ordering a parent with a child.","L1":"Can recall that exec() runs a program, but cannot explain that it transforms the currently running process rather than making a new process.","L2":"Can explain that exec() starts or loads another program, but may still think it creates a new process identifier or returns normally to the old program after success.","L3":"Can accurately state that exec() replaces the current program image by loading code and static data from an executable into the existing process, keeps the process identity rather than creating a new PID, and does not return if successful.","L4":"Can apply exec() semantics to examples, predicting that code after a successful exec() in the old program will not run and that the process continues as a different program under the same process identity.","L5":"Can teach or critique exec() behavior, generate examples showing failure versus successful replacement, and clearly distinguish image replacement from process creation when reasoning about process-control designs."},"diagnostic_signals":["States that exec() does not create a new process.","Describes replacement or transformation of the current program image.","Mentions loading code and static data from an executable into the existing process.","Recognizes that the process identifier is not newly created by exec().","Recognizes that a successful exec() does not return to the old program.","Common misconception: says exec() is the call that creates the child process."],"simulator_behavior":"When answering about this node, responses should show whether the learner can reason about exec() as same-process program-image replacement and distinguish it from process creation and waiting."},{"id":"fork_and_exec_separation_in_a_shell","name":"fork and exec Separation in a Shell","type":"concept","definition":"The separation of fork() and exec() enables a shell to create a child, adjust the child's execution context, run the requested command, and use wait() for foreground command ordering.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 5, Section 5.4","note":"Uses the shell as the motivating application for separating fork and exec."}],"diagnostic_goal":"Diagnose whether the learner understands why a UNIX shell benefits from separating fork() and exec(): the shell can create a child, modify the child's execution context, run the requested command, and use wait() for foreground ordering.","levels":{"L0":"Does not connect fork(), exec(), and wait() to shell command execution, or thinks the shell simply replaces itself with every command without preserving control.","L1":"Can recall that shells use fork() and exec(), but cannot explain why the separation matters or what happens between the two calls.","L2":"Can explain that a shell creates a child and runs a command, but has only a vague idea of how fork and exec divide responsibilities or why wait() is used for foreground commands.","L3":"Can explain that the shell uses fork() to create a child, can adjust the child's execution context before exec(), then uses exec() to run the requested command and wait() when the foreground shell must order itself after child completion; recognizes redirection as an example enabled by the gap between fork and exec.","L4":"Can apply the separation to shell scenarios, such as explaining where redirection setup belongs, why the parent shell remains available after the child command completes, and when wait() is needed for foreground command ordering.","L5":"Can critique alternative shell designs that combine creation and replacement too tightly, generate examples of context changes between fork and exec, and explain the flexibility gained by the separated API while distinguishing it from general fork or exec semantics alone."},"diagnostic_signals":["Explains that the shell forks a child rather than replacing the shell process directly for ordinary command execution.","Identifies code between fork() and exec() as the place where the child's execution context can be adjusted.","Uses redirection as a source-grounded example of a feature enabled between fork and exec.","States that exec() runs the requested command in the child after setup.","States that wait() is used by the parent shell for foreground command ordering.","Common misconception: says the parent shell calls exec() directly and therefore continues normally afterward."],"simulator_behavior":"When answering about this node, responses should reveal whether the learner can use the shell example to explain the practical value of separating process creation, context adjustment, command execution, and foreground waiting."},{"id":"limited_direct_execution","name":"Limited Direct Execution","type":"concept","definition":"Limited direct execution virtualizes the CPU by running a program directly on the processor while using OS and hardware support to restrict the program and preserve OS control.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 6, Sections 6.1 and 6.5","note":"Introduces the efficient-but-controlled approach to CPU virtualization."}],"diagnostic_goal":"Diagnose whether the learner understands limited direct execution as CPU virtualization that runs programs directly on the processor for efficiency while using OS and hardware support to restrict execution and preserve OS control.","levels":{"L0":"Does not recognize limited direct execution as a CPU virtualization technique, or treats it as either unrestricted direct hardware access by programs or complete interpretation by the OS.","L1":"Can recall the phrase limited direct execution or that programs run on the CPU, but cannot explain the tension between efficiency and control.","L2":"Can explain that the program runs directly on the processor and that some restrictions exist, but has an incomplete account of why hardware and OS support are needed or how OS control is preserved.","L3":"Can describe limited direct execution as running the program directly on the CPU while setting up hardware and OS mechanisms to limit what the program can do, enabling efficient CPU virtualization without reducing the OS to a mere library.","L4":"Can apply the idea to scenarios involving protected execution, explaining why direct execution is fast and why limits are necessary for restricted operations, control transfer, or safe sharing of the CPU.","L5":"Can critique the design tradeoff of efficiency versus control, generate examples of what could go wrong with no limits, and explain how limited direct execution supports virtualization while preserving objective OS authority over resources."},"diagnostic_signals":["Mentions both parts of the idea: direct CPU execution and limits or restrictions.","Explains that hardware setup or support is needed before running the program directly.","Connects the approach to efficient CPU virtualization.","Recognizes the need to preserve OS control rather than letting applications fully control hardware.","Avoids describing the OS as merely a library that the program may ignore.","Common misconception: equates limited direct execution with emulating every instruction in software."],"simulator_behavior":"When answering about this node, responses should show whether the learner can balance the efficiency of direct execution with the control provided by OS and hardware limits."},{"id":"user_mode_and_kernel_mode","name":"User Mode and Kernel Mode","type":"concept","definition":"User mode restricts application code from privileged operations, while kernel mode gives the operating system authority to access hardware resources and execute restricted instructions.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 6, Section 6.2","note":"Contrasts restricted user execution with privileged kernel execution."}],"diagnostic_goal":"Diagnose whether the learner understands the distinction between user mode and kernel mode as a hardware-supported privilege boundary that restricts applications while allowing the operating system to perform privileged operations and access hardware resources.","levels":{"L0":"Cannot distinguish user mode from kernel mode, or reverses their privileges by saying applications have full hardware authority while the OS is restricted.","L1":"Can recall the terms user mode and kernel mode, but gives only a memorized contrast such as user versus OS without explaining privileges, restricted instructions, or hardware access.","L2":"Can explain that user programs are more restricted and the OS has more privilege, but gives vague examples and may not connect the distinction to protected I/O or restricted operations.","L3":"Can accurately describe that applications in user mode lack full access to hardware resources and privileged instructions, while the operating system in kernel mode can access hardware resources and execute restricted instructions to provide protected services.","L4":"Can apply the mode distinction to scenarios, deciding whether an operation such as direct I/O or privileged resource access must occur in kernel mode and explaining why applications must use OS services instead of directly performing it.","L5":"Can critique explanations of protection mechanisms, generate valid examples of user-mode and kernel-mode responsibilities, and explain how the distinction supports limited direct execution by combining application execution with OS-controlled access to hardware."},"diagnostic_signals":["States that user mode restricts application access to hardware resources.","States that kernel mode gives the OS authority to execute privileged or restricted instructions.","Uses I/O or hardware access as an example of a protected operation.","Avoids saying user mode and kernel mode are merely different programming languages or user accounts.","Explains why OS services are needed for restricted operations by applications.","Connects the privilege distinction to controlled execution rather than only naming two modes."],"simulator_behavior":"When answering about this node, responses should reveal whether the learner can distinguish application-level restricted execution from OS-level privileged execution and reason about protected hardware operations."},{"id":"system_call_trap_and_return_from_trap","name":"System Call Trap and Return From Trap","type":"concept","definition":"A system call uses a trap instruction to enter the kernel with raised privilege, and a return-from-trap resumes the user program while lowering privilege back to user mode.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 6, Section 6.2","note":"Describes controlled privilege transfer for system calls."}],"diagnostic_goal":"Diagnose whether the user understands how a system call uses a trap to enter the kernel under controlled higher privilege and how return-from-trap resumes the user program with privilege lowered back to user mode.","levels":{"L0":"Cannot identify the role of trap or return-from-trap in a system call, or treats a system call as an ordinary function call with no privilege change or controlled kernel entry.","L1":"Can recall that a trap is involved in system calls and that the kernel runs them, but gives a memorized or vague account of privilege changes and return behavior.","L2":"Can explain that a trap transfers execution from user code into the kernel and raises privilege, and that return-from-trap goes back to the user program, but may be unclear about why the transfer is controlled or that privilege is lowered on return.","L3":"Can describe the full two-way control flow: user program executes a trap for a system call, hardware enters the kernel with raised privilege, the OS performs the requested work, and return-from-trap resumes the user program in user mode; can distinguish this from an unrestricted jump into kernel code.","L4":"Can apply the concept to reason about new system-call scenarios, identifying when execution should trap, what privilege mode the CPU should be in before, during, and after the call, and why return-from-trap is necessary for safe resumption.","L5":"Can critique and teach the mechanism as a controlled privilege transition, generate examples and counterexamples, and explain the security and control consequences of omitting either trap-mediated entry or privilege-lowering return."},"diagnostic_signals":["States that a trap both jumps into the kernel and raises privilege to kernel mode.","States that return-from-trap resumes the calling user program and lowers privilege back to user mode.","Distinguishes a system call trap from an ordinary user-level function call or arbitrary jump.","Correctly tracks CPU mode before the trap, during kernel execution, and after return-from-trap.","Explains that the transition is controlled so user programs can request OS services without directly running arbitrary privileged code.","Common misconception: says the user program remains in user mode while executing kernel code.","Common misconception: says return-from-trap only returns a value and does not affect privilege or execution mode."],"simulator_behavior":"When answering, reflect the user state by varying whether responses merely name traps, explain the trap and return path, track privilege changes accurately, and reason about why controlled entry and privilege-lowering return are required."},{"id":"trap_table_controlled_kernel_entry","name":"Trap Table Controlled Kernel Entry","type":"concept","definition":"A trap table is initialized by the kernel so hardware invokes approved OS handlers for system calls, interrupts, and exceptional events instead of letting user code choose arbitrary kernel entry points.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 6, Section 6.2","note":"Explains boot-time setup of controlled trap destinations."}],"diagnostic_goal":"Diagnose whether the user understands that the kernel initializes a trap table at boot so hardware dispatches system calls, interrupts, and exceptions only to approved OS handler locations.","levels":{"L0":"Does not recognize what a trap table is, or believes user programs directly choose arbitrary kernel addresses for system calls, interrupts, or exceptions.","L1":"Can recall the term trap table and associate it with traps or handlers, but cannot explain who sets it up, when it is set up, or how it constrains kernel entry.","L2":"Can explain that a trap table maps trap-like events to OS handlers, but may be vague about boot-time kernel initialization or why user code cannot freely choose the target.","L3":"Can describe that the kernel sets up the trap table at boot, hardware uses it to invoke approved handlers for system calls, interrupts, and exceptional events, and this preserves kernel control over entry points.","L4":"Can apply the concept to scenarios by deciding whether a proposed kernel entry path is safe, identifying which component chooses handler addresses, and explaining how the trap table prevents arbitrary user-selected kernel jumps.","L5":"Can critique and generalize the trap table mechanism as an indirection that balances controlled access to OS services with protection, and can generate examples showing what would go wrong without kernel-controlled handler registration."},"diagnostic_signals":["Mentions that the kernel initializes the trap table at boot time.","Identifies the trap table as containing approved OS handler locations for system calls, interrupts, and exceptional events.","Explains that hardware consults the table on trap-like events rather than trusting a user-supplied arbitrary destination.","Connects the trap table to controlled kernel entry and protection of kernel control flow.","Distinguishes trap table setup from the user program invoking a system call.","Common misconception: says each user process installs its own kernel trap destinations.","Common misconception: treats the trap table as merely a list of system call names with no control-flow or protection function."],"simulator_behavior":"When answering, reflect the user state by varying whether responses confuse the trap table with user-chosen jumps, merely recall the term, or accurately explain boot-time kernel setup and hardware dispatch to approved OS handlers."},{"id":"timer_interrupt_for_preemptive_control","name":"Timer Interrupt for Preemptive Control","type":"concept","definition":"A timer interrupt periodically transfers control from the running process back to the operating system, allowing the OS to preempt non-cooperative or CPU-bound code.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 6, Section 6.3","note":"Shows how the OS regains control without process cooperation."}],"diagnostic_goal":"Diagnose whether the user understands how a timer interrupt lets the operating system regain control from a running process without relying on that process to cooperate.","levels":{"L0":"Does not recognize timer interrupts as a mechanism for OS control, or thinks a CPU-bound process can run indefinitely unless it voluntarily calls the OS.","L1":"Can recall that timer interrupts are related to scheduling or preemption, but cannot explain how they transfer control back to the operating system.","L2":"Can explain that a timer interrupt periodically stops the current process and lets the OS run, but may be unclear about the contrast with cooperative system calls or about why this matters for CPU-bound code.","L3":"Can describe that the OS programs a timer so an interrupt periodically transfers control from the running process to the OS, enabling preemption of non-cooperative or CPU-bound processes and possible scheduling of another process.","L4":"Can apply the concept to scheduling scenarios by identifying when a timer interrupt is needed, predicting that the OS regains control even if the process makes no system calls, and reasoning about preemptive control over CPU use.","L5":"Can critique and teach timer interrupts as the foundation for non-cooperative preemptive control, generate examples contrasting cooperative and preemptive behavior, and explain consequences if the timer mechanism were absent or disabled."},"diagnostic_signals":["States that a timer interrupt periodically transfers control from the running process to the OS.","Contrasts preemptive control with waiting for a process to make a system call or otherwise cooperate.","Explains that the OS can stop or preempt CPU-bound or non-cooperative code.","Mentions that after the OS regains control it may choose to run another process.","Correctly avoids describing timer interrupts as ordinary function calls made by the process.","Common misconception: says the timer interrupt is requested voluntarily by the running program.","Common misconception: says preemption requires the process to finish or block first."],"simulator_behavior":"When answering, reflect the user state by varying whether responses rely on cooperative process behavior, merely mention scheduling, or accurately explain periodic timer-driven transfer of control back to the OS for preemption."},{"id":"context_switch","name":"Context Switch","type":"concept","definition":"A context switch saves the execution state of the currently running process and restores the saved state of another process so the CPU resumes execution in the new process.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 6, Section 6.3","note":"Describes saving and restoring register and kernel context."}],"diagnostic_goal":"Diagnose whether the user understands that a context switch saves the current process execution state and restores another process state so the CPU resumes the other process correctly.","levels":{"L0":"Does not recognize context switching as saving and restoring process execution state, or confuses it with simply starting a new program or changing a variable.","L1":"Can recall that a context switch changes from one process to another, but gives little detail about saved and restored state.","L2":"Can explain that the OS saves the current process state and loads another process state, but may omit key state such as registers, program counter, or kernel stack context, or may be imprecise about resumption.","L3":"Can describe a scheduler-triggered switch in which the OS saves register values and related execution context for the currently running process and restores the saved registers, program counter, and kernel stack context of another process so it resumes where it left off.","L4":"Can apply the concept to trace what happens during a switch between processes, identify which saved state determines where execution resumes, and reason about errors that would occur if state were not saved or restored correctly.","L5":"Can critique and teach context switching as a state-preservation mechanism underlying multiprogramming, generate examples of correct and incorrect switch behavior, and abstract the need to preserve enough CPU and kernel context for transparent resumption."},"diagnostic_signals":["Says the current process's execution state is saved before another process runs.","Mentions restoring a previously saved state for the next process.","Identifies relevant state such as registers, program counter, and kernel stack context.","Explains that the new process resumes execution from its saved point, not from the beginning unless that is its saved state.","Connects the context switch to a scheduler decision without reducing it to scheduling policy alone.","Common misconception: says a context switch only changes memory ownership or process priority.","Common misconception: omits restoration and describes only saving the old process."],"simulator_behavior":"When answering, reflect the user state by varying whether responses merely say processes switch, include partial saved-state details, or accurately track saving and restoring CPU and kernel context for resumption."},{"id":"scheduling_turnaround_time_and_response_time","name":"Scheduling Turnaround Time and Response Time","type":"concept","definition":"Turnaround time measures completion time minus arrival time, while response time measures the time from a job's arrival until its first scheduled execution.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 7, Sections 7.2 and 7.6","note":"Defines the core scheduling metrics for batch and interactive workloads."}],"diagnostic_goal":"Diagnose whether the user can distinguish and compute scheduling turnaround time and response time from job arrival, first scheduled execution, and completion times.","levels":{"L0":"Cannot identify turnaround time or response time, or confuses both with unrelated quantities such as total CPU burst length regardless of arrival or first run time.","L1":"Can recall the names of the two metrics or one formula fragment, but often swaps them or cannot apply them to a job timeline.","L2":"Can explain that turnaround concerns completion and response concerns first scheduling, and may compute simple cases, but may still make boundary errors with arrival time or with jobs that wait before first running.","L3":"Can state and use the definitions: turnaround time is completion time minus arrival time, while response time is first scheduled execution time minus arrival time; can explain why response time is important for interactive time-shared systems.","L4":"Can apply both metrics across new schedules with multiple arrivals, waiting periods, and preemption, correctly identifying completion and first-run times and comparing how policies affect batch versus interactive goals.","L5":"Can critique and teach the distinction between completion-oriented and first-response-oriented scheduling metrics, generate schedules that separate the two, and explain why optimizing one metric may not optimize the other."},"diagnostic_signals":["Correctly defines turnaround time as completion time minus arrival time.","Correctly defines response time as time from arrival until first scheduled execution.","Uses first run time, not completion time, when computing response time.","Uses arrival time as the baseline for both metrics.","Can explain that turnaround was introduced as a performance metric and response time matters for interactive time-shared systems.","Common misconception: computes response time as completion time minus arrival time.","Common misconception: ignores arrival time and uses only service or run duration."],"simulator_behavior":"When answering, reflect the user state by varying whether responses swap the metrics, recite formulas without applying them, or accurately compute and interpret turnaround and response times from scheduling timelines."},{"id":"fifo_scheduling_and_convoy_effect","name":"FIFO Scheduling and Convoy Effect","type":"concept","definition":"FIFO scheduling runs jobs in arrival order; if a long job precedes short jobs, the short jobs can wait behind it and experience the convoy effect and poor turnaround time.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 7, Section 7.3","note":"Introduces FIFO and its convoy-effect weakness."}],"diagnostic_goal":"Diagnose whether the user understands FIFO scheduling by arrival order and how a long job ahead of short jobs can create the convoy effect and poor turnaround time.","levels":{"L0":"Does not recognize FIFO scheduling or believes it selects jobs by shortest length, priority, or response needs rather than arrival order.","L1":"Can recall that FIFO means first-in-first-out or arrival order, but cannot explain the convoy effect or its impact on waiting and turnaround.","L2":"Can explain that FIFO runs jobs in arrival order and that short jobs may wait behind a long job, but may not clearly connect this to poor turnaround time or the convoy-effect pattern.","L3":"Can describe FIFO as simple non-reordering by arrival order and explain the convoy effect: relatively short jobs queue behind a heavyweight resource consumer, causing unnecessary waiting and poor turnaround when job lengths differ.","L4":"Can apply the concept to scheduling examples by constructing FIFO order, calculating or comparing waiting and turnaround effects, and identifying when a long leading job will produce a convoy effect.","L5":"Can critique FIFO's simplicity versus its weakness under mixed job lengths, teach the convoy effect with examples and counterexamples, and reason about why alternative policies may improve turnaround in such cases."},"diagnostic_signals":["States that FIFO runs jobs in the order they arrive.","Identifies a long or heavyweight job at the front as the cause of short jobs waiting behind it.","Uses the term or concept of convoy effect for short jobs queued behind a long resource consumer.","Connects the convoy effect to poor waiting time or turnaround time for short jobs.","Can trace a simple FIFO schedule without reordering by job length.","Common misconception: says FIFO automatically gives good turnaround because it is fair by arrival order.","Common misconception: describes FIFO as selecting the shortest job first."],"simulator_behavior":"When answering, reflect the user state by varying whether responses only name arrival order, miss the convoy effect, or accurately explain and apply how long leading jobs degrade turnaround for short jobs."},{"id":"shortest_job_scheduling_policies","name":"Shortest-Job Scheduling Policies","type":"concept","definition":"SJF chooses the shortest known job in a non-preemptive setting, while STCF preempts when appropriate by always choosing the job with the least remaining time.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 7, Sections 7.4 and 7.5","note":"Covers SJF and its preemptive STCF variant."}],"diagnostic_goal":"Diagnose whether the user understands the relationship between SJF and STCF, including non-preemptive shortest-job choice versus preemptive least-remaining-time choice.","levels":{"L0":"Does not recognize SJF or STCF, or confuses them with FIFO, round-robin, or priority scheduling without reference to job length or remaining time.","L1":"Can recall that shortest-job policies choose short jobs, but cannot distinguish SJF from STCF or explain preemption.","L2":"Can explain that SJF chooses the shortest known job and STCF is related to shortest remaining time, but may be unclear about non-preemptive versus preemptive behavior or how later arrivals affect the decision.","L3":"Can describe SJF as choosing the shortest known job in a non-preemptive setting and STCF as adding preemption by always choosing the job with the least remaining time, especially when new jobs arrive after the current job has started.","L4":"Can apply SJF and STCF to scheduling timelines, deciding whether a running job continues or is preempted when a new job arrives, and comparing resulting turnaround behavior under simultaneous and staggered arrivals.","L5":"Can critique and teach why SJF optimizes turnaround under simultaneous arrivals while STCF extends the idea to later arrivals via remaining-time comparisons, and can generate examples where SJF and STCF make the same or different choices."},"diagnostic_signals":["Identifies SJF as selecting the shortest known job in a non-preemptive setting.","Identifies STCF as the preemptive form of SJF.","States that STCF chooses the job with the least remaining time to completion.","Correctly handles a later-arriving short job by considering whether it should preempt the current job under STCF.","Recognizes the simultaneous-arrival condition under which SJF is presented as optimizing turnaround.","Common misconception: says SJF always preempts when a shorter job arrives.","Common misconception: says STCF compares original job length rather than remaining time."],"simulator_behavior":"When answering, reflect the user state by varying whether responses only mention short jobs, blur preemption, or accurately distinguish SJF from STCF and apply remaining-time comparisons."},{"id":"multi_level_feedback_queue_scheduling","name":"Multi-Level Feedback Queue Scheduling","type":"concept","definition":"MLFQ uses multiple priority queues and feedback from observed behavior to favor interactive jobs while still making progress on long-running CPU-intensive jobs when future job lengths are not known.","source_locators":[{"source_id":"OSTEP","locator":"Experiment Scope: Operating Systems Foundations (part 2), Chapter 8, Sections 8.1-8.6","note":"Introduces MLFQ goals and core rules."}],"diagnostic_goal":"Diagnose whether the user understands how MLFQ uses multiple priority queues and feedback from observed job behavior to favor interactive jobs while still allowing long CPU-intensive jobs to progress when future lengths are unknown.","levels":{"L0":"Does not recognize MLFQ or treats it as a single fixed queue with no priorities, feedback, demotion, or starvation prevention.","L1":"Can recall that MLFQ has multiple queues or priorities, but cannot explain how feedback from job behavior changes priority or how it serves interactive and long-running jobs.","L2":"Can explain that MLFQ uses several priority queues and adjusts jobs based on behavior, but may only partially describe rules such as new jobs starting high, demotion after using time allotment, round-robin within a queue, or priority boosts.","L3":"Can describe the core MLFQ rules: higher-priority queues run first, jobs at the same priority use round-robin, new jobs begin at high priority, jobs that consume their time allotment are demoted, and periodic boosts help avoid starvation while favoring interactive jobs.","L4":"Can apply MLFQ to scheduling scenarios by tracking job movement among queues, predicting how interactive versus CPU-intensive behavior affects priority, applying round-robin within a queue, and explaining how boosts allow long jobs to make progress.","L5":"Can critique and teach MLFQ as an adaptive scheduling policy for unknown future job lengths, generate examples showing both its responsiveness and starvation risks, and reason about how feedback, demotion, and boosts balance interactive performance with progress for long-running jobs."},"diagnostic_signals":["Mentions multiple priority queues rather than a single queue.","Explains that feedback from observed behavior determines or changes a job's priority.","States that higher-priority jobs run before lower-priority jobs and that same-priority jobs use round-robin.","States that new jobs start at high priority.","Explains demotion after a job uses its time allotment, especially for CPU-intensive behavior.","Mentions periodic priority boosts as a way to avoid starvation of low-priority long-running jobs.","Connects the policy to favoring interactive jobs while still making progress on CPU-intensive jobs when future job lengths are unknown.","Common misconception: says MLFQ requires knowing all job lengths in advance."],"simulator_behavior":"When answering, reflect the user state by varying whether responses merely name multiple queues, omit feedback and boosts, or accurately track priority rules, demotion, round-robin behavior, and starvation avoidance in MLFQ."}],"edges":[{"id":"edge_operating_system_virtualization_prerequisite_for_limited_direct_execution","source":"operating_system_virtualization","target":"limited_direct_execution","type":"prerequisite_for","rationale":"Limited direct execution is introduced as a CPU-virtualization technique, so understanding OS virtualization as transforming physical resources into virtual abstractions is needed to understand what limited direct execution is trying to accomplish.","weight":0.88,"curation_confidence":0.9},{"id":"edge_operating_system_virtualization_supports_operating_system_as_resource_manager","source":"operating_system_virtualization","target":"operating_system_as_resource_manager","type":"supports","rationale":"Virtualizing resources helps explain why multiple programs can share physical CPU, memory, and disk resources, which in turn motivates the OS role of allocating those shared resources.","weight":0.74,"curation_confidence":0.82},{"id":"edge_operating_system_as_standard_interface_provider_prerequisite_for_system_call_trap_and_return_from_trap","source":"operating_system_as_standard_interface_provider","target":"system_call_trap_and_return_from_trap","type":"prerequisite_for","rationale":"System-call trap mechanics explain how applications cross the OS interface to request services, so the notion of system calls as OS-provided interfaces is a prerequisite for stable understanding of the trap-and-return mechanism.","weight":0.86,"curation_confidence":0.9},{"id":"edge_user_mode_and_kernel_mode_prerequisite_for_system_call_trap_and_return_from_trap","source":"user_mode_and_kernel_mode","target":"system_call_trap_and_return_from_trap","type":"prerequisite_for","rationale":"A system call trap raises privilege to kernel mode and return-from-trap lowers privilege back to user mode, so the user/kernel privilege distinction is required to understand the mechanism accurately.","weight":0.95,"curation_confidence":0.96},{"id":"edge_user_mode_and_kernel_mode_prerequisite_for_limited_direct_execution","source":"user_mode_and_kernel_mode","target":"limited_direct_execution","type":"prerequisite_for","rationale":"Limited direct execution depends on running application code directly while restricting privileged operations; the user-mode and kernel-mode distinction is the core privilege boundary that makes those limits meaningful.","weight":0.9,"curation_confidence":0.94},{"id":"edge_system_call_trap_and_return_from_trap_supports_limited_direct_execution","source":"system_call_trap_and_return_from_trap","target":"limited_direct_execution","type":"supports","rationale":"Trap-mediated system calls explain how limited direct execution can let user programs run directly while still providing controlled entry into the kernel for privileged OS services.","weight":0.82,"curation_confidence":0.88},{"id":"edge_timer_interrupt_for_preemptive_control_supports_limited_direct_execution","source":"timer_interrupt_for_preemptive_control","target":"limited_direct_execution","type":"supports","rationale":"Timer interrupts explain how the OS regains control from directly executing programs without their cooperation, which supports the control side of limited direct execution.","weight":0.84,"curation_confidence":0.9},{"id":"edge_trap_table_controlled_kernel_entry_supports_system_call_trap_and_return_from_trap","source":"trap_table_controlled_kernel_entry","target":"system_call_trap_and_return_from_trap","type":"supports","rationale":"The trap table explains how trap events are dispatched to approved kernel handlers rather than arbitrary user-selected destinations, strengthening the controlled-entry account of system-call traps.","weight":0.78,"curation_confidence":0.86},{"id":"edge_timer_interrupt_for_preemptive_control_supports_context_switch","source":"timer_interrupt_for_preemptive_control","target":"context_switch","type":"supports","rationale":"A timer interrupt can return control to the OS and create the opportunity for the scheduler to switch away from the current process, making it a specific trigger that supports preemptive context switching.","weight":0.72,"curation_confidence":0.8},{"id":"edge_process_abstraction_prerequisite_for_process_machine_state","source":"process_abstraction","target":"process_machine_state","type":"prerequisite_for","rationale":"Process machine state is the execution state of a process, so understanding a process as a running-program abstraction is necessary before its memory, register, and I/O state can be interpreted correctly.","weight":0.9,"curation_confidence":0.94},{"id":"edge_process_abstraction_prerequisite_for_process_creation_and_loading","source":"process_abstraction","target":"process_creation_and_loading","type":"prerequisite_for","rationale":"Process creation is the transformation of an executable into a running process, so the distinction between an inactive program and the process abstraction is required to understand creation and loading.","weight":0.9,"curation_confidence":0.93},{"id":"edge_process_abstraction_prerequisite_for_process_states_and_transitions","source":"process_abstraction","target":"process_states_and_transitions","type":"prerequisite_for","rationale":"Running, ready, and blocked are states of a process, so understanding what a process is is necessary for stable understanding of the state model and its transitions.","weight":0.86,"curation_confidence":0.91},{"id":"edge_process_abstraction_prerequisite_for_process_list_and_process_control_block","source":"process_abstraction","target":"process_list_and_process_control_block","type":"prerequisite_for","rationale":"Process lists and process control blocks are OS data structures for tracking processes, so the process abstraction is needed to understand what those structures describe and manage.","weight":0.84,"curation_confidence":0.88},{"id":"edge_process_machine_state_prerequisite_for_context_switch","source":"process_machine_state","target":"context_switch","type":"prerequisite_for","rationale":"A context switch saves and restores process execution state, so understanding the relevant machine state such as registers, program counter, and I/O-related state is required to understand what is being preserved.","weight":0.93,"curation_confidence":0.95},{"id":"edge_process_list_and_process_control_block_supports_context_switch","source":"process_list_and_process_control_block","target":"context_switch","type":"supports","rationale":"Process control blocks store saved context and per-process metadata, which explains where the OS can keep the state needed to stop and later resume processes during context switches.","weight":0.82,"curation_confidence":0.88},{"id":"edge_context_switch_supports_mechanism_and_policy_separation","source":"context_switch","target":"mechanism_and_policy_separation","type":"supports","rationale":"Context switching is a concrete example of an OS mechanism: it is the low-level machinery that carries out a switch after a scheduling policy decides which process should run.","weight":0.8,"curation_confidence":0.9},{"id":"edge_fork_process_creation_part_of_unix_fork_exec_and_wait_process_api","source":"fork_process_creation","target":"unix_fork_exec_and_wait_process_api","type":"part_of","rationale":"fork() is one of the core calls in the UNIX process-control API, where it provides the process-creation component of the combined fork, exec, and wait model.","weight":0.92,"curation_confidence":0.96},{"id":"edge_exec_process_image_replacement_part_of_unix_fork_exec_and_wait_process_api","source":"exec_process_image_replacement","target":"unix_fork_exec_and_wait_process_api","type":"part_of","rationale":"exec() is one of the core calls in the UNIX process-control API, where it provides the program-image replacement component used with fork() and wait().","weight":0.92,"curation_confidence":0.96},{"id":"edge_exec_process_image_replacement_contrasts_with_fork_process_creation","source":"exec_process_image_replacement","target":"fork_process_creation","type":"contrasts_with","rationale":"fork() creates a new child process that continues from the call, while exec() does not create a new process and instead replaces the current process's program image.","weight":0.9,"curation_confidence":0.95},{"id":"edge_process_creation_and_loading_supports_exec_process_image_replacement","source":"process_creation_and_loading","target":"exec_process_image_replacement","type":"supports","rationale":"Both concepts involve loading executable code and data into memory, and process creation provides the broader loading-and-initialization background needed to explain exec() as loading a new program image into an existing process.","weight":0.72,"curation_confidence":0.78},{"id":"edge_unix_fork_exec_and_wait_process_api_prerequisite_for_fork_and_exec_separation_in_a_shell","source":"unix_fork_exec_and_wait_process_api","target":"fork_and_exec_separation_in_a_shell","type":"prerequisite_for","rationale":"The shell example depends on the combined roles of fork(), exec(), and wait(): creating a child, replacing its program image, and ordering the parent shell with child completion.","weight":0.94,"curation_confidence":0.96},{"id":"edge_fork_process_creation_prerequisite_for_fork_and_exec_separation_in_a_shell","source":"fork_process_creation","target":"fork_and_exec_separation_in_a_shell","type":"prerequisite_for","rationale":"Understanding how fork() creates a child that continues from the call is required to explain why a shell can create a separate child process before running a command.","weight":0.88,"curation_confidence":0.92},{"id":"edge_exec_process_image_replacement_prerequisite_for_fork_and_exec_separation_in_a_shell","source":"exec_process_image_replacement","target":"fork_and_exec_separation_in_a_shell","type":"prerequisite_for","rationale":"Understanding exec() as replacing the program image within an existing process is required to explain how the shell's child becomes the requested command after any setup between fork and exec.","weight":0.88,"curation_confidence":0.92},{"id":"edge_scheduling_turnaround_time_and_response_time_prerequisite_for_fifo_scheduling_and_convoy_effect","source":"scheduling_turnaround_time_and_response_time","target":"fifo_scheduling_and_convoy_effect","type":"prerequisite_for","rationale":"The convoy-effect weakness of FIFO is described in terms of waiting and poor turnaround time, so the scheduling metric of turnaround time is needed to evaluate the effect precisely.","weight":0.82,"curation_confidence":0.87},{"id":"edge_scheduling_turnaround_time_and_response_time_prerequisite_for_shortest_job_scheduling_policies","source":"scheduling_turnaround_time_and_response_time","target":"shortest_job_scheduling_policies","type":"prerequisite_for","rationale":"SJF and STCF are motivated by turnaround-time behavior, so understanding scheduling turnaround time is necessary for stable understanding of what these shortest-job policies optimize or improve.","weight":0.84,"curation_confidence":0.89},{"id":"edge_fifo_scheduling_and_convoy_effect_contrasts_with_shortest_job_scheduling_policies","source":"fifo_scheduling_and_convoy_effect","target":"shortest_job_scheduling_policies","type":"contrasts_with","rationale":"FIFO schedules by arrival order and can make short jobs wait behind a long job, whereas SJF and STCF use job length or remaining time to favor shorter work and improve turnaround behavior under their assumptions.","weight":0.86,"curation_confidence":0.9},{"id":"edge_multi_level_feedback_queue_scheduling_contrasts_with_shortest_job_scheduling_policies","source":"multi_level_feedback_queue_scheduling","target":"shortest_job_scheduling_policies","type":"contrasts_with","rationale":"SJF and STCF rely on known job lengths or remaining times, while MLFQ is designed for cases where future job lengths are not known and instead uses feedback from observed behavior to adjust priorities.","weight":0.84,"curation_confidence":0.88},{"id":"edge_scheduling_turnaround_time_and_response_time_supports_multi_level_feedback_queue_scheduling","source":"scheduling_turnaround_time_and_response_time","target":"multi_level_feedback_queue_scheduling","type":"supports","rationale":"Response time helps explain MLFQ's goal of favoring interactive jobs, while turnaround-oriented scheduling metrics provide context for comparing MLFQ with earlier scheduling policies.","weight":0.72,"curation_confidence":0.8}]}</script>
+  <div class="app-shell">
+    <header class="masthead">
+      <p class="eyebrow">KnowAct · Expert content-validity review</p>
+      <h1 id="page-title"></h1>
+      <p class="subtitle" id="page-subtitle"></p>
+      <div class="binding-strip" id="binding-strip"></div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="panel nav-panel">
+          <div class="nav-title">评审导航</div>
+          <button class="nav-button active" data-section-target="overview">1. 范围与评审者 <span class="count" id="nav-overview-count"></span></button>
+          <button class="nav-button" data-section-target="nodes">2. 节点 <span class="count" id="nav-nodes-count"></span></button>
+          <button class="nav-button" data-section-target="edges">3. 边 <span class="count" id="nav-edges-count"></span></button>
+          <button class="nav-button" data-section-target="coverage">4. 覆盖度 <span class="count" id="nav-coverage-count"></span></button>
+          <button class="nav-button" data-section-target="submit">5. 校验与导出 <span class="count" id="nav-submit-count"></span></button>
+          <div class="save-state" id="save-state">尚未保存</div>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section class="section active" id="section-overview"></section>
+        <section class="section" id="section-nodes"></section>
+        <section class="section" id="section-edges"></section>
+        <section class="section" id="section-coverage"></section>
+        <section class="section" id="section-submit"></section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    "use strict";
+
+    const packageData = JSON.parse(document.getElementById("review-package").textContent);
+    const SUBMISSION_SCHEMA = "knowact.kg_review_submission.v3";
+    const storageKey = `knowact:kg-review:${packageData.graph.graph_fingerprint}`;
+    const sectionOrder = ["overview", "nodes", "edges", "coverage", "submit"];
+    let activeSection = "overview";
+    let state = loadState() || createBlankState();
+
+    const nodeOptions = {
+      scope_fit: ["in_scope", "boundary", "out_of_scope"],
+      granularity: ["appropriate", "too_broad", "too_narrow", "mixed"],
+      diagnostic_usefulness: ["adequate", "minor_issue", "major_issue"],
+      rubric_quality: ["adequate", "minor_issue", "major_issue"],
+      decision: ["accept", "edit", "reject"],
+    };
+    const edgeOptions = {
+      relation_validity: ["valid", "uncertain", "invalid"],
+      type_correct: ["yes", "no", "uncertain"],
+      replacement_type: ["part_of", "prerequisite_for", "supports", "contrasts_with"],
+      direction_correct: ["yes", "no", "not_applicable", "uncertain"],
+      provenance_class: ["source_explicit", "source_entailed", "expert_pedagogical_extension", "unsupported"],
+      decision: ["accept", "edit", "delete"],
+    };
+
+    function esc(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function blankNodeReview() {
+      return {
+        scope_fit: "", granularity: "",
+        diagnostic_usefulness: "", rubric_quality: "", decision: "",
+        proposed_change: "", rationale: "",
+      };
+    }
+
+    function blankEdgeReview() {
+      return {
+        relation_validity: "", type_correct: "", replacement_type: "",
+        direction_correct: "", provenance_class: "", decision: "",
+        proposed_change: "", rationale: "",
+      };
+    }
+
+    function blankCoverageReview() {
+      return { task_coverage: "", missing_or_redundant_content: "", rationale: "" };
+    }
+
+    function createBlankState() {
+      return {
+        submissionId: "",
+        reviewer: {
+          reviewer_id: "",
+          role: "",
+          experience_band: "",
+          introduction: "",
+        },
+        nodeReviews: Object.fromEntries(packageData.nodes.map(node => [node.id, blankNodeReview()])),
+        edgeReviews: Object.fromEntries(packageData.edges.map(edge => [edge.id, blankEdgeReview()])),
+        coverageReviews: Object.fromEntries(
+          packageData.scope.representative_tasks.map((_, index) => [`task_${String(index + 1).padStart(3, "0")}`, blankCoverageReview()])
+        ),
+        overall: { decision: "", rationale: "" },
+      };
+    }
+
+    function loadState() {
+      try {
+        const value = localStorage.getItem(storageKey);
+        if (!value) return null;
+        const parsed = JSON.parse(value);
+        if (parsed.graphFingerprint !== packageData.graph.graph_fingerprint) return null;
+        return parsed.state;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(storageKey, JSON.stringify({
+        graphFingerprint: packageData.graph.graph_fingerprint,
+        state,
+      }));
+      document.getElementById("save-state").textContent = `已在本机保存 · ${new Date().toLocaleTimeString()}`;
+      updateProgress();
+    }
+
+    function ensureCompleteShape() {
+      const reviewer = state.reviewer || {};
+      state.reviewer = {
+        reviewer_id: reviewer.reviewer_id || "",
+        role: reviewer.role || "",
+        experience_band: reviewer.experience_band || "",
+        introduction: reviewer.introduction || "",
+      };
+      for (const node of packageData.nodes) {
+        state.nodeReviews[node.id] ||= blankNodeReview();
+      }
+      for (const edge of packageData.edges) {
+        state.edgeReviews[edge.id] ||= blankEdgeReview();
+      }
+      packageData.scope.representative_tasks.forEach((_, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        state.coverageReviews[id] ||= blankCoverageReview();
+      });
+      state.overall ||= { decision: "", rationale: "" };
+    }
+
+    function selectField(label, scope, id, field, value, options, hint = "", allowBlank = true) {
+      const optionHtml = [
+        allowBlank ? '<option value="">请选择 / Select</option>' : "",
+        ...options.map(option => `<option value="${esc(option)}"${value === option ? " selected" : ""}>${esc(option)}</option>`),
+      ].join("");
+      return `<div class="field">
+        <label class="required">${esc(label)}</label>
+        <select data-scope="${esc(scope)}" data-id="${esc(id)}" data-field="${esc(field)}">${optionHtml}</select>
+        ${hint ? `<span class="hint">${esc(hint)}</span>` : ""}
+      </div>`;
+    }
+
+    function textField(label, scope, id, field, value, options = {}) {
+      const full = options.full ? " full" : "";
+      const required = options.required ? " required" : "";
+      const hint = options.hint ? `<span class="hint">${esc(options.hint)}</span>` : "";
+      const type = options.type || "textarea";
+      const min = options.min !== undefined ? ` min="${esc(options.min)}"` : "";
+      const step = options.step !== undefined ? ` step="${esc(options.step)}"` : "";
+      if (type === "textarea") {
+        return `<div class="field${full}">
+          <label class="${required}">${esc(label)}</label>
+          <textarea class="${options.compact ? "compact-textarea" : ""}" data-scope="${esc(scope)}" data-id="${esc(id)}" data-field="${esc(field)}">${esc(value)}</textarea>
+          ${hint}
+        </div>`;
+      }
+      return `<div class="field${full}">
+        <label class="${required}">${esc(label)}</label>
+        <input type="${esc(type)}" value="${esc(value)}" data-scope="${esc(scope)}" data-id="${esc(id)}" data-field="${esc(field)}"${min}${step}>
+        ${hint}
+      </div>`;
+    }
+
+    function renderLabelGuide(title, intro, items) {
+      return `<aside class="panel card label-guide">
+        <h3>${esc(title)}</h3>
+        <p>${esc(intro)}</p>
+        <div class="label-guide-grid">
+          ${items.map(item => `<div class="label-guide-item">
+            <strong>${esc(item.label)} <code>${esc(item.field)}</code></strong>
+            <p>${esc(item.description)}</p>
+          </div>`).join("")}
+        </div>
+      </aside>`;
+    }
+
+    function nodeIsComplete(review) {
+      const base = Object.keys(nodeOptions).every(field => Boolean(review[field]));
+      if (!base) return false;
+      if (["edit", "reject"].includes(review.decision) && !review.rationale.trim()) return false;
+      return review.decision !== "edit" || Boolean(review.proposed_change.trim());
+    }
+
+    function edgeIsComplete(review, edge) {
+      const required = ["relation_validity", "type_correct", "direction_correct", "provenance_class", "decision"];
+      if (!required.every(field => Boolean(review[field]))) return false;
+      if (review.type_correct === "no" && !review.replacement_type) return false;
+      if (edge.type === "contrasts_with" && review.direction_correct !== "not_applicable") return false;
+      if (edge.type !== "contrasts_with" && review.direction_correct === "not_applicable") return false;
+      if (["edit", "delete"].includes(review.decision) && !review.rationale.trim()) return false;
+      return review.decision !== "edit" || Boolean(review.proposed_change.trim());
+    }
+
+    function coverageIsComplete(review) {
+      if (!review.task_coverage) return false;
+      if (review.task_coverage !== "sufficient") {
+        return Boolean(review.rationale.trim() && review.missing_or_redundant_content.trim());
+      }
+      return true;
+    }
+
+    function metadataIssues() {
+      const reviewer = state.reviewer;
+      return ["reviewer_id", "role", "experience_band", "introduction"]
+        .filter(field => !String(reviewer[field] || "").trim())
+        .map(field => `评审者字段 ${field} 尚未填写。`);
+    }
+
+    function validationIssues() {
+      const issues = metadataIssues().map(message => ({ section: "overview", message }));
+      packageData.nodes.forEach((node, index) => {
+        if (!nodeIsComplete(state.nodeReviews[node.id])) {
+          issues.push({ section: "nodes", message: `节点 ${index + 1} (${node.id}) 未完成或条件字段不完整。` });
+        }
+      });
+      packageData.edges.forEach((edge, index) => {
+        if (!edgeIsComplete(state.edgeReviews[edge.id], edge)) {
+          issues.push({ section: "edges", message: `边 ${index + 1} (${edge.id}) 未完成或条件字段不完整。` });
+        }
+      });
+      packageData.scope.representative_tasks.forEach((_, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        if (!coverageIsComplete(state.coverageReviews[id])) {
+          issues.push({ section: "coverage", message: `代表性任务 ${index + 1} 尚未完成；partial/insufficient 还需填写内容与理由。` });
+        }
+      });
+      if (!state.overall.decision) {
+        issues.push({ section: "coverage", message: "尚未填写总体图谱决定。" });
+      } else if (state.overall.decision !== "approve" && !state.overall.rationale.trim()) {
+        issues.push({ section: "coverage", message: "approve_after_edits / do_not_approve 必须填写总体理由。" });
+      }
+      return issues;
+    }
+
+    function updateProgress() {
+      ensureCompleteShape();
+      const nodeDone = packageData.nodes.filter(node => nodeIsComplete(state.nodeReviews[node.id])).length;
+      const edgeDone = packageData.edges.filter(edge => edgeIsComplete(state.edgeReviews[edge.id], edge)).length;
+      const coverageDone = packageData.scope.representative_tasks.filter((_, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        return coverageIsComplete(state.coverageReviews[id]);
+      }).length;
+      const overviewDone = metadataIssues().length === 0 ? 1 : 0;
+      const overallDone = state.overall.decision ? 1 : 0;
+      document.getElementById("nav-overview-count").textContent = `${overviewDone}/1`;
+      document.getElementById("nav-nodes-count").textContent = `${nodeDone}/${packageData.nodes.length}`;
+      document.getElementById("nav-edges-count").textContent = `${edgeDone}/${packageData.edges.length}`;
+      document.getElementById("nav-coverage-count").textContent = `${coverageDone + overallDone}/${packageData.scope.representative_tasks.length + 1}`;
+      document.getElementById("nav-submit-count").textContent = validationIssues().length ? "待校验" : "可导出";
+      document.querySelectorAll("[data-progress-kind]").forEach(element => {
+        const kind = element.dataset.progressKind;
+        if (kind === "nodes") element.textContent = `${nodeDone} / ${packageData.nodes.length} 完成`;
+        if (kind === "edges") element.textContent = `${edgeDone} / ${packageData.edges.length} 完成`;
+        if (kind === "coverage") element.textContent = `${coverageDone} / ${packageData.scope.representative_tasks.length} 完成`;
+      });
+    }
+
+    function renderHeader() {
+      const graph = packageData.graph;
+      document.getElementById("page-title").textContent = `${graph.domain} Candidate Knowledge Graph`;
+      document.getElementById("page-subtitle").textContent =
+        "逐项评审范围、诊断价值、L0–L5 量规与关系有效性。页面离线运行，只导入/导出 JSON。";
+      document.getElementById("binding-strip").innerHTML = `
+        <span class="binding-pill">Run · ${esc(graph.candidate_run_id)}</span>
+        <span class="binding-pill">${graph.node_count} nodes</span>
+        <span class="binding-pill">${graph.edge_count} edges</span>
+        <span class="binding-pill">${graph.representative_task_count} tasks</span>
+        <span class="binding-pill">Candidate input · not promoted</span>`;
+    }
+
+    function renderOverview() {
+      const source = packageData.source;
+      const scope = packageData.scope;
+      const reviewer = state.reviewer;
+      document.getElementById("section-overview").innerHTML = `
+        <div class="section-header">
+          <div><h2>范围与评审者</h2><p>先了解这张图谱大致覆盖什么知识，再填写评审者信息。</p></div>
+          <span class="progress-badge">${metadataIssues().length ? "信息未完整" : "信息完整"}</span>
+        </div>
+        <div class="panel card">
+          <h3>图谱知识范围 / Graph knowledge scope</h3>
+          <p class="scope-summary">${esc(scope.review_scope_summary)}</p>
+          <div class="detail-block"><h4>Source</h4><p>${esc(source.title)}</p><p class="identifier">${esc(source.citation)}</p></div>
+          <details>
+            <summary>查看冻结绑定与哈希</summary>
+            <div class="hash-list">
+              graph_fingerprint: ${esc(packageData.graph.graph_fingerprint)}<br>
+              candidate_nodes: ${esc(packageData.graph.artifact_binding.candidate_nodes.sha256)}<br>
+              candidate_edges: ${esc(packageData.graph.artifact_binding.candidate_edges.sha256)}<br>
+              source_metadata: ${esc(packageData.graph.artifact_binding.source_metadata.sha256)}<br>
+              source_content: ${esc(packageData.graph.artifact_binding.source_content_sha256)}
+            </div>
+          </details>
+        </div>
+        <div class="panel card">
+          <h3>评审者信息 / Reviewer metadata</h3>
+          <p class="identifier">专家信息只记录 ID、角色、经验区间与个人介绍。</p>
+          <div class="review-grid">
+            ${textField("评审者 ID / Reviewer ID", "reviewer", "", "reviewer_id", reviewer.reviewer_id, {type: "text", required: true})}
+            ${textField("角色 / Role", "reviewer", "", "role", reviewer.role, {type: "text", required: true})}
+            ${selectField("经验区间 / Experience band", "reviewer", "", "experience_band", reviewer.experience_band, ["0-2 years", "3-5 years", "6-10 years", "11+ years"])}
+            ${textField("个人介绍 / Introduction", "reviewer", "", "introduction", reviewer.introduction, {full: true, required: true})}
+          </div>
+        </div>`;
+    }
+
+    function renderNodeCard(node, index) {
+      const review = state.nodeReviews[node.id];
+      const done = nodeIsComplete(review);
+      const locators = node.source_locators.map(locator => `
+        <div class="locator"><strong>${esc(locator.source_id)}</strong> · ${esc(locator.locator)}
+        ${locator.note ? `<br><span class="identifier">${esc(locator.note)}</span>` : ""}</div>`).join("");
+      const levels = Object.entries(node.levels).map(([level, description]) =>
+        `<div class="rubric-row"><strong>${esc(level)}</strong> ${esc(description)}</div>`).join("");
+      const decisionNeedsRationale = ["edit", "reject"].includes(review.decision);
+      return `<article class="panel card" id="node-${esc(node.id)}">
+        <div class="card-title">
+          <div style="display:flex; gap:10px; min-width:0">
+            <span class="item-number">N${String(index + 1).padStart(2, "0")}</span>
+            <div><h3>${esc(node.name)}</h3><div class="identifier">${esc(node.id)}</div></div>
+          </div>
+          <span class="item-status ${done ? "done" : "todo"}">${done ? "已完成" : "待完成"}</span>
+        </div>
+        <div class="detail-block"><h4>Definition</h4><p>${esc(node.definition)}</p></div>
+        <details>
+          <summary>展开来源、诊断目标、L0–L5 量规与信号</summary>
+          <div class="detail-block"><h4>Source locators</h4>${locators}</div>
+          <div class="detail-block"><h4>Diagnostic goal</h4><p>${esc(node.diagnostic_goal)}</p></div>
+          <div class="detail-block"><h4>Mastery rubric</h4>${levels}</div>
+          <div class="detail-block"><h4>Diagnostic signals</h4><ul>${node.diagnostic_signals.map(item => `<li>${esc(item)}</li>`).join("")}</ul></div>
+          <div class="detail-block"><h4>Simulator behavior</h4><p>${esc(node.simulator_behavior)}</p></div>
+        </details>
+        <div class="review-grid">
+          ${selectField("范围适配 / Scope fit", "node", node.id, "scope_fit", review.scope_fit, nodeOptions.scope_fit)}
+          ${selectField("粒度 / Granularity", "node", node.id, "granularity", review.granularity, nodeOptions.granularity)}
+          ${selectField("诊断价值 / Diagnostic usefulness", "node", node.id, "diagnostic_usefulness", review.diagnostic_usefulness, nodeOptions.diagnostic_usefulness)}
+          ${selectField("量规质量 / Rubric quality", "node", node.id, "rubric_quality", review.rubric_quality, nodeOptions.rubric_quality)}
+          ${selectField("总体决定 / Decision", "node", node.id, "decision", review.decision, nodeOptions.decision)}
+          ${textField("最小必要修改 / Proposed change", "node", node.id, "proposed_change", review.proposed_change, {full: true, required: review.decision === "edit", compact: true})}
+          ${textField("评审理由 / Rationale", "node", node.id, "rationale", review.rationale, {full: true, required: decisionNeedsRationale, compact: true})}
+        </div>
+      </article>`;
+    }
+
+    function renderNodes() {
+      const labelGuide = renderLabelGuide(
+        "标签速查 / Label guide",
+        "先看字段在判断什么，再选择最贴近的选项；uncertain 表示证据不足，不能当作通过。",
+        [
+          { label: "范围适配", field: "scope_fit", description: "节点是否属于本 domain 的声明范围：in_scope 范围内；boundary 边界项；out_of_scope 范围外。" },
+          { label: "粒度", field: "granularity", description: "节点是否足够单一且适合诊断：appropriate 合适；too_broad 过宽；too_narrow 过窄；mixed 混合多个概念。" },
+          { label: "诊断价值", field: "diagnostic_usefulness", description: "该节点能否帮助区分用户掌握状态：adequate 可用；minor_issue 小问题；major_issue 严重问题。" },
+          { label: "量规质量", field: "rubric_quality", description: "L0–L5 是否有序、可区分、可从回答中观察：adequate 可用；minor_issue 小问题；major_issue 严重问题。" },
+          { label: "总体决定", field: "decision", description: "accept 原样接受；edit 修改后接受；reject 不应保留。edit 必须填写最小必要修改。" },
+          { label: "最小必要修改", field: "proposed_change", description: "只写使节点可接受所需的具体改动；选择 edit 时必填。" },
+          { label: "评审理由", field: "rationale", description: "说明判断依据；选择 edit 或 reject 时必填。" },
+        ]
+      );
+      document.getElementById("section-nodes").innerHTML = `
+        <div class="section-header">
+          <div><h2>节点评审</h2><p>检查稳定性、来源、诊断价值与 L0–L5 的有序可观察性。</p></div>
+          <span class="progress-badge" data-progress-kind="nodes"></span>
+        </div>
+        ${labelGuide}
+        ${packageData.nodes.map(renderNodeCard).join("")}`;
+    }
+
+    function renderEdgeCard(edge, index) {
+      const review = state.edgeReviews[edge.id];
+      const done = edgeIsComplete(review, edge);
+      const nodeById = Object.fromEntries(packageData.nodes.map(node => [node.id, node]));
+      const source = nodeById[edge.source];
+      const target = nodeById[edge.target];
+      const decisionNeedsRationale = ["edit", "delete"].includes(review.decision);
+      return `<article class="panel card" id="edge-${esc(edge.id)}">
+        <div class="card-title">
+          <div style="display:flex; gap:10px; min-width:0">
+            <span class="item-number">E${String(index + 1).padStart(2, "0")}</span>
+            <div>
+              <h3>${esc(source.name)} → ${esc(target.name)}</h3>
+              <div class="identifier">${esc(edge.id)}</div>
+            </div>
+          </div>
+          <span class="item-status ${done ? "done" : "todo"}">${done ? "已完成" : "待完成"}</span>
+        </div>
+        <div class="binding-strip" style="margin-top:12px">
+          <span class="binding-pill" style="background:#ece9df;color:var(--ink)">${esc(edge.type)}</span>
+          <span class="binding-pill" style="background:#ece9df;color:var(--ink)">weight ${esc(edge.weight)}</span>
+          <span class="binding-pill" style="background:#ece9df;color:var(--ink)">curation ${esc(edge.curation_confidence)}</span>
+        </div>
+        <div class="detail-block"><h4>Knowledge Edge Rationale</h4><p>${esc(edge.rationale)}</p></div>
+        <div class="review-grid">
+          ${selectField("关系有效性 / Relation validity", "edge", edge.id, "relation_validity", review.relation_validity, edgeOptions.relation_validity)}
+          ${selectField("类型正确 / Type correct", "edge", edge.id, "type_correct", review.type_correct, edgeOptions.type_correct)}
+          ${selectField("替代类型 / Replacement type", "edge", edge.id, "replacement_type", review.replacement_type, edgeOptions.replacement_type, "type_correct=no 时必填。")}
+          ${selectField("方向正确 / Direction correct", "edge", edge.id, "direction_correct", review.direction_correct, edgeOptions.direction_correct, "contrasts_with 必须选 not_applicable。")}
+          ${selectField("依据类别 / Provenance class", "edge", edge.id, "provenance_class", review.provenance_class, edgeOptions.provenance_class)}
+          ${selectField("总体决定 / Decision", "edge", edge.id, "decision", review.decision, edgeOptions.decision)}
+          ${textField("建议修改 / Proposed change", "edge", edge.id, "proposed_change", review.proposed_change, {full: true, required: review.decision === "edit", compact: true})}
+          ${textField("评审理由 / Rationale", "edge", edge.id, "rationale", review.rationale, {full: true, required: decisionNeedsRationale, compact: true})}
+        </div>
+      </article>`;
+    }
+
+    function renderEdges() {
+      const labelGuide = renderLabelGuide(
+        "标签速查 / Label guide",
+        "判断的是明确的知识关系，而不是两个概念是否大致相关；uncertain 表示证据不足。",
+        [
+          { label: "关系有效性", field: "relation_validity", description: "source 与 target 之间是否确实存在所声明的知识关系：valid 有效；uncertain 暂不能判断；invalid 无效。" },
+          { label: "类型正确", field: "type_correct", description: "当前关系类型是否准确：yes 正确；no 错误；uncertain 暂不能判断。" },
+          { label: "替代类型", field: "replacement_type", description: "类型错误时选择应替换为 part_of、prerequisite_for、supports 或 contrasts_with；type_correct=no 时必填。" },
+          { label: "方向正确", field: "direction_correct", description: "检查 source → target 的方向：yes 正确；no 反向；uncertain 不确定；contrasts_with 选 not_applicable。" },
+          { label: "依据类别", field: "provenance_class", description: "source_explicit 来源明示；source_entailed 可由来源推出；expert_pedagogical_extension 专家教学扩展；unsupported 无依据。" },
+          { label: "总体决定", field: "decision", description: "accept 原样接受；edit 修改后接受；delete 删除。edit 必须给出具体改动。" },
+          { label: "建议修改", field: "proposed_change", description: "写明关系类型、方向、端点或表述需要怎样修改；选择 edit 时必填。" },
+          { label: "评审理由", field: "rationale", description: "说明判断依据；选择 edit 或 delete 时必填。" },
+        ]
+      );
+      document.getElementById("section-edges").innerHTML = `
+        <div class="section-header">
+          <div><h2>边评审</h2><p>检查端点、规范关系类型、方向与 rationale；仅“相关”不足以保留。</p></div>
+          <span class="progress-badge" data-progress-kind="edges"></span>
+        </div>
+        ${labelGuide}
+        ${packageData.edges.map(renderEdgeCard).join("")}`;
+    }
+
+    function renderCoverage() {
+      const taskCards = packageData.scope.representative_tasks.map((task, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        const review = state.coverageReviews[id];
+        const done = coverageIsComplete(review);
+        return `<article class="panel card" id="coverage-${id}">
+          <div class="card-title">
+            <div style="display:flex; gap:10px; min-width:0">
+              <span class="item-number">T${String(index + 1).padStart(2, "0")}</span>
+              <div><h3>${esc(task)}</h3><div class="identifier">${id}</div></div>
+            </div>
+            <span class="item-status ${done ? "done" : "todo"}">${done ? "已完成" : "待完成"}</span>
+          </div>
+          <div class="review-grid">
+            ${selectField("任务覆盖 / Task coverage", "coverage", id, "task_coverage", review.task_coverage, ["sufficient", "partial", "insufficient"])}
+            ${textField("必要缺失或冗余内容", "coverage", id, "missing_or_redundant_content", review.missing_or_redundant_content, {full: true, required: review.task_coverage && review.task_coverage !== "sufficient", compact: true})}
+            ${textField("理由 / Rationale", "coverage", id, "rationale", review.rationale, {full: true, required: review.task_coverage && review.task_coverage !== "sufficient", compact: true})}
+          </div>
+        </article>`;
+      }).join("");
+      document.getElementById("section-coverage").innerHTML = `
+        <div class="section-header">
+          <div><h2>图谱覆盖度</h2><p>逐项检查 metadata 中冻结的 50 项代表性任务；这是有边界的 scope check，不是 ontology recall。</p></div>
+          <span class="progress-badge" data-progress-kind="coverage"></span>
+        </div>
+        ${taskCards}
+        <article class="panel card">
+          <h3>总体图谱决定 / Overall graph decision</h3>
+          <div class="review-grid">
+            ${selectField("总体决定", "overall", "", "decision", state.overall.decision, ["approve", "approve_after_edits", "do_not_approve"])}
+            ${textField("总体理由", "overall", "", "rationale", state.overall.rationale, {full: true, required: state.overall.decision && state.overall.decision !== "approve"})}
+          </div>
+        </article>`;
+    }
+
+    function renderSubmit() {
+      const issues = validationIssues();
+      document.getElementById("section-submit").innerHTML = `
+        <div class="section-header">
+          <div><h2>校验与 JSON 导出</h2><p>草稿可随时导出；完整提交必须通过条目、条件字段与独立评审校验。</p></div>
+          <span class="progress-badge">${issues.length ? `${issues.length} 个问题` : "校验通过"}</span>
+        </div>
+        <div class="panel card">
+          <h3>数据流</h3>
+          <div class="callout">
+            本页不会生成 CSV。两位评审者分别导出 <code>knowact.kg_review_submission.v3</code> JSON，
+            再把两份完整 JSON 导入 <code>compare_and_confirm.html</code> 进行一致性计算与仲裁确认。
+          </div>
+          <div id="validation-errors" class="error-box ${issues.length ? "visible" : ""}">
+            <strong>${issues.length ? "完整提交尚未通过校验：" : ""}</strong>
+            ${issues.length ? `<ul>${issues.slice(0, 20).map(issue => `<li>${esc(issue.message)}</li>`).join("")}${issues.length > 20 ? `<li>另有 ${issues.length - 20} 项……</li>` : ""}</ul>` : ""}
+          </div>
+          ${issues.length ? "" : '<div class="success-box"><strong>完整性校验通过。</strong> 导出仍是 candidate graph 的独立专家判断，不等于 promotion。</div>'}
+          <div class="actions">
+            <button id="export-draft">导出草稿 JSON</button>
+            <button class="primary" id="export-complete"${issues.length ? " disabled" : ""}>提交并导出完整 JSON</button>
+            <button id="import-json">导入本图谱 JSON 草稿</button>
+            <input class="file-input" id="import-file" type="file" accept="application/json,.json">
+            <button class="danger" id="reset-review">清空本机草稿</button>
+          </div>
+        </div>
+        <div class="panel card">
+          <h3>冻结输入</h3>
+          <div class="hash-list">
+            package: ${esc(packageData.graph.review_package_id)}<br>
+            fingerprint: ${esc(packageData.graph.graph_fingerprint)}<br>
+            schema: ${SUBMISSION_SCHEMA}
+          </div>
+        </div>`;
+
+      document.getElementById("export-draft").addEventListener("click", () => exportSubmission("draft"));
+      document.getElementById("export-complete").addEventListener("click", () => exportSubmission("complete"));
+      document.getElementById("import-json").addEventListener("click", () => document.getElementById("import-file").click());
+      document.getElementById("import-file").addEventListener("change", importSubmission);
+      document.getElementById("reset-review").addEventListener("click", resetReview);
+    }
+
+    function renderSection(section) {
+      if (section === "overview") renderOverview();
+      if (section === "nodes") renderNodes();
+      if (section === "edges") renderEdges();
+      if (section === "coverage") renderCoverage();
+      if (section === "submit") renderSubmit();
+      bindFormEvents();
+      updateProgress();
+    }
+
+    function switchSection(section) {
+      activeSection = section;
+      document.querySelectorAll(".section").forEach(element => element.classList.toggle("active", element.id === `section-${section}`));
+      document.querySelectorAll(".nav-button").forEach(element => element.classList.toggle("active", element.dataset.sectionTarget === section));
+      renderSection(section);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function bindFormEvents() {
+      document.querySelectorAll("[data-scope][data-field]").forEach(element => {
+        const eventName = element.tagName === "SELECT" || element.type === "checkbox" ? "change" : "input";
+        element.addEventListener(eventName, event => {
+          const input = event.currentTarget;
+          const value = input.type === "checkbox" ? input.checked : input.value;
+          const { scope, id, field } = input.dataset;
+          if (scope === "reviewer") state.reviewer[field] = value;
+          if (scope === "node") state.nodeReviews[id][field] = value;
+          if (scope === "edge") state.edgeReviews[id][field] = value;
+          if (scope === "coverage") state.coverageReviews[id][field] = value;
+          if (scope === "overall") state.overall[field] = value;
+          saveState();
+          if (input.tagName === "SELECT") renderSection(activeSection);
+        });
+      });
+    }
+
+    function buildSubmission(status) {
+      if (!state.submissionId) {
+        const randomPart = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        state.submissionId = `kg-review-${randomPart}`;
+        saveState();
+      }
+      const issues = validationIssues();
+      return {
+        schema_version: SUBMISSION_SCHEMA,
+        status,
+        submission_id: state.submissionId,
+        exported_at: new Date().toISOString(),
+        graph: structuredClone(packageData.graph),
+        reviewer: {
+          reviewer_id: state.reviewer.reviewer_id.trim(),
+          role: state.reviewer.role.trim(),
+          experience_band: state.reviewer.experience_band,
+          introduction: state.reviewer.introduction.trim(),
+        },
+        node_reviews: packageData.nodes.map((node, index) => ({
+          item_order: index + 1,
+          node_id: node.id,
+          ...structuredClone(state.nodeReviews[node.id]),
+        })),
+        edge_reviews: packageData.edges.map((edge, index) => ({
+          item_order: index + 1,
+          edge_id: edge.id,
+          ...structuredClone(state.edgeReviews[edge.id]),
+        })),
+        coverage_reviews: packageData.scope.representative_tasks.map((task, index) => {
+          const taskId = `task_${String(index + 1).padStart(3, "0")}`;
+          return {
+            item_order: index + 1,
+            task_id: taskId,
+            task_text: task,
+            ...structuredClone(state.coverageReviews[taskId]),
+          };
+        }),
+        overall_graph_review: structuredClone(state.overall),
+        validation: {
+          complete: issues.length === 0,
+          issue_count: issues.length,
+          issues: issues.map(issue => ({ section: issue.section, message: issue.message })),
+        },
+      };
+    }
+
+    function downloadJson(documentValue, filename) {
+      const blob = new Blob([JSON.stringify(documentValue, null, 2) + "\n"], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function safeFilename(value) {
+      return String(value || "anonymous").replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || "anonymous";
+    }
+
+    function exportSubmission(status) {
+      const submission = buildSubmission(status);
+      if (status === "complete" && !submission.validation.complete) {
+        switchSection("submit");
+        return;
+      }
+      const filename = `${packageData.graph.domain.toLowerCase()}_kg_review_${safeFilename(submission.reviewer.reviewer_id)}_${status}.json`;
+      downloadJson(submission, filename);
+    }
+
+    function stateFromSubmission(documentValue) {
+      const next = createBlankState();
+      next.submissionId = documentValue.submission_id || "";
+      const reviewer = documentValue.reviewer || {};
+      next.reviewer = {
+        reviewer_id: reviewer.reviewer_id || "",
+        role: reviewer.role || "",
+        experience_band: reviewer.experience_band || "",
+        introduction: reviewer.introduction || "",
+      };
+      for (const review of documentValue.node_reviews || []) {
+        if (next.nodeReviews[review.node_id]) {
+          next.nodeReviews[review.node_id] = { ...blankNodeReview(), ...review };
+        }
+      }
+      for (const review of documentValue.edge_reviews || []) {
+        if (next.edgeReviews[review.edge_id]) {
+          next.edgeReviews[review.edge_id] = { ...blankEdgeReview(), ...review };
+        }
+      }
+      for (const review of documentValue.coverage_reviews || []) {
+        if (next.coverageReviews[review.task_id]) {
+          next.coverageReviews[review.task_id] = { ...blankCoverageReview(), ...review };
+        }
+      }
+      next.overall = { decision: "", rationale: "", ...(documentValue.overall_graph_review || {}) };
+      return next;
+    }
+
+    async function importSubmission(event) {
+      const file = event.currentTarget.files?.[0];
+      event.currentTarget.value = "";
+      if (!file) return;
+      try {
+        const documentValue = JSON.parse(await file.text());
+        if (documentValue.schema_version !== SUBMISSION_SCHEMA) throw new Error("schema_version 不匹配");
+        if (documentValue.graph?.graph_fingerprint !== packageData.graph.graph_fingerprint) {
+          throw new Error("JSON 绑定的是另一张图谱或另一版 candidate artifacts");
+        }
+        state = stateFromSubmission(documentValue);
+        saveState();
+        renderSection(activeSection);
+        alert("JSON 已导入并恢复为本机草稿。");
+      } catch (error) {
+        alert(`无法导入：${error.message}`);
+      }
+    }
+
+    function resetReview() {
+      if (!confirm("确定清空此图谱在本浏览器中的全部评审草稿吗？请先导出需要保留的 JSON。")) return;
+      localStorage.removeItem(storageKey);
+      state = createBlankState();
+      renderSection(activeSection);
+    }
+
+    document.querySelectorAll("[data-section-target]").forEach(button => {
+      button.addEventListener("click", () => switchSection(button.dataset.sectionTarget));
+    });
+
+    ensureCompleteShape();
+    renderHeader();
+    sectionOrder.forEach(renderSection);
+    switchSection("overview");
+  })();
+  </script>
+</body>
+</html>

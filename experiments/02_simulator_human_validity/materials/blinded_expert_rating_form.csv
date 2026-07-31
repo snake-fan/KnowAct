@@ -1,0 +1,2 @@
+rater_code,presentation_id,question_id,graph_version,target_node_ids,expressed_mastery,correctness,ability_boundary,uncertainty,misconception,diagnostic_usefulness,naturalness,profile_consistency,unratable_reason,rater_comment,rating_minutes
+,,,,,L0|L1|L2|L3|L4|L5|unratable,incorrect|partly_correct|correct|unratable,poor|partial|accurate|unratable,underexpressed|compatible|overexpressed|unratable,missing_reviewed|preserved|invented|not_applicable|unratable,1|2|3|4|5|6|7,1|2|3|4|5|6|7,1|2|3|4|5|6|7,,,

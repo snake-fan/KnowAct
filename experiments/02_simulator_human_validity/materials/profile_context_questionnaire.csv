@@ -1,0 +1,10 @@
+field_id,prompt,response_type,allowed_values_or_guidance,required,profile_context_destination,privacy_class
+PC01,What is the highest level at which you have studied statistics or machine learning?,single_choice,none|self_study|secondary|undergraduate|graduate|professional,yes,background,restricted
+PC02,Which relevant courses or learning resources have you used?,free_text,Do not include institution or instructor names,no,background,restricted
+PC03,Which statistical or machine-learning methods have you used before?,multi_text,Short method names only,no,prior_experience,restricted
+PC04,Have you completed a project involving regression or predictive modeling?,single_choice,no|guided_exercise|course_project|independent_project|professional,yes,prior_experience,restricted
+PC05,What do you hope to learn or improve in this topic?,free_text,One or two sentences,yes,goals,restricted
+PC06,How long do you usually prefer an answer to be?,single_choice,very_short|short|moderate|detailed,yes,preferences,restricted
+PC07,When unsure how do you normally answer?,single_choice,state_uncertainty|think_aloud|give_best_guess|ask_for_clarification,yes,preferences,restricted
+PC08,Do you prefer equations examples verbal explanations or a mixture?,multi_choice,equations|worked_examples|verbal_explanation|mixture,yes,preferences,restricted
+PC09,Is there anything else about your answer style that the simulator may imitate?,free_text,Style only; do not add ability claims or sensitive facts,no,preferences,restricted

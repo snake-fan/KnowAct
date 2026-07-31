@@ -3,20 +3,44 @@
 
 \subsection{Artifact and Run Binding}
 
-Every reported run identifies the graph and map versions, turn budget, interaction rule, scoring profile, simulator configuration, tested-agent model, provider settings, and execution configuration. Reported graph versions link to the source hash, declared aspect scope, extraction evidence, reconciliation and verification decisions, workflow traces, and human-review record. Development fixtures without this chain are excluded from benchmark claims.
+Every reported run identifies graph and map versions, turn budget, interaction rule, scoring profile,
+simulator, tested-agent model, provider settings, and execution configuration.
 
-Agents receive identical public artifacts and episode constraints. Hidden maps, simulator evidence, policy traces, and scoring internals remain outside the tested-agent context. Repeated stochastic runs are nested within episodes; confidence intervals and paired tests use the episode as the independent unit.
+Reported graph versions link to source hash, declared scope, extraction evidence, verification
+decisions, workflow traces, and human-review records.
+
+Development fixtures without this chain are excluded from benchmark claims.
+
+Agents receive identical public artifacts and episode constraints. Hidden maps, simulator evidence,
+policy traces, and scoring internals remain outside the tested-agent context.
+
+Repeated stochastic runs are nested within episodes. Confidence intervals and paired tests use the
+episode as the independent unit.
 
 \subsection{Policy Controls and Analyses}
 
-The fixed-question agent follows a predefined diagnostic order. The random agent samples valid targets under the interaction constraints. The simple LLM agent chooses questions and updates its map through the same semantic interface as structured agents.
+The fixed-question agent follows a predefined diagnostic order. The random agent samples valid targets
+under the interaction constraints.
 
-The main analysis reports mastery distance, exact match, missing predictions, unsupported inference, and per-node signed error. Turn-indexed curves distinguish early information acquisition from final reconstruction. Working-map, graph-relation, and evidence-reference ablations test state maintenance, graph-mediated generalization, and traceability.
+The simple LLM agent chooses questions and updates its map through the same semantic interface as
+structured agents.
+
+The main analysis reports mastery distance, exact match, missing predictions, unsupported inference,
+and per-node signed error.
+
+Turn-indexed curves distinguish early information acquisition from final reconstruction.
+
+Working-map, graph-relation, and evidence-reference ablations test state maintenance, graph-mediated
+generalization, and traceability.
 
 \subsection{Knowledge-Graph Expert-Review Results}
 \label{app:graph-review-results}
 
-Table~\ref{tab:graph-review-results-placeholder} is a reporting placeholder for the study specified in Appendix~\ref{app:construction}. Every \texttt{TBD} entry must be replaced from the locked reviewer forms and adjudication record before empirical claims are made.
+Table~\ref{tab:graph-review-results-placeholder} is a reporting placeholder for the study in
+Appendix~\ref{app:construction}.
+
+Every \texttt{TBD} entry must be replaced from locked reviewer forms and the adjudication record before
+empirical claims are made.
 
 \begin{table}[h!]
 \caption{Expert-review results placeholder. Decision entries should be reported as counts with percentages in parentheses.}
@@ -40,13 +64,62 @@ Unresolved items & \texttt{TBD} & \texttt{TBD} & \texttt{TBD} \\
 \end{table}
 
 \noindent\textbf{Result statement to replace.}
-Two qualified statistical-learning reviewers independently assessed all 21 nodes and 30 edges. Node decisions achieved raw agreement of \texttt{TBD} with Cohen's $\kappa$ of \texttt{TBD}; edge decisions achieved raw agreement of \texttt{TBD} with $\kappa$ of \texttt{TBD}. The reviewers required \texttt{TBD} minutes and \texttt{TBD} minutes, respectively. After adjudication, \texttt{TBD} nodes were accepted unchanged, \texttt{TBD} were edited, and \texttt{TBD} were rejected; \texttt{TBD} edges were accepted unchanged, \texttt{TBD} were edited, and \texttt{TBD} were deleted. The final graph version was \texttt{TBD}, and the number of unresolved validity defects was \texttt{TBD}. This statement supports only content validity for the declared scope and tasks.
+Two qualified statistical-learning reviewers independently assessed all 21 nodes and 30 edges.
 
-\subsection{Simulator, Human, and Error Analyses}
+Node decisions achieved raw agreement of \texttt{TBD} with Cohen's $\kappa$ of \texttt{TBD}. Edge
+decisions achieved raw agreement of \texttt{TBD} with $\kappa$ of \texttt{TBD}.
 
-Robustness checks vary simulator model, grounding implementation, answer policy, and profile style while holding maps and budgets fixed. Matched human episodes compare state fidelity, diagnostic usefulness, naturalness, leakage, agent rankings, and adaptivity effects.
+The reviewers required \texttt{TBD} and \texttt{TBD} minutes, respectively.
 
-Error categories include poor grounding, hidden-state leakage, missed evidence, stale working-map state, redundant probes, unsupported graph propagation, and premature finalization. Representative trajectories connect each error to both the map update and the subsequent action.
+After adjudication, \texttt{TBD} nodes were accepted unchanged, \texttt{TBD} edited, and \texttt{TBD}
+rejected.
+
+For edges, \texttt{TBD} were accepted unchanged, \texttt{TBD} edited, and \texttt{TBD} deleted.
+
+The final graph version was \texttt{TBD}; unresolved validity defects numbered \texttt{TBD}. This
+statement supports only content validity for the declared scope and tasks.
+
+\subsection{\sagesim Held-Out Human Protocol}
+
+Participants first answer diagnostic set A. Their answers, node rubrics, self-review, and researcher
+adjudication produce a reviewed map; unresolved participant--node pairs are retained as unresolved.
+
+Diagnostic set B remains held out from map authoring and simulator tuning. Each participant answers B
+before seeing matched simulator responses.
+
+For each participant--question--condition cell, three fixed seeds are retained. The participant, not
+the generated response or seed, is the independent sampling unit.
+
+Participants rate core-claim, mastery, coverage, boundary, uncertainty, misconception, overstatement,
+understatement, style authenticity, and overall representativeness on seven-point items.
+
+The instrument receives expert content review, cognitive interviews, and a pilot. Items are not summed
+until dimensionality and reliability support a composite.
+
+Blinded reviewers annotate expressed mastery, correctness, boundary, uncertainty, misconception,
+diagnostic usefulness, naturalness, and style consistency.
+
+Primary endpoints are matched human--simulator expressed-mastery distance and the participant's overall
+representativeness rating. Signed bias and misconception errors diagnose over- and under-performance.
+
+\subsection{\sagesim Safety and Proxy Protocol}
+
+Adversarial prompts request labels, identifiers, state tables, unrelated nodes, and canary fields.
+Visible-history injection and compound probes test whether scope widens improperly.
+
+Exact forbidden-field matches and semantic leakage are separate outcomes. Passing observed probes
+supports only a bounded output-safety claim.
+
+Matched human and \sagesim episodes hold graph, budget, tested-agent contract, and scorer fixed. We
+report effect-direction agreement, rank correlation with uncertainty, absolute shifts, and reversals.
+
+Robustness checks also vary simulator model, grounding implementation, answer policy, and profile style
+while holding maps and budgets fixed.
+
+Error categories include poor grounding, hidden-state leakage, missed evidence, stale working-map state,
+redundant probes, unsupported graph propagation, and premature finalization.
+
+Representative trajectories connect each error to both the map update and the subsequent action.
 
 % Reserved for complete per-domain results, turn-efficiency curves,
 % robustness checks, human-validation statistics, and qualitative cases.

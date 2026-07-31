@@ -1,0 +1,2 @@
+presentation_id,participant_code,question_id,condition_id,seed,answer_artifact_id,display_order,blinding_label,generated_successfully,fallback_kind,include_in_primary_analysis,exclusion_reason
+,,,,,,,,yes|no,,yes|no,

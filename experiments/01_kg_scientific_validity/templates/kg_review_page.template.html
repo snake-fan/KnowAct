@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{PAGE_TITLE}}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17211b;
+      --muted: #637068;
+      --paper: #f4f1e9;
+      --panel: #fffdf7;
+      --line: #d9d4c7;
+      --accent: #176b51;
+      --accent-soft: #e4f0e9;
+      --warn: #9a5a14;
+      --danger: #a13732;
+      --shadow: 0 12px 36px rgba(38, 47, 40, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    button, select, input, textarea { border-radius: 8px; }
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      padding: 9px 13px;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+    button.danger { color: var(--danger); }
+    button:disabled { cursor: not-allowed; opacity: 0.52; }
+
+    .app-shell { min-height: 100vh; }
+    .masthead {
+      background: #12251d;
+      color: white;
+      padding: 28px max(24px, calc((100vw - 1440px) / 2));
+    }
+    .eyebrow {
+      color: #9ed7c0;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      margin: 0 0 7px;
+      text-transform: uppercase;
+    }
+    h1 { font-size: clamp(24px, 4vw, 40px); line-height: 1.13; margin: 0; }
+    .subtitle { color: #c8d5cf; margin: 10px 0 0; max-width: 900px; }
+    .binding-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 18px;
+    }
+    .binding-pill {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px;
+      font-size: 12px;
+      padding: 6px 10px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+      gap: 22px;
+      margin: 0 auto;
+      max-width: 1440px;
+      padding: 22px;
+    }
+    .sidebar {
+      align-self: start;
+      position: sticky;
+      top: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+    }
+    .nav-panel { overflow: hidden; }
+    .nav-title {
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      padding: 14px 16px 10px;
+      text-transform: uppercase;
+    }
+    .nav-button {
+      align-items: center;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 13px 16px;
+      text-align: left;
+      width: 100%;
+    }
+    .nav-button.active { background: var(--accent-soft); color: var(--accent); font-weight: 750; }
+    .count {
+      background: #ece9df;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 11px;
+      padding: 2px 7px;
+    }
+    .nav-button.active .count { background: white; color: var(--accent); }
+    .save-state {
+      color: var(--muted);
+      font-size: 12px;
+      padding: 12px 16px;
+    }
+
+    .content { min-width: 0; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .section-header {
+      align-items: start;
+      display: flex;
+      justify-content: space-between;
+      margin: 5px 0 16px;
+    }
+    .section-header h2 { font-size: 25px; line-height: 1.25; margin: 0 0 4px; }
+    .section-header p { color: var(--muted); margin: 0; }
+    .progress-badge {
+      background: var(--accent-soft);
+      border-radius: 999px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 750;
+      padding: 6px 10px;
+      white-space: nowrap;
+    }
+
+    .card { margin-bottom: 15px; padding: 20px; }
+    .card-title { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
+    .card h3 { font-size: 19px; line-height: 1.3; margin: 0; }
+    .label-guide {
+      background: #f8f6ef;
+      border-color: #c9c4b7;
+    }
+    .label-guide > p { color: var(--muted); margin: 5px 0 14px; }
+    .label-guide-grid {
+      display: grid;
+      gap: 9px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .label-guide-item {
+      background: white;
+      border: 1px solid #dfdbcf;
+      border-radius: 9px;
+      padding: 10px 12px;
+    }
+    .label-guide-item strong { display: block; font-size: 13px; margin-bottom: 3px; }
+    .label-guide-item p { color: var(--muted); font-size: 12px; margin: 0; }
+    .label-guide-item code { color: var(--accent); font-size: 11px; }
+    .identifier {
+      color: var(--muted);
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+    .item-number {
+      background: #ece9df;
+      border-radius: 7px;
+      color: var(--muted);
+      flex: 0 0 auto;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 7px;
+    }
+    .item-status {
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 8px;
+    }
+    .item-status.done { background: var(--accent-soft); color: var(--accent); }
+    .item-status.todo { background: #f7e9d3; color: var(--warn); }
+    details {
+      border-top: 1px solid var(--line);
+      margin-top: 15px;
+      padding-top: 12px;
+    }
+    summary { color: var(--accent); cursor: pointer; font-weight: 750; }
+    .detail-block { margin-top: 13px; }
+    .detail-block h4 {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      margin: 0 0 5px;
+      text-transform: uppercase;
+    }
+    .detail-block p { margin: 0; white-space: pre-wrap; }
+    .locator, .rubric-row {
+      background: #f4f1e8;
+      border-left: 3px solid #a9b9b1;
+      margin: 7px 0;
+      padding: 9px 11px;
+    }
+    .rubric-row strong { color: var(--accent); display: inline-block; min-width: 30px; }
+    ul { margin: 7px 0; padding-left: 20px; }
+
+    .review-grid {
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 16px;
+      padding-top: 16px;
+    }
+    .field { min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 5px;
+    }
+    .required::after { color: var(--danger); content: " *"; }
+    .hint { color: var(--muted); display: block; font-size: 11px; margin-top: 4px; }
+    input, select, textarea {
+      background: white;
+      border: 1px solid #bbb7aa;
+      color: var(--ink);
+      padding: 9px 10px;
+      width: 100%;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(23, 107, 81, 0.12);
+      outline: none;
+    }
+    textarea { min-height: 84px; resize: vertical; }
+    .compact-textarea { min-height: 62px; }
+
+    .scope-summary { font-size: 16px; line-height: 1.8; margin: 8px 0 0; }
+    .callout {
+      background: #fff7e8;
+      border: 1px solid #ecd1a6;
+      border-radius: 10px;
+      color: #664216;
+      margin: 14px 0;
+      padding: 12px 14px;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .file-input { display: none; }
+    .error-box {
+      background: #fff0ef;
+      border: 1px solid #e0aaa7;
+      border-radius: 10px;
+      color: #75211d;
+      display: none;
+      margin: 14px 0;
+      padding: 13px 15px;
+    }
+    .error-box.visible { display: block; }
+    .success-box {
+      background: var(--accent-soft);
+      border: 1px solid #a7cbbb;
+      border-radius: 10px;
+      color: #154f3e;
+      margin: 14px 0;
+      padding: 13px 15px;
+    }
+    .checkbox-line { align-items: flex-start; display: flex; gap: 9px; }
+    .checkbox-line input { margin-top: 4px; width: auto; }
+    .hash-list {
+      background: #f0ede5;
+      border-radius: 9px;
+      font: 11px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+      padding: 11px 13px;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; padding: 14px; }
+      .sidebar { position: static; }
+      .nav-panel { display: grid; grid-template-columns: repeat(3, 1fr); }
+      .nav-title, .save-state { grid-column: 1 / -1; }
+      .nav-button { border-right: 1px solid var(--line); }
+      .review-grid, .label-guide-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+    }
+    @media print {
+      .sidebar, .actions { display: none !important; }
+      .layout { display: block; max-width: none; padding: 0; }
+      .section { display: block !important; }
+      .panel { box-shadow: none; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <script id="review-package" type="application/json">{{REVIEW_PACKAGE_JSON}}</script>
+  <div class="app-shell">
+    <header class="masthead">
+      <p class="eyebrow">KnowAct · Expert content-validity review</p>
+      <h1 id="page-title"></h1>
+      <p class="subtitle" id="page-subtitle"></p>
+      <div class="binding-strip" id="binding-strip"></div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="panel nav-panel">
+          <div class="nav-title">评审导航</div>
+          <button class="nav-button active" data-section-target="overview">1. 范围与评审者 <span class="count" id="nav-overview-count"></span></button>
+          <button class="nav-button" data-section-target="nodes">2. 节点 <span class="count" id="nav-nodes-count"></span></button>
+          <button class="nav-button" data-section-target="edges">3. 边 <span class="count" id="nav-edges-count"></span></button>
+          <button class="nav-button" data-section-target="coverage">4. 覆盖度 <span class="count" id="nav-coverage-count"></span></button>
+          <button class="nav-button" data-section-target="submit">5. 校验与导出 <span class="count" id="nav-submit-count"></span></button>
+          <div class="save-state" id="save-state">尚未保存</div>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section class="section active" id="section-overview"></section>
+        <section class="section" id="section-nodes"></section>
+        <section class="section" id="section-edges"></section>
+        <section class="section" id="section-coverage"></section>
+        <section class="section" id="section-submit"></section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    "use strict";
+
+    const packageData = JSON.parse(document.getElementById("review-package").textContent);
+    const SUBMISSION_SCHEMA = "knowact.kg_review_submission.v3";
+    const storageKey = `knowact:kg-review:${packageData.graph.graph_fingerprint}`;
+    const sectionOrder = ["overview", "nodes", "edges", "coverage", "submit"];
+    let activeSection = "overview";
+    let state = loadState() || createBlankState();
+
+    const nodeOptions = {
+      scope_fit: ["in_scope", "boundary", "out_of_scope"],
+      granularity: ["appropriate", "too_broad", "too_narrow", "mixed"],
+      diagnostic_usefulness: ["adequate", "minor_issue", "major_issue"],
+      rubric_quality: ["adequate", "minor_issue", "major_issue"],
+      decision: ["accept", "edit", "reject"],
+    };
+    const edgeOptions = {
+      relation_validity: ["valid", "uncertain", "invalid"],
+      type_correct: ["yes", "no", "uncertain"],
+      replacement_type: ["part_of", "prerequisite_for", "supports", "contrasts_with"],
+      direction_correct: ["yes", "no", "not_applicable", "uncertain"],
+      provenance_class: ["source_explicit", "source_entailed", "expert_pedagogical_extension", "unsupported"],
+      decision: ["accept", "edit", "delete"],
+    };
+
+    function esc(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function blankNodeReview() {
+      return {
+        scope_fit: "", granularity: "",
+        diagnostic_usefulness: "", rubric_quality: "", decision: "",
+        proposed_change: "", rationale: "",
+      };
+    }
+
+    function blankEdgeReview() {
+      return {
+        relation_validity: "", type_correct: "", replacement_type: "",
+        direction_correct: "", provenance_class: "", decision: "",
+        proposed_change: "", rationale: "",
+      };
+    }
+
+    function blankCoverageReview() {
+      return { task_coverage: "", missing_or_redundant_content: "", rationale: "" };
+    }
+
+    function createBlankState() {
+      return {
+        submissionId: "",
+        reviewer: {
+          reviewer_id: "",
+          role: "",
+          experience_band: "",
+          introduction: "",
+        },
+        nodeReviews: Object.fromEntries(packageData.nodes.map(node => [node.id, blankNodeReview()])),
+        edgeReviews: Object.fromEntries(packageData.edges.map(edge => [edge.id, blankEdgeReview()])),
+        coverageReviews: Object.fromEntries(
+          packageData.scope.representative_tasks.map((_, index) => [`task_${String(index + 1).padStart(3, "0")}`, blankCoverageReview()])
+        ),
+        overall: { decision: "", rationale: "" },
+      };
+    }
+
+    function loadState() {
+      try {
+        const value = localStorage.getItem(storageKey);
+        if (!value) return null;
+        const parsed = JSON.parse(value);
+        if (parsed.graphFingerprint !== packageData.graph.graph_fingerprint) return null;
+        return parsed.state;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(storageKey, JSON.stringify({
+        graphFingerprint: packageData.graph.graph_fingerprint,
+        state,
+      }));
+      document.getElementById("save-state").textContent = `已在本机保存 · ${new Date().toLocaleTimeString()}`;
+      updateProgress();
+    }
+
+    function ensureCompleteShape() {
+      const reviewer = state.reviewer || {};
+      state.reviewer = {
+        reviewer_id: reviewer.reviewer_id || "",
+        role: reviewer.role || "",
+        experience_band: reviewer.experience_band || "",
+        introduction: reviewer.introduction || "",
+      };
+      for (const node of packageData.nodes) {
+        state.nodeReviews[node.id] ||= blankNodeReview();
+      }
+      for (const edge of packageData.edges) {
+        state.edgeReviews[edge.id] ||= blankEdgeReview();
+      }
+      packageData.scope.representative_tasks.forEach((_, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        state.coverageReviews[id] ||= blankCoverageReview();
+      });
+      state.overall ||= { decision: "", rationale: "" };
+    }
+
+    function selectField(label, scope, id, field, value, options, hint = "", allowBlank = true) {
+      const optionHtml = [
+        allowBlank ? '<option value="">请选择 / Select</option>' : "",
+        ...options.map(option => `<option value="${esc(option)}"${value === option ? " selected" : ""}>${esc(option)}</option>`),
+      ].join("");
+      return `<div class="field">
+        <label class="required">${esc(label)}</label>
+        <select data-scope="${esc(scope)}" data-id="${esc(id)}" data-field="${esc(field)}">${optionHtml}</select>
+        ${hint ? `<span class="hint">${esc(hint)}</span>` : ""}
+      </div>`;
+    }
+
+    function textField(label, scope, id, field, value, options = {}) {
+      const full = options.full ? " full" : "";
+      const required = options.required ? " required" : "";
+      const hint = options.hint ? `<span class="hint">${esc(options.hint)}</span>` : "";
+      const type = options.type || "textarea";
+      const min = options.min !== undefined ? ` min="${esc(options.min)}"` : "";
+      const step = options.step !== undefined ? ` step="${esc(options.step)}"` : "";
+      if (type === "textarea") {
+        return `<div class="field${full}">
+          <label class="${required}">${esc(label)}</label>
+          <textarea class="${options.compact ? "compact-textarea" : ""}" data-scope="${esc(scope)}" data-id="${esc(id)}" data-field="${esc(field)}">${esc(value)}</textarea>
+          ${hint}
+        </div>`;
+      }
+      return `<div class="field${full}">
+        <label class="${required}">${esc(label)}</label>
+        <input type="${esc(type)}" value="${esc(value)}" data-scope="${esc(scope)}" data-id="${esc(id)}" data-field="${esc(field)}"${min}${step}>
+        ${hint}
+      </div>`;
+    }
+
+    function renderLabelGuide(title, intro, items) {
+      return `<aside class="panel card label-guide">
+        <h3>${esc(title)}</h3>
+        <p>${esc(intro)}</p>
+        <div class="label-guide-grid">
+          ${items.map(item => `<div class="label-guide-item">
+            <strong>${esc(item.label)} <code>${esc(item.field)}</code></strong>
+            <p>${esc(item.description)}</p>
+          </div>`).join("")}
+        </div>
+      </aside>`;
+    }
+
+    function nodeIsComplete(review) {
+      const base = Object.keys(nodeOptions).every(field => Boolean(review[field]));
+      if (!base) return false;
+      if (["edit", "reject"].includes(review.decision) && !review.rationale.trim()) return false;
+      return review.decision !== "edit" || Boolean(review.proposed_change.trim());
+    }
+
+    function edgeIsComplete(review, edge) {
+      const required = ["relation_validity", "type_correct", "direction_correct", "provenance_class", "decision"];
+      if (!required.every(field => Boolean(review[field]))) return false;
+      if (review.type_correct === "no" && !review.replacement_type) return false;
+      if (edge.type === "contrasts_with" && review.direction_correct !== "not_applicable") return false;
+      if (edge.type !== "contrasts_with" && review.direction_correct === "not_applicable") return false;
+      if (["edit", "delete"].includes(review.decision) && !review.rationale.trim()) return false;
+      return review.decision !== "edit" || Boolean(review.proposed_change.trim());
+    }
+
+    function coverageIsComplete(review) {
+      if (!review.task_coverage) return false;
+      if (review.task_coverage !== "sufficient") {
+        return Boolean(review.rationale.trim() && review.missing_or_redundant_content.trim());
+      }
+      return true;
+    }
+
+    function metadataIssues() {
+      const reviewer = state.reviewer;
+      return ["reviewer_id", "role", "experience_band", "introduction"]
+        .filter(field => !String(reviewer[field] || "").trim())
+        .map(field => `评审者字段 ${field} 尚未填写。`);
+    }
+
+    function validationIssues() {
+      const issues = metadataIssues().map(message => ({ section: "overview", message }));
+      packageData.nodes.forEach((node, index) => {
+        if (!nodeIsComplete(state.nodeReviews[node.id])) {
+          issues.push({ section: "nodes", message: `节点 ${index + 1} (${node.id}) 未完成或条件字段不完整。` });
+        }
+      });
+      packageData.edges.forEach((edge, index) => {
+        if (!edgeIsComplete(state.edgeReviews[edge.id], edge)) {
+          issues.push({ section: "edges", message: `边 ${index + 1} (${edge.id}) 未完成或条件字段不完整。` });
+        }
+      });
+      packageData.scope.representative_tasks.forEach((_, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        if (!coverageIsComplete(state.coverageReviews[id])) {
+          issues.push({ section: "coverage", message: `代表性任务 ${index + 1} 尚未完成；partial/insufficient 还需填写内容与理由。` });
+        }
+      });
+      if (!state.overall.decision) {
+        issues.push({ section: "coverage", message: "尚未填写总体图谱决定。" });
+      } else if (state.overall.decision !== "approve" && !state.overall.rationale.trim()) {
+        issues.push({ section: "coverage", message: "approve_after_edits / do_not_approve 必须填写总体理由。" });
+      }
+      return issues;
+    }
+
+    function updateProgress() {
+      ensureCompleteShape();
+      const nodeDone = packageData.nodes.filter(node => nodeIsComplete(state.nodeReviews[node.id])).length;
+      const edgeDone = packageData.edges.filter(edge => edgeIsComplete(state.edgeReviews[edge.id], edge)).length;
+      const coverageDone = packageData.scope.representative_tasks.filter((_, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        return coverageIsComplete(state.coverageReviews[id]);
+      }).length;
+      const overviewDone = metadataIssues().length === 0 ? 1 : 0;
+      const overallDone = state.overall.decision ? 1 : 0;
+      document.getElementById("nav-overview-count").textContent = `${overviewDone}/1`;
+      document.getElementById("nav-nodes-count").textContent = `${nodeDone}/${packageData.nodes.length}`;
+      document.getElementById("nav-edges-count").textContent = `${edgeDone}/${packageData.edges.length}`;
+      document.getElementById("nav-coverage-count").textContent = `${coverageDone + overallDone}/${packageData.scope.representative_tasks.length + 1}`;
+      document.getElementById("nav-submit-count").textContent = validationIssues().length ? "待校验" : "可导出";
+      document.querySelectorAll("[data-progress-kind]").forEach(element => {
+        const kind = element.dataset.progressKind;
+        if (kind === "nodes") element.textContent = `${nodeDone} / ${packageData.nodes.length} 完成`;
+        if (kind === "edges") element.textContent = `${edgeDone} / ${packageData.edges.length} 完成`;
+        if (kind === "coverage") element.textContent = `${coverageDone} / ${packageData.scope.representative_tasks.length} 完成`;
+      });
+    }
+
+    function renderHeader() {
+      const graph = packageData.graph;
+      document.getElementById("page-title").textContent = `${graph.domain} Candidate Knowledge Graph`;
+      document.getElementById("page-subtitle").textContent =
+        "逐项评审范围、诊断价值、L0–L5 量规与关系有效性。页面离线运行，只导入/导出 JSON。";
+      document.getElementById("binding-strip").innerHTML = `
+        <span class="binding-pill">Run · ${esc(graph.candidate_run_id)}</span>
+        <span class="binding-pill">${graph.node_count} nodes</span>
+        <span class="binding-pill">${graph.edge_count} edges</span>
+        <span class="binding-pill">${graph.representative_task_count} tasks</span>
+        <span class="binding-pill">Candidate input · not promoted</span>`;
+    }
+
+    function renderOverview() {
+      const source = packageData.source;
+      const scope = packageData.scope;
+      const reviewer = state.reviewer;
+      document.getElementById("section-overview").innerHTML = `
+        <div class="section-header">
+          <div><h2>范围与评审者</h2><p>先了解这张图谱大致覆盖什么知识，再填写评审者信息。</p></div>
+          <span class="progress-badge">${metadataIssues().length ? "信息未完整" : "信息完整"}</span>
+        </div>
+        <div class="panel card">
+          <h3>图谱知识范围 / Graph knowledge scope</h3>
+          <p class="scope-summary">${esc(scope.review_scope_summary)}</p>
+          <div class="detail-block"><h4>Source</h4><p>${esc(source.title)}</p><p class="identifier">${esc(source.citation)}</p></div>
+          <details>
+            <summary>查看冻结绑定与哈希</summary>
+            <div class="hash-list">
+              graph_fingerprint: ${esc(packageData.graph.graph_fingerprint)}<br>
+              candidate_nodes: ${esc(packageData.graph.artifact_binding.candidate_nodes.sha256)}<br>
+              candidate_edges: ${esc(packageData.graph.artifact_binding.candidate_edges.sha256)}<br>
+              source_metadata: ${esc(packageData.graph.artifact_binding.source_metadata.sha256)}<br>
+              source_content: ${esc(packageData.graph.artifact_binding.source_content_sha256)}
+            </div>
+          </details>
+        </div>
+        <div class="panel card">
+          <h3>评审者信息 / Reviewer metadata</h3>
+          <p class="identifier">专家信息只记录 ID、角色、经验区间与个人介绍。</p>
+          <div class="review-grid">
+            ${textField("评审者 ID / Reviewer ID", "reviewer", "", "reviewer_id", reviewer.reviewer_id, {type: "text", required: true})}
+            ${textField("角色 / Role", "reviewer", "", "role", reviewer.role, {type: "text", required: true})}
+            ${selectField("经验区间 / Experience band", "reviewer", "", "experience_band", reviewer.experience_band, ["0-2 years", "3-5 years", "6-10 years", "11+ years"])}
+            ${textField("个人介绍 / Introduction", "reviewer", "", "introduction", reviewer.introduction, {full: true, required: true})}
+          </div>
+        </div>`;
+    }
+
+    function renderNodeCard(node, index) {
+      const review = state.nodeReviews[node.id];
+      const done = nodeIsComplete(review);
+      const locators = node.source_locators.map(locator => `
+        <div class="locator"><strong>${esc(locator.source_id)}</strong> · ${esc(locator.locator)}
+        ${locator.note ? `<br><span class="identifier">${esc(locator.note)}</span>` : ""}</div>`).join("");
+      const levels = Object.entries(node.levels).map(([level, description]) =>
+        `<div class="rubric-row"><strong>${esc(level)}</strong> ${esc(description)}</div>`).join("");
+      const decisionNeedsRationale = ["edit", "reject"].includes(review.decision);
+      return `<article class="panel card" id="node-${esc(node.id)}">
+        <div class="card-title">
+          <div style="display:flex; gap:10px; min-width:0">
+            <span class="item-number">N${String(index + 1).padStart(2, "0")}</span>
+            <div><h3>${esc(node.name)}</h3><div class="identifier">${esc(node.id)}</div></div>
+          </div>
+          <span class="item-status ${done ? "done" : "todo"}">${done ? "已完成" : "待完成"}</span>
+        </div>
+        <div class="detail-block"><h4>Definition</h4><p>${esc(node.definition)}</p></div>
+        <details>
+          <summary>展开来源、诊断目标、L0–L5 量规与信号</summary>
+          <div class="detail-block"><h4>Source locators</h4>${locators}</div>
+          <div class="detail-block"><h4>Diagnostic goal</h4><p>${esc(node.diagnostic_goal)}</p></div>
+          <div class="detail-block"><h4>Mastery rubric</h4>${levels}</div>
+          <div class="detail-block"><h4>Diagnostic signals</h4><ul>${node.diagnostic_signals.map(item => `<li>${esc(item)}</li>`).join("")}</ul></div>
+          <div class="detail-block"><h4>Simulator behavior</h4><p>${esc(node.simulator_behavior)}</p></div>
+        </details>
+        <div class="review-grid">
+          ${selectField("范围适配 / Scope fit", "node", node.id, "scope_fit", review.scope_fit, nodeOptions.scope_fit)}
+          ${selectField("粒度 / Granularity", "node", node.id, "granularity", review.granularity, nodeOptions.granularity)}
+          ${selectField("诊断价值 / Diagnostic usefulness", "node", node.id, "diagnostic_usefulness", review.diagnostic_usefulness, nodeOptions.diagnostic_usefulness)}
+          ${selectField("量规质量 / Rubric quality", "node", node.id, "rubric_quality", review.rubric_quality, nodeOptions.rubric_quality)}
+          ${selectField("总体决定 / Decision", "node", node.id, "decision", review.decision, nodeOptions.decision)}
+          ${textField("最小必要修改 / Proposed change", "node", node.id, "proposed_change", review.proposed_change, {full: true, required: review.decision === "edit", compact: true})}
+          ${textField("评审理由 / Rationale", "node", node.id, "rationale", review.rationale, {full: true, required: decisionNeedsRationale, compact: true})}
+        </div>
+      </article>`;
+    }
+
+    function renderNodes() {
+      const labelGuide = renderLabelGuide(
+        "标签速查 / Label guide",
+        "先看字段在判断什么，再选择最贴近的选项；uncertain 表示证据不足，不能当作通过。",
+        [
+          { label: "范围适配", field: "scope_fit", description: "节点是否属于本 domain 的声明范围：in_scope 范围内；boundary 边界项；out_of_scope 范围外。" },
+          { label: "粒度", field: "granularity", description: "节点是否足够单一且适合诊断：appropriate 合适；too_broad 过宽；too_narrow 过窄；mixed 混合多个概念。" },
+          { label: "诊断价值", field: "diagnostic_usefulness", description: "该节点能否帮助区分用户掌握状态：adequate 可用；minor_issue 小问题；major_issue 严重问题。" },
+          { label: "量规质量", field: "rubric_quality", description: "L0–L5 是否有序、可区分、可从回答中观察：adequate 可用；minor_issue 小问题；major_issue 严重问题。" },
+          { label: "总体决定", field: "decision", description: "accept 原样接受；edit 修改后接受；reject 不应保留。edit 必须填写最小必要修改。" },
+          { label: "最小必要修改", field: "proposed_change", description: "只写使节点可接受所需的具体改动；选择 edit 时必填。" },
+          { label: "评审理由", field: "rationale", description: "说明判断依据；选择 edit 或 reject 时必填。" },
+        ]
+      );
+      document.getElementById("section-nodes").innerHTML = `
+        <div class="section-header">
+          <div><h2>节点评审</h2><p>检查稳定性、来源、诊断价值与 L0–L5 的有序可观察性。</p></div>
+          <span class="progress-badge" data-progress-kind="nodes"></span>
+        </div>
+        ${labelGuide}
+        ${packageData.nodes.map(renderNodeCard).join("")}`;
+    }
+
+    function renderEdgeCard(edge, index) {
+      const review = state.edgeReviews[edge.id];
+      const done = edgeIsComplete(review, edge);
+      const nodeById = Object.fromEntries(packageData.nodes.map(node => [node.id, node]));
+      const source = nodeById[edge.source];
+      const target = nodeById[edge.target];
+      const decisionNeedsRationale = ["edit", "delete"].includes(review.decision);
+      return `<article class="panel card" id="edge-${esc(edge.id)}">
+        <div class="card-title">
+          <div style="display:flex; gap:10px; min-width:0">
+            <span class="item-number">E${String(index + 1).padStart(2, "0")}</span>
+            <div>
+              <h3>${esc(source.name)} → ${esc(target.name)}</h3>
+              <div class="identifier">${esc(edge.id)}</div>
+            </div>
+          </div>
+          <span class="item-status ${done ? "done" : "todo"}">${done ? "已完成" : "待完成"}</span>
+        </div>
+        <div class="binding-strip" style="margin-top:12px">
+          <span class="binding-pill" style="background:#ece9df;color:var(--ink)">${esc(edge.type)}</span>
+          <span class="binding-pill" style="background:#ece9df;color:var(--ink)">weight ${esc(edge.weight)}</span>
+          <span class="binding-pill" style="background:#ece9df;color:var(--ink)">curation ${esc(edge.curation_confidence)}</span>
+        </div>
+        <div class="detail-block"><h4>Knowledge Edge Rationale</h4><p>${esc(edge.rationale)}</p></div>
+        <div class="review-grid">
+          ${selectField("关系有效性 / Relation validity", "edge", edge.id, "relation_validity", review.relation_validity, edgeOptions.relation_validity)}
+          ${selectField("类型正确 / Type correct", "edge", edge.id, "type_correct", review.type_correct, edgeOptions.type_correct)}
+          ${selectField("替代类型 / Replacement type", "edge", edge.id, "replacement_type", review.replacement_type, edgeOptions.replacement_type, "type_correct=no 时必填。")}
+          ${selectField("方向正确 / Direction correct", "edge", edge.id, "direction_correct", review.direction_correct, edgeOptions.direction_correct, "contrasts_with 必须选 not_applicable。")}
+          ${selectField("依据类别 / Provenance class", "edge", edge.id, "provenance_class", review.provenance_class, edgeOptions.provenance_class)}
+          ${selectField("总体决定 / Decision", "edge", edge.id, "decision", review.decision, edgeOptions.decision)}
+          ${textField("建议修改 / Proposed change", "edge", edge.id, "proposed_change", review.proposed_change, {full: true, required: review.decision === "edit", compact: true})}
+          ${textField("评审理由 / Rationale", "edge", edge.id, "rationale", review.rationale, {full: true, required: decisionNeedsRationale, compact: true})}
+        </div>
+      </article>`;
+    }
+
+    function renderEdges() {
+      const labelGuide = renderLabelGuide(
+        "标签速查 / Label guide",
+        "判断的是明确的知识关系，而不是两个概念是否大致相关；uncertain 表示证据不足。",
+        [
+          { label: "关系有效性", field: "relation_validity", description: "source 与 target 之间是否确实存在所声明的知识关系：valid 有效；uncertain 暂不能判断；invalid 无效。" },
+          { label: "类型正确", field: "type_correct", description: "当前关系类型是否准确：yes 正确；no 错误；uncertain 暂不能判断。" },
+          { label: "替代类型", field: "replacement_type", description: "类型错误时选择应替换为 part_of、prerequisite_for、supports 或 contrasts_with；type_correct=no 时必填。" },
+          { label: "方向正确", field: "direction_correct", description: "检查 source → target 的方向：yes 正确；no 反向；uncertain 不确定；contrasts_with 选 not_applicable。" },
+          { label: "依据类别", field: "provenance_class", description: "source_explicit 来源明示；source_entailed 可由来源推出；expert_pedagogical_extension 专家教学扩展；unsupported 无依据。" },
+          { label: "总体决定", field: "decision", description: "accept 原样接受；edit 修改后接受；delete 删除。edit 必须给出具体改动。" },
+          { label: "建议修改", field: "proposed_change", description: "写明关系类型、方向、端点或表述需要怎样修改；选择 edit 时必填。" },
+          { label: "评审理由", field: "rationale", description: "说明判断依据；选择 edit 或 delete 时必填。" },
+        ]
+      );
+      document.getElementById("section-edges").innerHTML = `
+        <div class="section-header">
+          <div><h2>边评审</h2><p>检查端点、规范关系类型、方向与 rationale；仅“相关”不足以保留。</p></div>
+          <span class="progress-badge" data-progress-kind="edges"></span>
+        </div>
+        ${labelGuide}
+        ${packageData.edges.map(renderEdgeCard).join("")}`;
+    }
+
+    function renderCoverage() {
+      const taskCards = packageData.scope.representative_tasks.map((task, index) => {
+        const id = `task_${String(index + 1).padStart(3, "0")}`;
+        const review = state.coverageReviews[id];
+        const done = coverageIsComplete(review);
+        return `<article class="panel card" id="coverage-${id}">
+          <div class="card-title">
+            <div style="display:flex; gap:10px; min-width:0">
+              <span class="item-number">T${String(index + 1).padStart(2, "0")}</span>
+              <div><h3>${esc(task)}</h3><div class="identifier">${id}</div></div>
+            </div>
+            <span class="item-status ${done ? "done" : "todo"}">${done ? "已完成" : "待完成"}</span>
+          </div>
+          <div class="review-grid">
+            ${selectField("任务覆盖 / Task coverage", "coverage", id, "task_coverage", review.task_coverage, ["sufficient", "partial", "insufficient"])}
+            ${textField("必要缺失或冗余内容", "coverage", id, "missing_or_redundant_content", review.missing_or_redundant_content, {full: true, required: review.task_coverage && review.task_coverage !== "sufficient", compact: true})}
+            ${textField("理由 / Rationale", "coverage", id, "rationale", review.rationale, {full: true, required: review.task_coverage && review.task_coverage !== "sufficient", compact: true})}
+          </div>
+        </article>`;
+      }).join("");
+      document.getElementById("section-coverage").innerHTML = `
+        <div class="section-header">
+          <div><h2>图谱覆盖度</h2><p>逐项检查 metadata 中冻结的 50 项代表性任务；这是有边界的 scope check，不是 ontology recall。</p></div>
+          <span class="progress-badge" data-progress-kind="coverage"></span>
+        </div>
+        ${taskCards}
+        <article class="panel card">
+          <h3>总体图谱决定 / Overall graph decision</h3>
+          <div class="review-grid">
+            ${selectField("总体决定", "overall", "", "decision", state.overall.decision, ["approve", "approve_after_edits", "do_not_approve"])}
+            ${textField("总体理由", "overall", "", "rationale", state.overall.rationale, {full: true, required: state.overall.decision && state.overall.decision !== "approve"})}
+          </div>
+        </article>`;
+    }
+
+    function renderSubmit() {
+      const issues = validationIssues();
+      document.getElementById("section-submit").innerHTML = `
+        <div class="section-header">
+          <div><h2>校验与 JSON 导出</h2><p>草稿可随时导出；完整提交必须通过条目、条件字段与独立评审校验。</p></div>
+          <span class="progress-badge">${issues.length ? `${issues.length} 个问题` : "校验通过"}</span>
+        </div>
+        <div class="panel card">
+          <h3>数据流</h3>
+          <div class="callout">
+            本页不会生成 CSV。两位评审者分别导出 <code>knowact.kg_review_submission.v3</code> JSON，
+            再把两份完整 JSON 导入 <code>compare_and_confirm.html</code> 进行一致性计算与仲裁确认。
+          </div>
+          <div id="validation-errors" class="error-box ${issues.length ? "visible" : ""}">
+            <strong>${issues.length ? "完整提交尚未通过校验：" : ""}</strong>
+            ${issues.length ? `<ul>${issues.slice(0, 20).map(issue => `<li>${esc(issue.message)}</li>`).join("")}${issues.length > 20 ? `<li>另有 ${issues.length - 20} 项……</li>` : ""}</ul>` : ""}
+          </div>
+          ${issues.length ? "" : '<div class="success-box"><strong>完整性校验通过。</strong> 导出仍是 candidate graph 的独立专家判断，不等于 promotion。</div>'}
+          <div class="actions">
+            <button id="export-draft">导出草稿 JSON</button>
+            <button class="primary" id="export-complete"${issues.length ? " disabled" : ""}>提交并导出完整 JSON</button>
+            <button id="import-json">导入本图谱 JSON 草稿</button>
+            <input class="file-input" id="import-file" type="file" accept="application/json,.json">
+            <button class="danger" id="reset-review">清空本机草稿</button>
+          </div>
+        </div>
+        <div class="panel card">
+          <h3>冻结输入</h3>
+          <div class="hash-list">
+            package: ${esc(packageData.graph.review_package_id)}<br>
+            fingerprint: ${esc(packageData.graph.graph_fingerprint)}<br>
+            schema: ${SUBMISSION_SCHEMA}
+          </div>
+        </div>`;
+
+      document.getElementById("export-draft").addEventListener("click", () => exportSubmission("draft"));
+      document.getElementById("export-complete").addEventListener("click", () => exportSubmission("complete"));
+      document.getElementById("import-json").addEventListener("click", () => document.getElementById("import-file").click());
+      document.getElementById("import-file").addEventListener("change", importSubmission);
+      document.getElementById("reset-review").addEventListener("click", resetReview);
+    }
+
+    function renderSection(section) {
+      if (section === "overview") renderOverview();
+      if (section === "nodes") renderNodes();
+      if (section === "edges") renderEdges();
+      if (section === "coverage") renderCoverage();
+      if (section === "submit") renderSubmit();
+      bindFormEvents();
+      updateProgress();
+    }
+
+    function switchSection(section) {
+      activeSection = section;
+      document.querySelectorAll(".section").forEach(element => element.classList.toggle("active", element.id === `section-${section}`));
+      document.querySelectorAll(".nav-button").forEach(element => element.classList.toggle("active", element.dataset.sectionTarget === section));
+      renderSection(section);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function bindFormEvents() {
+      document.querySelectorAll("[data-scope][data-field]").forEach(element => {
+        const eventName = element.tagName === "SELECT" || element.type === "checkbox" ? "change" : "input";
+        element.addEventListener(eventName, event => {
+          const input = event.currentTarget;
+          const value = input.type === "checkbox" ? input.checked : input.value;
+          const { scope, id, field } = input.dataset;
+          if (scope === "reviewer") state.reviewer[field] = value;
+          if (scope === "node") state.nodeReviews[id][field] = value;
+          if (scope === "edge") state.edgeReviews[id][field] = value;
+          if (scope === "coverage") state.coverageReviews[id][field] = value;
+          if (scope === "overall") state.overall[field] = value;
+          saveState();
+          if (input.tagName === "SELECT") renderSection(activeSection);
+        });
+      });
+    }
+
+    function buildSubmission(status) {
+      if (!state.submissionId) {
+        const randomPart = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        state.submissionId = `kg-review-${randomPart}`;
+        saveState();
+      }
+      const issues = validationIssues();
+      return {
+        schema_version: SUBMISSION_SCHEMA,
+        status,
+        submission_id: state.submissionId,
+        exported_at: new Date().toISOString(),
+        graph: structuredClone(packageData.graph),
+        reviewer: {
+          reviewer_id: state.reviewer.reviewer_id.trim(),
+          role: state.reviewer.role.trim(),
+          experience_band: state.reviewer.experience_band,
+          introduction: state.reviewer.introduction.trim(),
+        },
+        node_reviews: packageData.nodes.map((node, index) => ({
+          item_order: index + 1,
+          node_id: node.id,
+          ...structuredClone(state.nodeReviews[node.id]),
+        })),
+        edge_reviews: packageData.edges.map((edge, index) => ({
+          item_order: index + 1,
+          edge_id: edge.id,
+          ...structuredClone(state.edgeReviews[edge.id]),
+        })),
+        coverage_reviews: packageData.scope.representative_tasks.map((task, index) => {
+          const taskId = `task_${String(index + 1).padStart(3, "0")}`;
+          return {
+            item_order: index + 1,
+            task_id: taskId,
+            task_text: task,
+            ...structuredClone(state.coverageReviews[taskId]),
+          };
+        }),
+        overall_graph_review: structuredClone(state.overall),
+        validation: {
+          complete: issues.length === 0,
+          issue_count: issues.length,
+          issues: issues.map(issue => ({ section: issue.section, message: issue.message })),
+        },
+      };
+    }
+
+    function downloadJson(documentValue, filename) {
+      const blob = new Blob([JSON.stringify(documentValue, null, 2) + "\n"], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function safeFilename(value) {
+      return String(value || "anonymous").replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || "anonymous";
+    }
+
+    function exportSubmission(status) {
+      const submission = buildSubmission(status);
+      if (status === "complete" && !submission.validation.complete) {
+        switchSection("submit");
+        return;
+      }
+      const filename = `${packageData.graph.domain.toLowerCase()}_kg_review_${safeFilename(submission.reviewer.reviewer_id)}_${status}.json`;
+      downloadJson(submission, filename);
+    }
+
+    function stateFromSubmission(documentValue) {
+      const next = createBlankState();
+      next.submissionId = documentValue.submission_id || "";
+      const reviewer = documentValue.reviewer || {};
+      next.reviewer = {
+        reviewer_id: reviewer.reviewer_id || "",
+        role: reviewer.role || "",
+        experience_band: reviewer.experience_band || "",
+        introduction: reviewer.introduction || "",
+      };
+      for (const review of documentValue.node_reviews || []) {
+        if (next.nodeReviews[review.node_id]) {
+          next.nodeReviews[review.node_id] = { ...blankNodeReview(), ...review };
+        }
+      }
+      for (const review of documentValue.edge_reviews || []) {
+        if (next.edgeReviews[review.edge_id]) {
+          next.edgeReviews[review.edge_id] = { ...blankEdgeReview(), ...review };
+        }
+      }
+      for (const review of documentValue.coverage_reviews || []) {
+        if (next.coverageReviews[review.task_id]) {
+          next.coverageReviews[review.task_id] = { ...blankCoverageReview(), ...review };
+        }
+      }
+      next.overall = { decision: "", rationale: "", ...(documentValue.overall_graph_review || {}) };
+      return next;
+    }
+
+    async function importSubmission(event) {
+      const file = event.currentTarget.files?.[0];
+      event.currentTarget.value = "";
+      if (!file) return;
+      try {
+        const documentValue = JSON.parse(await file.text());
+        if (documentValue.schema_version !== SUBMISSION_SCHEMA) throw new Error("schema_version 不匹配");
+        if (documentValue.graph?.graph_fingerprint !== packageData.graph.graph_fingerprint) {
+          throw new Error("JSON 绑定的是另一张图谱或另一版 candidate artifacts");
+        }
+        state = stateFromSubmission(documentValue);
+        saveState();
+        renderSection(activeSection);
+        alert("JSON 已导入并恢复为本机草稿。");
+      } catch (error) {
+        alert(`无法导入：${error.message}`);
+      }
+    }
+
+    function resetReview() {
+      if (!confirm("确定清空此图谱在本浏览器中的全部评审草稿吗？请先导出需要保留的 JSON。")) return;
+      localStorage.removeItem(storageKey);
+      state = createBlankState();
+      renderSection(activeSection);
+    }
+
+    document.querySelectorAll("[data-section-target]").forEach(button => {
+      button.addEventListener("click", () => switchSection(button.dataset.sectionTarget));
+    });
+
+    ensureCompleteShape();
+    renderHeader();
+    sectionOrder.forEach(renderSection);
+    switchSection("overview");
+  })();
+  </script>
+</body>
+</html>

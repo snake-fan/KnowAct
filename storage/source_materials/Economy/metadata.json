@@ -1,7 +1,8 @@
 {
-  "metadata_version": "1.0",
+  "metadata_version": "1.1",
   "source_id": "Economy",
   "benchmark_domain": "Economy",
+  "domain_summary": "Introductory economics based on Units 1-4 of CORE Econ's The Economy. It covers capitalist institutions and long-run growth, technology and population, scarcity and individual choice, and strategic social interactions, with emphasis on interpreting economic models and evidence.",
   "title": "The Economy: Introductory Economics Foundations",
   "citation": "CORE Econ, The Economy 1.0, Units 1-4.",
   "storage_path": "source_materials/Economy/experiment_scope.md",

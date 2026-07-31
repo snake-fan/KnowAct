@@ -2,6 +2,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from backend.knowact.agents.belief import MasteryBelief
 from backend.knowact.agents.working_map import (
     AgentWorkingKnowledgeMap,
     AssessedMasteryLevel,
@@ -38,6 +39,7 @@ class WorkingMapNodeAssessmentUpdate(BaseModel):
     diagnostic_confidence: DiagnosticConfidence
     assessment_note: str | None = None
     supporting_turn_ids: tuple[str, ...] = Field(default_factory=tuple)
+    mastery_belief: MasteryBelief | None = None
 
     @field_validator("node_id")
     @classmethod
@@ -305,6 +307,15 @@ def _validate_update_batch(
         )
 
     for update in updates:
+        if (
+            update.mastery_belief is not None
+            and update.assessed_mastery_level != AssessedMasteryLevel.UNKNOWN
+            and update.mastery_belief.mode_level
+            != update.assessed_mastery_level.value
+        ):
+            raise KnowActValidationError(
+                f"Assessment for node {update.node_id} does not match its mastery belief mode"
+            )
         if update.assessed_mastery_level == AssessedMasteryLevel.UNKNOWN:
             continue
 
@@ -338,6 +349,7 @@ def _apply_update_to_state(
             "diagnostic_confidence": update.diagnostic_confidence,
             "assessment_note": update.assessment_note,
             "supporting_turn_ids": update.supporting_turn_ids,
+            "mastery_belief": update.mastery_belief,
         }
     )
 

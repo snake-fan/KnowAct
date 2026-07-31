@@ -2,6 +2,8 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -55,17 +57,22 @@ class V1ProfileContextAuthoringApiTest(unittest.TestCase):
             )
 
             with self.assertLogs("knowact.authoring.profile_context", level="INFO") as logs:
-                response = client.post(
-                    "/api/authoring/profile-context-candidates",
-                    json={
-                        "benchmark_domain": "classical_supervised_ml_algorithms",
-                        "rough_description": (
-                            "A beginner who can follow sklearn examples but has weak statistical foundations."
-                        ),
-                        "domain_summary": "Classical supervised machine learning algorithms.",
-                        "run_id": "profile_run_001",
-                    },
-                )
+                with patch(
+                    "backend.knowact.api.authoring.load_graph_authoring_source_metadata",
+                    return_value=SimpleNamespace(
+                        domain_summary="Classical supervised machine learning algorithms."
+                    ),
+                ):
+                    response = client.post(
+                        "/api/authoring/profile-context-candidates",
+                        json={
+                            "benchmark_domain": "classical_supervised_ml_algorithms",
+                            "rough_description": (
+                                "A beginner who can follow sklearn examples but has weak statistical foundations."
+                            ),
+                            "run_id": "profile_run_001",
+                        },
+                    )
 
             self.assertEqual(200, response.status_code)
             rendered_logs = "\n".join(logs.output)
@@ -73,6 +80,10 @@ class V1ProfileContextAuthoringApiTest(unittest.TestCase):
             self.assertIn("Profile context authoring model call started", rendered_logs)
             self.assertIn("Profile context authoring parser succeeded", rendered_logs)
             self.assertIn("Profile context authoring workflow succeeded", rendered_logs)
+            self.assertIn(
+                "Optional subject-area summary: Classical supervised machine learning algorithms.",
+                fake_model_client.calls[0][1].content,
+            )
             payload = response.json()
             self.assertEqual("profile_run_001", payload["run_id"])
             self.assertEqual(
@@ -531,6 +542,7 @@ class V1ProfileContextAuthoringApiTest(unittest.TestCase):
                 json={
                     "benchmark_domain": "classical_supervised_ml_algorithms",
                     "rough_description": "A practical beginner.",
+                    "domain_summary": "Client-authored summaries are not accepted.",
                     "graph_nodes": [{"id": "train_test_split"}],
                     "node_rubrics": [{"id": "train_test_split", "levels": {}}],
                     "edges": [],
@@ -540,7 +552,7 @@ class V1ProfileContextAuthoringApiTest(unittest.TestCase):
             self.assertEqual(422, response.status_code)
             self.assertEqual([], fake_model_client.calls)
             self.assertEqual(
-                {"edges", "graph_nodes", "node_rubrics"},
+                {"domain_summary", "edges", "graph_nodes", "node_rubrics"},
                 {
                     item["loc"][-1]
                     for item in response.json()["detail"]

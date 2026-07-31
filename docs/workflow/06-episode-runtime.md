@@ -32,8 +32,9 @@ runtime 依赖 core、validation、storage、simulator、agents 和 scoring：�
 ## 关键边界
 
 - episode runtime 永远不读取 candidate graph/map。
-- run id 不覆盖；run artifacts 在 `experiments/runs/{run_id}/` 下按职责保存。
-- run 开始时即创建 run 目录，并写出初始 `working_map.json`。一个完整 turn 定义为一次 diagnostic question、一次 simulator answer，以及 Tested Agent 基于该回答执行的 working/reconstructed-map update；update 完成后立即原子写入 `experiments/runs/{run_id}/turns/{turn_id}.json`，同时同步更新顶层 `working_map.json`。
+- run id 不覆盖；run artifacts 在
+  `experiments/03_agent_reconstruction/results/runs/{run_id}/` 下按职责保存。
+- run 开始时即创建 run 目录，并写出初始 `working_map.json`。一个完整 turn 定义为一次 diagnostic question、一次 simulator answer，以及 Tested Agent 基于该回答执行的 working/reconstructed-map update；update 完成后立即原子写入 `experiments/03_agent_reconstruction/results/runs/{run_id}/turns/{turn_id}.json`，同时同步更新顶层 `working_map.json`。
 - 单轮文件包含该轮 visible dialogue 和 working-map update attempts/outcome；不复制完整 per-turn map snapshot。run 正常结束后另写纯可见对话的聚合 `transcript.json`，供现有 transcript API 和整体分析使用。
 - 单轮 dialogue 与聚合 transcript 不得包含 simulator debug trace id、grounded node id、answer blueprint、hidden evidence 或 profile context。单轮 update record 只记录 Tested Agent 自己提交的评估修改及验证结果。
 - 单轮 `/api/simulator/turn` 是独立 preview，不可被当成隐式 episode runtime。

@@ -3,46 +3,99 @@
 
 \subsection{What a \knowact Result Would Mean}
 
-A benchmark score is evidence only relative to the explanations that the design excludes. Low reconstruction error alone is compatible with several stories: the agent inferred the user from dialogue, exploited a strong population prior, received leaked information, or guessed well. \knowact strengthens interpretation by pairing endpoint accuracy with controlled access, evidence references, and non-adaptive comparisons.
+A benchmark score is evidence only relative to the explanations excluded by the design.
+
+Low reconstruction error may reflect dialogue inference, a population prior, leaked information, or a
+good guess.
+
+\knowact strengthens interpretation through controlled access, evidence references, and non-adaptive
+comparisons.
 
 The resulting claims form a hierarchy:
+
 \begin{enumerate}[leftmargin=1.7em]
     \item \emph{reconstruction}: the final map matches the reviewed map;
     \item \emph{active acquisition}: adaptive policies outperform matched non-adaptive controls;
-    \item \emph{state use}: working-map or graph ablations identify a mechanism for that advantage;
-    \item \emph{external validity}: the advantage is robust across simulators and transfers to human interaction.
+    \item \emph{state use}: working-map ablations identify a mechanism for that advantage;
+    \item \emph{graph-aware diagnosis}: graph structure improves efficiency without unsupported propagation;
+    \item \emph{proxy robustness}: the advantage persists across simulator configurations;
+    \item \emph{human transfer}: the advantage persists in matched human interaction.
 \end{enumerate}
 
-Evidence for a lower level does not entail a higher one. In particular, accurate reconstruction is not yet functional ToM if the same result is achieved by a fixed script. Conversely, failure to transfer to humans would indict the simulator proxy, not necessarily the internal consistency of the reconstruction task.
+Evidence for a lower level does not entail a higher one.
 
-The interaction can be viewed as active information acquisition over a structured latent state. It differs from pool-based active learning because probes are open-ended utterances whose meaning must be grounded. It differs from conventional adaptive testing because the item bank is not fixed or psychometrically calibrated. This expressivity is precisely why provenance, grounding, and proxy validation are constitutive parts of the measurement argument.
+Accurate reconstruction is not active user modeling if a fixed script achieves the same result. Failure
+to transfer to humans indicts the simulator proxy, not necessarily task consistency.
 
-Even a fully validated result would remain diagnostic rather than task-complete. \knowact asks whether an agent can acquire a useful user model; it does not yet establish that the model improves teaching, recommendation, or collaboration. Connecting reconstruction to downstream benefit is a separate claim and a natural next benchmark layer.
+The interaction is active information acquisition over a structured latent state.
+
+It differs from pool-based active learning because probes are open utterances that require grounding. It
+differs from adaptive testing because the item bank is neither fixed nor psychometrically calibrated.
+
+This expressivity makes provenance, grounding, and proxy validation part of the measurement argument.
+
+Even a fully validated result would remain diagnostic rather than task-complete.
+
+\knowact asks whether an agent acquires a useful user model. It does not establish improved teaching,
+recommendation, or collaboration.
+
+Connecting reconstruction to downstream benefit is a separate claim and a natural next benchmark layer.
 
 \subsection{Limitations and Threats to Validity}
 
 \paragraph{The target is authored, not discovered.}
-The graph and rubrics determine which distinctions count as knowledge. Expert review and source provenance make that choice defensible and inspectable, but not uniquely correct. Rankings may change under another granularity, relation set, or rubric design.
+The graph and rubrics determine which distinctions count as knowledge.
+
+Expert review and source provenance make that choice inspectable, not uniquely correct. Rankings may
+change under another granularity, relation set, or rubric.
 
 \paragraph{Simulator fidelity.}
-A simulator can be perfectly consistent with a reviewed map while expressing partial knowledge unlike a person. Leakage tests establish access control, not behavioral realism. Matched human studies must test diagnostic value and ranking transfer rather than relying on naturalness alone.
+A simulator may be consistent with a reviewed map while expressing partial knowledge unlike a person.
+
+Context isolation limits raw-field exposure, but does not establish semantic safety or behavioral
+realism. Held-out answers and matched human studies must test state fidelity and ranking transfer.
 
 \paragraph{Artifact dependence.}
-The fixed graph, rubrics, maps, and simulator jointly operationalize the target construct. Their shared design choices may make the benchmark easier for some model families. Source grounding, deterministic fixtures, artifact review, simulator variation, and human validation reduce but cannot remove this dependence.
+The graph, rubrics, maps, and simulator jointly operationalize the construct. Shared design choices may
+favor some model families.
+
+Source grounding, deterministic fixtures, review, simulator variation, and human validation reduce but
+cannot remove this dependence.
 
 \paragraph{Simplified knowledge state.}
-A static L0--L5 state cannot capture context dependence, procedural fluency, confidence, forgetting, or learning during dialogue. Freezing state makes the reconstruction target identifiable, but it also turns explanations into observations rather than teaching events. Dynamic diagnosis will require a transition model and a different causal interpretation.
+A static L0--L5 state cannot capture context, procedural fluency, confidence, forgetting, or learning.
+
+Freezing state makes reconstruction identifiable, but it treats explanations as observations rather
+than teaching events. Dynamic diagnosis needs a transition model and different causal interpretation.
 
 \paragraph{Initial domain scope.}
-The first release focuses on statistical learning and a small authored graph. It can validate the protocol but not cross-domain generality. Additional domains must vary source style, graph topology, concept granularity, and the kinds of misconceptions that can be expressed.
+The first release focuses on statistical learning and a small authored graph. It can validate the
+protocol, not cross-domain generality.
+
+Additional domains must vary source style, topology, concept granularity, and expressible misconceptions.
 
 \paragraph{Operational claims.}
-Success would demonstrate behavior compatible with structured user modeling under benchmark constraints. It would not establish human-like beliefs, consciousness, or a psychologically faithful ToM mechanism. The term functional ToM names the tested role of the representation, not its ontological status.
+Success would show behavior compatible with structured user modeling under benchmark constraints.
+
+It would not establish human-like beliefs, consciousness, or a faithful psychological mechanism. The
+term functional ToM names the tested role, not an ontological status.
 
 \subsection{Conclusion and Outlook}
 
-Evaluating user-aware agents requires more than placing them in a conversation. The evaluator must know what user state is at stake, make evidence acquisition consequential, and distinguish accurate inference from leakage, priors, and generic interaction skill.
+Evaluating user-aware agents requires more than placing them in a conversation.
 
-\knowact offers one operationalization of these requirements. It turns a reviewed knowledge map into an explicit latent target, lets agents choose natural-language probes under a budget, and exposes the link from visible evidence to working state and subsequent action. The simulator boundary and deterministic score make this loop auditable without claiming that simulation is equivalent to human interaction.
+The evaluator must know the user state at stake, make evidence acquisition consequential, and separate
+accurate inference from leakage, priors, and generic interaction skill.
 
-The immediate next step is not to broaden the claim but to test it: adaptive controls, mechanism ablations, simulator variation, and matched human episodes must establish which level of the evidence hierarchy \knowact can support. Only then should the benchmark be extended to dynamic learning, downstream assistance, and additional domains.
+\knowact turns a reviewed knowledge map into an explicit latent target and lets agents choose probes
+under a budget.
+
+It exposes the link from visible evidence to working state and action. The \sagesim boundary and
+deterministic score make the loop auditable without equating simulation with human interaction.
+
+The immediate next step is to test, not broaden, the claim.
+
+Adaptive controls, mechanism ablations, simulator variation, and human episodes must establish which
+evidence level \knowact supports.
+
+Only then should the benchmark extend to dynamic learning, downstream assistance, and new domains.

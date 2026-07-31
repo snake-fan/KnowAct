@@ -31,13 +31,17 @@
 
 - `frontend/`：React 前端，用于 benchmark 配置、交互界面、实验结果查看和知识地图可视化；当前包含 Knowledge Graph、User Profile、User Map、Simulator、Episodes 和 Run Queue workbench modules。Knowledge Graph workbench 可按 domain/version 加载 reviewed graph snapshot 进行只读预览；该功能不编辑 candidate artifacts，也不执行 promotion。
 - `backend/`：FastAPI 后端，用于 profile generation、user simulator、agent loop、evaluation API 和实验任务编排。
-- `backend/knowact/api/`：FastAPI routers；当前包含 `/api/authoring` surface。Graph authoring 固定从 `storage/source_materials/{Economy,ISLP,OSTEP}/` 读取 benchmark author 手工放置的 Markdown，并从各自 versioned `metadata.json` 加载 domain、aspect、至少 50 道 representative questions、领域 exclusions 和节点预算；生成请求只接受 source、run id 与 provider。该 surface 生成 reviewable candidate graph artifacts，通过显式 review confirmation 将校验后的 candidate snapshot promote 为 reviewed authored graph version，并从 reviewed graph 与 confirmed Profile Context snapshot 生成可检查的 Candidate Knowledge Map。
+- `backend/knowact/api/`：FastAPI routers；当前包含 `/api/authoring` surface。Graph authoring 固定从 `storage/source_materials/{Economy,ISLP,OSTEP}/` 读取 benchmark author 手工放置的 Markdown，并从各自 versioned `metadata.json` 加载 domain、面向用户的 `domain_summary`、aspect、至少 50 道 representative questions、领域 exclusions 和节点预算；User Profile workbench 只读展示 metadata summary，profile-context generation 由 backend 解析该字段，client 不得覆盖。Graph generation 请求只接受 source、run id 与 provider。该 surface 生成 reviewable candidate graph artifacts，通过显式 review confirmation 将校验后的 candidate snapshot promote 为 reviewed authored graph version，并从 reviewed graph 与 confirmed Profile Context snapshot 生成可检查的 Candidate Knowledge Map。
 - `backend/knowact/core/` 和 `backend/knowact/validation/`：当前 V1 已开始实现的 schema 与 validation spine。
 - `backend/knowact/simulator/`：Phase 5 user simulator contracts；当前包含 usable stateless single-turn DTO/API boundary，用于建立 tested-agent-visible request/response 边界。
 - `backend/knowact/runtime/`：Episode manifest registry、tested-agent visibility boundary、turn runner、持久化 FIFO Episode Run Queue、turn-level checkpoint 和单进程并发调度。
 - `benchmark/fixtures/`：小型 development fixtures，可用于跑通 schema、validation 和 runtime wiring；不要把它们误认为正式 v1 benchmark graph。
 - `test/`：当前 Python `unittest` 测试入口。
-- `docs/`：研究设计、数据 schema、知识地图、评估指标和实验记录。
+- `docs/`：研究综述、数据 schema、知识地图、评估指标和 workflow 记录。
+- `experiments/`：三个正式实验的设计、执行材料与结果归档。Episode Run
+  产物固定写入
+  `experiments/03_agent_reconstruction/results/runs/{run_id}/`，队列状态写入
+  `experiments/03_agent_reconstruction/runtime/run_queue.json`。
 
 如果实际目录结构发生变化，请同步更新 `README.md`、`README.zh-CN.md` 和本文件。
 

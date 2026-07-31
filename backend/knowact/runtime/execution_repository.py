@@ -10,6 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.knowact.core.episode import EvaluationEpisodeManifest
+from backend.knowact.runtime.experiment_paths import run_queue_state_path
 
 
 RUN_QUEUE_STATE_VERSION = 1
@@ -82,7 +83,7 @@ class EpisodeExecutionNotFoundError(EpisodeExecutionRepositoryError):
 
 class EpisodeExecutionRepository:
     def __init__(self, *, workspace_root: Path) -> None:
-        self._path = workspace_root / "experiments" / "runtime" / "run_queue.json"
+        self._path = run_queue_state_path(workspace_root)
         self._lock = RLock()
 
     def initialize(self, manifests: tuple[EvaluationEpisodeManifest, ...]) -> None:

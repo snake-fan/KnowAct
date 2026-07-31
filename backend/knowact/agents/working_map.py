@@ -1,7 +1,9 @@
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from backend.knowact.agents.belief import MasteryBelief
 from backend.knowact.core.graph import KnowledgeGraph
 from backend.knowact.core.map import MasteryLevel
 
@@ -36,6 +38,7 @@ class WorkingMapNodeAssessment(BaseModel):
     diagnostic_confidence: DiagnosticConfidence = DiagnosticConfidence.UNKNOWN
     assessment_note: str | None = None
     supporting_turn_ids: tuple[str, ...] = Field(default_factory=tuple)
+    mastery_belief: MasteryBelief | None = None
 
     @field_validator("node_id")
     @classmethod
@@ -61,6 +64,16 @@ class WorkingMapNodeAssessment(BaseModel):
         if len(value) != len(set(value)):
             raise ValueError("must not contain duplicate items")
         return value
+
+    @model_validator(mode="after")
+    def _belief_mode_matches_committed_mastery(self) -> Self:
+        if (
+            self.mastery_belief is not None
+            and self.assessed_mastery_level != AssessedMasteryLevel.UNKNOWN
+            and self.mastery_belief.mode_level != self.assessed_mastery_level.value
+        ):
+            raise ValueError("mastery belief mode must match assessed mastery level")
+        return self
 
 
 class AgentWorkingKnowledgeMap(BaseModel):

@@ -1,6 +1,6 @@
-# User Simulator
+# User Simulator: SAGE Workflow
 
-Status: Draft for Phase 5 design
+Status: Implemented Phase 5 workflow; human-validity experiments not yet run
 
 This document defines the v1 user simulator workflow. It follows `CONTEXT.md`, the v1 ADRs, and `docs/V1ProjectBreakdown.md`. If this document conflicts with `CONTEXT.md` or an accepted ADR, the glossary and ADR take precedence.
 
@@ -9,6 +9,12 @@ This document defines the v1 user simulator workflow. It follows `CONTEXT.md`, t
 The v1 **User Simulator** answers **Diagnostic Questions** naturally while staying faithful to a hidden **Reviewed Map** and hidden **Ground-Truth Evidence**.
 
 It is not a state-query API, a scoring component, or a tested-agent question-selection policy. The tested agent must infer the user's state from visible answers.
+
+The workflow is named **SAGE — Scoped Answer Generation from Epistemic
+State**（基于认知状态的作用域受限回答生成）. `Scoped` means that a question
+is grounded before hidden state is read; `Epistemic State` means that answer
+content comes from reviewed node-level knowledge rather than free-form persona
+role play.
 
 ## Design Summary
 
@@ -22,7 +28,27 @@ It is not a state-query API, a scoring component, or a tested-agent question-sel
 - Debug traces are hidden benchmark-author artifacts, separate from visible transcript and scoring outputs.
 - The Phase 5 single-turn endpoint is stateless per turn and must not become a parallel episode runtime.
 
-## Workflow
+## Scientific Claim Boundary
+
+SAGE is an information contract and workflow, not a claim that the generator has
+a human cognitive mechanism.
+
+- **Implemented fact:** public-scope grounding, direct-node hidden-context
+  retrieval, de-identified blueprint construction, separated surface
+  generation, bounded retry, and safe fallback exist in the current service.
+- **Literature-supported motivation:** user/student simulation, grounded
+  dialogue, and plan-to-text work motivate decomposition, explicit
+  task-relevant state, and direct plus downstream validation.
+- **Research hypothesis:** SAGE preserves a person's mastery, misconception,
+  uncertainty, and agent-comparison conclusions better than monolithic role
+  prompting.
+
+The 39-paper quality-gated evidence pool and synthesis are in
+`docs/research/user_simulator_workflow/`. The held-out human and proxy-validity
+protocol plus execution materials are in
+`experiments/02_simulator_human_validity/`.
+
+## SAGE Workflow
 
 ```text
 Diagnostic Question
@@ -45,9 +71,24 @@ Answer Generator
 Simulator Answer
 ```
 
-This diagram shows workflow components only. **Simulator Answer Blueprint** is the structured intermediate artifact between policy and generation.
+This diagram shows workflow components only. **Simulator Answer Blueprint** is the structured epistemic abstraction between policy and generation.
 
-The implementation may collapse or split these components, but it should preserve their information boundaries.
+The implementation may collapse or split these components, but it should
+preserve their information boundaries. In formal notation:
+
+\[
+S_t=g(q_t,\mathcal{G},\mathcal{H}^{vis}_{t-1}),\quad
+C_t=R(\mathcal{M}^{\star},Z;S_t),\quad
+B_t=\pi(C_t,q_t),
+\]
+
+\[
+a_t\sim p_\phi(\cdot\mid B_t,\mathcal{H}^{vis}_{t-1},\eta).
+\]
+
+Here \(S_t\) is the publicly grounded scope, \(C_t\) the permitted local hidden
+context, \(B_t\) the de-identified blueprint, and \(\eta\) optional style
+context.
 
 Component contracts:
 
@@ -257,6 +298,12 @@ Label-seeking questions still use the normal Answer Blueprint-to-generator path,
 The simulator does not run a separate Answer Validation agent after generation. Leakage prevention is structural: policy converts grounded hidden state into a de-identified **Simulator Answer Blueprint**, and the generator receives only that blueprint, visible dialogue, and an optional style hint. It never receives raw maps, mastery labels, hidden evidence ids, map ids, user ids, scoring fields, or debug details.
 
 Generator instructions still forbid benchmark labels, hidden ids, state-table wording, map dumps, scores, debug references, and schema language. Failed, timed-out, empty, or malformed model output may be retried briefly with the same blueprint before terminal fallback.
+
+This boundary supports a narrow access-isolation claim: raw hidden fields are
+not placed in the generator context. It does not prove that every generated
+answer is semantically faithful or safe under adversarial questions. Those
+claims require the leakage, state-fidelity, and human-linkage experiments in
+`experiments/02_simulator_human_validity/`.
 
 ## Safe Fallback
 

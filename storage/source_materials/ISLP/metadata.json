@@ -1,7 +1,8 @@
 {
-  "metadata_version": "1.0",
+  "metadata_version": "1.1",
   "source_id": "ISLP",
   "benchmark_domain": "ISLP",
+  "domain_summary": "Foundations of statistical learning and linear regression based on Chapters 2-3 of An Introduction to Statistical Learning with Applications in Python. It covers prediction versus inference, model flexibility and generalization, bias-variance trade-offs, simple and multiple linear regression, statistical inference, and regression diagnostics.",
   "title": "An Introduction to Statistical Learning: Statistical Learning Foundations",
   "citation": "James, Witten, Hastie, Tibshirani, and Taylor, An Introduction to Statistical Learning with Applications in Python, Chapters 2-3.",
   "storage_path": "source_materials/ISLP/experiment_scope.md",

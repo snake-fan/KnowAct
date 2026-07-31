@@ -55,17 +55,18 @@ class GraphAuthoringSourceMetadata(SourceMaterialRecord):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    metadata_version: Literal["1.0"]
+    metadata_version: Literal["1.0", "1.1"]
     benchmark_domain: str
+    domain_summary: str | None = None
     content_sha256: str
     graph_authoring_scope: GraphAuthoringScope
     question_bank_method: Literal["reference_grounded_original_questions"]
     question_bank_sources: tuple[QuestionBankReference, ...] = Field(min_length=1)
 
-    @field_validator("benchmark_domain")
+    @field_validator("benchmark_domain", "domain_summary")
     @classmethod
-    def _benchmark_domain_must_not_be_blank(cls, value: str) -> str:
-        if not value.strip():
+    def _domain_values_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
             raise ValueError("must not be blank")
         return value
 
@@ -82,6 +83,8 @@ class GraphAuthoringSourceMetadata(SourceMaterialRecord):
 
     @model_validator(mode="after")
     def _validate_fixed_research_contract(self) -> "GraphAuthoringSourceMetadata":
+        if self.metadata_version == "1.1" and self.domain_summary is None:
+            raise ValueError("metadata_version 1.1 requires domain_summary")
         if self.source_id not in FIXED_GRAPH_AUTHORING_SOURCE_IDS:
             raise ValueError(
                 "source_id must be one of "

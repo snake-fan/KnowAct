@@ -15,11 +15,13 @@ visible graph + prior visible transcript + working map
 
 ### 将决策与隐藏 truth 隔离
 
-agent protocol/input 只包含 Tested-Agent-visible context。Simple LLM agent、fixed-question 和 random-question baseline 都必须穿过同一接口；实现不能读取 hidden map、profile context、simulator debug trace 或 scoring data。
+agent protocol/input 只包含 Tested-Agent-visible context。Simple LLM agent、experimental evidence-calibrated agent、fixed-question 和 random-question baseline 都必须穿过同一接口；实现不能读取 hidden map、profile context、simulator debug trace 或 scoring data。
 
 ### Working map 是行动工具，不是评分提交
 
 agent 可以在每轮维护带假设和不确定性的 working map，用它选择下一问；它是可替换的内部决策状态。真正被评分的是最后一次完整 `Reconstructed Knowledge Map`，避免把过程表示格式强加给所有被测方法。
+
+`evidence_calibrated_agent` 可在 node assessment 上附加 checkpointed `mastery_belief`，但 shared finalization 仍只读取它已经投影出的 categorical mastery、confidence、note 和 visible turn references。该实验字段不能来自 hidden truth，也不改变其他 baseline 的初始 working-map contract。
 
 ### 语义工具而非隐藏字段访问
 

@@ -80,7 +80,7 @@ From the repository root, prepare `.env` and install backend/frontend dependenci
 make setup
 ```
 
-Fill in `.env` only for workflows that call an external model provider, such as LLM-backed graph authoring or simulator turns. The backend can still be started for health checks and local UI/API wiring without real secrets. Graph authoring uses exactly three filesystem-managed sources: `Economy`, `ISLP`, and `OSTEP`. Place each manually prepared UTF-8 Markdown file under `storage/source_materials/{source_id}/`; its versioned `metadata.json` supplies the matching domain, aspect, at least 50 reference-grounded representative questions, exclusions, and node budget. The generation form therefore asks only for Source, Run ID, and Provider.
+Fill in `.env` only for workflows that call an external model provider, such as LLM-backed graph authoring or simulator turns. The backend can still be started for health checks and local UI/API wiring without real secrets. Graph authoring uses exactly three filesystem-managed sources: `Economy`, `ISLP`, and `OSTEP`. Place each manually prepared UTF-8 Markdown file under `storage/source_materials/{source_id}/`; its versioned `metadata.json` supplies the matching domain, a user-facing domain summary, aspect, at least 50 reference-grounded representative questions, exclusions, and node budget. The User Profile workbench displays that summary read-only before rough-description entry, while the graph generation form asks only for Source, Run ID, and Provider.
 
 Episode registration reads provider-scoped model dropdowns from `KNOWACT_OPENAI_MODELS` and `KNOWACT_DEEPSEEK_MODELS` (comma-separated), with `KNOWACT_OPENAI_MODEL` and `KNOWACT_DEEPSEEK_MODEL` as defaults. A provider is available only when its API key is configured. The initial persistent Episode Run Queue is single-process; do not start the backend with multiple Uvicorn workers.
 
@@ -117,6 +117,11 @@ make build
 make check
 ```
 
+The three executable research packages are indexed in
+[`experiments/README.md`](experiments/README.md). Study protocols, materials,
+result templates, and generated artifacts live there; literature evidence and
+method synthesis remain under `docs/research/`.
+
 ---
 
 ## Benchmark Design
@@ -133,12 +138,12 @@ V1 benchmark construction uses three fixed source/domain identities: `Economy`, 
 
 2. **Human Verification**
 
-   Generated profiles are manually checked and revised to ensure consistency, plausibility, and evaluability.
+   Generated profiles are manually checked and revised to ensure consistency, plausibility, and evaluability. The current `Economy`, `ISLP`, and `OSTEP` candidate-graph content-validity study uses frozen offline HTML packages under [`experiments/01_kg_scientific_validity/`](experiments/01_kg_scientific_validity/README.md): independent reviewers export hash-bound JSON, and a separate page compares two complete submissions and exports confirmation JSON before structural validation and explicit promotion.
 
 3. **User Simulation**
 
    An LLM-based user simulator is conditioned on the hidden knowledge map and evidence, then answers diagnostic questions naturally without revealing mastery labels, hidden evidence ids, or the full map. It may be uncertain, partially correct, or reveal misconceptions, but its answers should remain consistent with the hidden map and evidence.
-   See `docs/UserSimulator.md` for the Phase 5 simulator workflow, grounding, validation, fallback, and single-turn boundaries.
+   See `docs/UserSimulator.md` for the Phase 5 SAGE simulator workflow, grounding, blueprint boundary, fallback, and single-turn boundaries; the human-validity protocol and materials are in [`experiments/02_simulator_human_validity/`](experiments/02_simulator_human_validity/README.md).
 
 4. **Agent Interaction**
 
@@ -312,6 +317,10 @@ The agent randomly selects diagnostic questions within the episode constraints.
 ### Simple LLM Agent
 
 The agent sees the authored knowledge graph and dialogue history, uses a simple prompt to choose the next diagnostic question, and submits a final reconstructed knowledge map.
+
+### Experimental Evidence-Calibrated Agent
+
+The `evidence_calibrated_agent` interprets visible answers as per-level likelihoods, persists an optional L0-L5 belief in the working map, and deterministically selects among multiple LLM-proposed questions using an inspectable risk-aware utility. It uses the same visibility, checkpoint, finalization, and scoring paths as the Simple LLM baseline. Method evidence is documented in [`docs/research/tested_agent_knowledge_map_reconstruction/`](docs/research/tested_agent_knowledge_map_reconstruction/README.md), and the executable comparison design is in [`experiments/03_agent_reconstruction/`](experiments/03_agent_reconstruction/README.md). It is a research candidate, not a validated replacement for the baseline.
 
 ### Oracle Profile Baseline
 

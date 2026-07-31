@@ -1,0 +1,14 @@
+participant_code,question_id,answer_presentation_id,item_id,item_label,item_text,response_scale,response,required
+,,,SF01,核心观点一致性,这段回答表达的核心观点与我真实想表达的内容一致。,1-7,,yes
+,,,SF02,知识水平一致性,这段回答体现出的知识水平与我对该问题的实际掌握程度一致。,1-7,,yes
+,,,SF03,已掌握内容覆盖,这段回答包含了我认为自己真正理解和能够表达的关键内容。,1-7,,yes
+,,,SF04,知识边界一致性,这段回答准确体现了我在哪些部分能够回答以及在哪些部分无法确定或无法解释。,1-7,,yes
+,,,SF05,不确定性一致性,这段回答所表现出的犹豫不确定或信心程度与我的真实状态一致。,1-7,,yes
+,,,SF06,误解一致性,如果我存在理解偏差这段回答准确体现了它；如果不存在则没有凭空制造偏差。,1-7,,yes
+,,,SF07,不过度表现,这段回答没有让我显得比实际更加了解这个问题。,1-7,,yes
+,,,SF08,不低估能力,这段回答没有明显低估我实际掌握的知识或能力。,1-7,,yes
+,,,SF09,表达方式真实性,在不要求逐字相同的情况下这段回答的表达方式像是我可能说出的回答。,1-7,,yes
+,,,SF10,整体代表性,总体而言我愿意将这段回答视为对我真实回答和真实理解的合理代表。,1-7,,yes
+,,,OVERALL,替代判断,该回答能否代替你的回答用于测试 AI Agent 判断你的知识状态？,direct_use|minor_bias|major_revision|not_representative,,yes
+,,,BIAS_FLAGS,偏差类型,如果存在偏差请选择所有适用类型。,overstates|understates|different_core|missing_uncertainty|missing_misconception|invented_misconception|style_mismatch|too_complete|too_vague|other,,no
+,,,COMMENT,可选说明,请指出最不像你的地方或最需要修改的部分。,free_text,,no

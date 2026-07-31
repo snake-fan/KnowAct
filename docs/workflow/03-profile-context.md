@@ -15,7 +15,7 @@ rough user description -> candidate profile-context run -> structural validation
 
 ### 在接触知识图谱之前生成 persona
 
-Profile Context Agent 只能看到 rough description、benchmark domain 和可选 domain summary，不能看到 graph nodes、rubrics 或 edges。这防止 persona 被反向填充成“恰好解释预设知识状态”的伪装输入。
+Profile Context Agent 只能看到 rough description、benchmark domain，以及 backend 从 versioned source/domain metadata 解析出的 `domain_summary`，不能看到 graph nodes、rubrics 或 edges。Workbench 在 rough description 之前只读展示 summary，client 不能覆盖。这防止 persona 被反向填充成“恰好解释预设知识状态”的伪装输入。
 
 ### 结构化而轻量
 

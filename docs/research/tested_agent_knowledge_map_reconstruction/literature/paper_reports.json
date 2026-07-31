@@ -1,0 +1,272 @@
+{
+  "field": "Interactive knowledge-map reconstruction agents",
+  "updated": "2026-07-30",
+  "reports": [
+    {
+      "id": "P001",
+      "title": "Deep Knowledge Tracing",
+      "authors": "Chris Piech et al.",
+      "year": 2015,
+      "venue": "NeurIPS",
+      "depth": "D2",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2015/hash/bac9162b47c56fc8a4d2a519803d51b3-Abstract.html",
+      "sections": {
+        "problem": "Infer changing student knowledge from a sequence of coursework interactions.",
+        "gap": "Earlier tracing models had limited functional forms for complex sequential interactions.",
+        "coreIdea": "Use a recurrent latent state to predict future student responses.",
+        "method": "Encode each skill-response event and update a recurrent hidden state used to predict future correctness.",
+        "evidence": "Evaluates prediction on real student datasets against then-standard knowledge-tracing methods.",
+        "limitation": "The state is optimized for next-response prediction, not an explicit full-map reconstruction, and observations are passive.",
+        "inspiration": "Maintain and update state across turns instead of re-inferring it from scratch.",
+        "knowActUse": "Motivates sequential belief revision and a passive history baseline."
+      }
+    },
+    {
+      "id": "P002",
+      "title": "pyKT: A Python Library to Benchmark Deep Learning based Knowledge Tracing Models",
+      "authors": "Zitao Liu et al.",
+      "year": 2022,
+      "venue": "NeurIPS Datasets and Benchmarks",
+      "depth": "D2",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2022/hash/75ca2b23d9794f02a92449af65a57556-Abstract-Datasets_and_Benchmarks.html",
+      "sections": {
+        "problem": "Knowledge-tracing results are difficult to compare because preprocessing and evaluation protocols vary.",
+        "gap": "Reported KT gains can reflect inconsistent data handling or leakage rather than better student modeling.",
+        "coreIdea": "Standardize datasets, implementations, training, and evaluation across representative KT models.",
+        "method": "Provide a shared library, preprocessing pipeline, and benchmark protocol across seven datasets and ten models.",
+        "evidence": "Benchmarks ten models on seven datasets and documents evaluation pitfalls including question/KC leakage.",
+        "limitation": "Its primary outcome is response prediction rather than hidden full-map recovery.",
+        "inspiration": "Treat visibility, splits, and metric aggregation as part of the benchmark contribution.",
+        "knowActUse": "Requires fixed visibility boundaries, episode-independent splits, and protocol audits before comparing agents."
+      }
+    },
+    {
+      "id": "P003",
+      "title": "BOBCAT: Bilevel Optimization-Based Computerized Adaptive Testing",
+      "authors": "Aritra Ghosh; Andrew Lan",
+      "year": 2021,
+      "venue": "IJCAI",
+      "depth": "D2",
+      "url": "https://www.ijcai.org/proceedings/2021/332",
+      "sections": {
+        "problem": "Static item-selection rules do not learn how to minimize diagnosis error from response data.",
+        "gap": "Hand-designed selection objectives cannot directly improve from large historical response datasets.",
+        "coreIdea": "Use bilevel optimization to learn a question-selection policy around a response model.",
+        "method": "Optimize inner-loop student adaptation and outer-loop selection performance jointly while remaining response-model agnostic.",
+        "evidence": "Compares against adaptive-testing methods on five real student-response datasets and reports shorter tests for matched accuracy.",
+        "limitation": "Assumes fixed items, binary responses, calibrated historical data, and mostly fixed-length testing.",
+        "inspiration": "Select the diagnostic target before realizing its natural-language question and compare quality at fixed budgets.",
+        "knowActUse": "Separates diagnostic target selection from response modeling and motivates matched-budget efficiency curves."
+      }
+    },
+    {
+      "id": "P004",
+      "title": "A Fast-Adaptive Cognitive Diagnosis Framework for Computerized Adaptive Testing Systems",
+      "authors": "Yuanhao Liu et al.",
+      "year": 2025,
+      "venue": "IJCAI",
+      "depth": "D2",
+      "url": "https://www.ijcai.org/proceedings/2025/648",
+      "sections": {
+        "problem": "Static cognitive diagnosis updates too slowly in early adaptive-testing turns.",
+        "gap": "Question-selection research often assumes the cognitive diagnosis is already accurate during cold start.",
+        "coreIdea": "Combine dynamic collaborative response graphs with a personalized response-sequence module.",
+        "method": "Enhance cognitive-diagnosis models with response-graph collaboration and a personalized sequence encoder during testing.",
+        "evidence": "Tests multiple cognitive-diagnosis models and selection strategies on three datasets, with early-turn, ablation, efficiency, and pretraining-ratio analyses.",
+        "limitation": "Collaborative student data and binary item responses do not transfer directly to cold-start open-ended dialogue; the paper notes limited theory linking diagnosis and selection.",
+        "inspiration": "Make early-turn reconstruction curves and update-versus-selection ablations central.",
+        "knowActUse": "Makes early-turn quality a primary outcome and motivates separate update versus selection ablations."
+      }
+    },
+    {
+      "id": "P005",
+      "title": "LongTutor: Benchmarking Large Language Models for Long-term Personalized Tutoring",
+      "authors": "Ning Li et al.",
+      "year": 2026,
+      "venue": "ACL",
+      "depth": "D2",
+      "url": "https://aclanthology.org/2026.acl-long.1371/",
+      "sections": {
+        "problem": "Short isolated evaluations do not test long-term evidence use, diagnosis, and adaptive action.",
+        "gap": "Existing tutoring benchmarks conflate evidence extraction, diagnosis, and action in short interactions.",
+        "coreIdea": "Decompose tutoring into historical evidence acquisition, knowledge-state diagnosis, and teaching action over expert-annotated logs.",
+        "method": "Construct staged tasks from expert-annotated real learning logs and expand them with a generator-verifier pipeline.",
+        "evidence": "Uses real-world learning logs, expert annotations, model comparisons, and a generator-verifier expansion pipeline.",
+        "limitation": "The evidence history is supplied rather than selected online by the evaluated model.",
+        "inspiration": "Score evidence interpretation, state reconstruction, and downstream action separately.",
+        "knowActUse": "Fixes a staged evaluation: evidence interpretation, state reconstruction, and action quality must be measured separately."
+      }
+    },
+    {
+      "id": "P006",
+      "title": "Conversational Learning Diagnosis via Reasoning Multi-Turn Interactive Learning",
+      "authors": "Fangzhou Yao; Sheng Chang; Weibo Gao; Qi Liu",
+      "year": 2026,
+      "venue": "AAAI",
+      "depth": "D1",
+      "url": "https://ojs.aaai.org/index.php/AAAI/article/view/40736",
+      "sections": {
+        "problem": "Direct prompting gives weakly grounded cognitive diagnoses over conversational learning histories.",
+        "gap": "Unstructured whole-dialogue judgments lack an explicit turn-level reasoning and validation process.",
+        "coreIdea": "Iterate behavior preview, state analysis, performance reasoning, and reflection across turns.",
+        "method": "Coordinate specialized reasoning roles that update cognitive state and test it through future-performance reasoning.",
+        "evidence": "Evaluates performance prediction and downstream tutoring support.",
+        "limitation": "Its role decomposition does not establish that multiple LLM agents are necessary, and active probe selection is not the central claim.",
+        "inspiration": "Convert each answer into typed evidence and test diagnoses against held-out behavior.",
+        "knowActUse": "Motivates typed turn-level evidence interpretation followed by independently testable prediction."
+      }
+    },
+    {
+      "id": "P007",
+      "title": "Planning-Guided Tutoring with Assessment-Driven Memory for Pedagogical LLM Tutors",
+      "authors": "Zechen Li; Qiannan Zhu; Mei Wang; Jia Li; Hua Huang",
+      "year": 2026,
+      "venue": "ACL",
+      "depth": "D2",
+      "url": "https://aclanthology.org/2026.acl-long.325/",
+      "sections": {
+        "problem": "LLM tutors struggle to sustain explicit scaffolding while adapting to a learner's evolving state.",
+        "gap": "Tutor prompts often lack a stable plan and persistent assessment state across turns.",
+        "coreIdea": "Maintain a pedagogical plan, step progress, inferred learner state, and dialogue history in an assessment-driven memory loop.",
+        "method": "Generate a stepwise plan and use an assessment-controlled memory to decide whether goals are met and which tutoring action follows.",
+        "evidence": "Reports multi-turn math-tutoring comparisons, plan and assessment ablations, and several tutoring-quality dimensions.",
+        "limitation": "Training is primarily synthetic and uses consistency filters and LLM-based checks; the optimized outcome is pedagogical tutoring quality rather than recovery of a hidden full-graph state.",
+        "inspiration": "Persist plan, evidence, state, and action as inspectable objects rather than only transcript text.",
+        "knowActUse": "Supports an explicit plan-state-action memory contract, not a claim about graph reconstruction."
+      }
+    },
+    {
+      "id": "P008",
+      "title": "Personalized Safety in LLMs: A Benchmark and A Planning-Based Agent Approach",
+      "authors": "Yuchen Wu et al.",
+      "year": 2025,
+      "venue": "NeurIPS",
+      "depth": "D2",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/8c2bb821410066459be64d03a4dc5719-Abstract-Conference.html",
+      "sections": {
+        "problem": "A system lacks user attributes needed to give safe personalized responses under interaction cost and privacy constraints.",
+        "gap": "Uniform context gathering ignores that attributes differ in utility and may be costly or sensitive to request.",
+        "coreIdea": "RAISE plans selective attribute acquisition and abstains when context is insufficient.",
+        "method": "Use offline LLM-guided search to build acquisition paths, then retrieve them online with an acquisition and abstention module.",
+        "evidence": "PENGUIN contains context-rich and context-free controls across sensitive domains; RAISE is compared with heuristic acquisition and reports outcome and query cost.",
+        "limitation": "The latent state is a fixed attribute set and the reward is safety, not ordinal concept mastery.",
+        "inspiration": "Optimize information value under interaction cost and allow explicit insufficiency decisions.",
+        "knowActUse": "Motivates target-before-language planning, marginal value of information, cost curves, and an explicit stop/abstain decision."
+      }
+    },
+    {
+      "id": "P009",
+      "title": "Teaching Language Models to Evolve with Users: Dynamic Profile Modeling for Personalized Alignment",
+      "authors": "Weixiang Zhao et al.",
+      "year": 2025,
+      "venue": "NeurIPS",
+      "depth": "D2",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/2fbc1ea60e215275e823c86338417162-Abstract-Conference.html",
+      "sections": {
+        "problem": "Static prompt or offline personalization struggles with cold-start and changing user preferences.",
+        "gap": "Profile inference is often implicit and is not separately rewarded from response quality.",
+        "coreIdea": "Train dialogue policies with separate rewards for profile inference and profile-aligned responses.",
+        "method": "Interact with a simulated user in an MDP and optimize explicit profile and response rewards with reinforcement learning.",
+        "evidence": "Compares prompting, retrieval, supervised, preference, and reinforcement-learning variants, with ablations and cross-format analysis.",
+        "limitation": "Profiles are simulated slots and actions are responses rather than diagnostic questions over a graph.",
+        "inspiration": "Score reconstructed state independently from the downstream response or action outcome.",
+        "knowActUse": "Requires reconstruction quality to be scored separately from downstream action quality."
+      }
+    },
+    {
+      "id": "P010",
+      "title": "Know Me, Respond to Me: Benchmarking LLMs for Dynamic User Profiling and Personalized Responses at Scale",
+      "authors": "Bowen Jiang et al.",
+      "year": 2025,
+      "venue": "COLM",
+      "depth": "D1",
+      "url": "https://openreview.net/forum?id=6ox8XZGOqP",
+      "sections": {
+        "problem": "LLMs must infer and track user traits and preferences that evolve over long histories.",
+        "gap": "Static personalization benchmarks do not expose profile changes, conflicts, and long-history retrieval failures.",
+        "coreIdea": "PERSONAMEM evaluates response selection at time-indexed profile states over long simulated histories.",
+        "method": "Generate evolving user profiles and long multi-session histories, then query the model at selected time points.",
+        "evidence": "Provides more than 180 histories, up to 60 sessions, 15 task types, and evaluation of frontier models across profile-query types.",
+        "limitation": "The model passively receives history and selects a response; it does not choose what evidence to acquire.",
+        "inspiration": "Stress-test evolving, contradictory, and long-horizon hidden states.",
+        "knowActUse": "Adds evolving-state, conflicting-evidence, and long-history stress tests."
+      }
+    },
+    {
+      "id": "P011",
+      "title": "SimulatorArena: Are User Simulators Reliable Proxies for Multi-Turn Evaluation of AI Assistants?",
+      "authors": "Yao Dou et al.",
+      "year": 2025,
+      "venue": "EMNLP",
+      "depth": "D1",
+      "url": "https://aclanthology.org/2025.emnlp-main.1786/",
+      "sections": {
+        "problem": "Simulator internal consistency does not show that it is a reliable substitute for human multi-turn evaluation.",
+        "gap": "There was no systematic benchmark linking simulator behavior and assistant rankings to human interactions.",
+        "coreIdea": "Compare simulated messages and assistant rankings against annotated human interactions.",
+        "method": "Collect human-LLM conversations, run simulator variants, and measure behavioral and ranking agreement.",
+        "evidence": "Uses 909 human-LLM conversations in two tasks and reports behavior and ranking agreement for simulator variants.",
+        "limitation": "Task-specific agreement cannot be assumed to transfer to diagnostic knowledge reconstruction.",
+        "inspiration": "Validate simulator behavior and preservation of agent rankings against a human subset.",
+        "knowActUse": "Requires a smaller human-linked study that tests behavior and agent-ranking preservation."
+      }
+    },
+    {
+      "id": "P012",
+      "title": "tau-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains",
+      "authors": "Shunyu Yao; Noah Shinn; Pedram Razavi; Karthik Narasimhan",
+      "year": 2025,
+      "venue": "ICLR",
+      "depth": "D2",
+      "url": "https://proceedings.iclr.cc/paper_files/paper/2025/hash/1b126cc38b8638e07bef37e7b2bb72bf-Abstract-Conference.html",
+      "sections": {
+        "problem": "Agent benchmarks rarely combine user interaction, policies, tools, and reliable repeated evaluation.",
+        "gap": "Static instruction-following benchmarks miss user dynamics and hide run-to-run inconsistency.",
+        "coreIdea": "Evaluate dynamic simulated-user interactions through deterministic goal-state checks and pass^k reliability.",
+        "method": "Define database-backed tasks, user intents, tools, policies, and repeated simulated interactions with deterministic final-state comparison.",
+        "evidence": "Tests two real-world domains and multiple function-calling agents over repeated stochastic trials.",
+        "limitation": "Final database state is externally observable; KnowAct's target is an inferred hidden mental state.",
+        "inspiration": "Use deterministic scoring and repeated-run reliability instead of selected successful trajectories.",
+        "knowActUse": "Motivates deterministic scoring, repeated seeds, and a reliability metric rather than best-run reporting."
+      }
+    },
+    {
+      "id": "P013",
+      "title": "AgentBoard: An Analytical Evaluation Board of Multi-turn LLM Agents",
+      "authors": "Chang Ma et al.",
+      "year": 2024,
+      "venue": "NeurIPS Datasets and Benchmarks",
+      "depth": "D2",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/877b40688e330a0e2a3fc24084208dfa-Abstract-Datasets_and_Benchmarks_Track.html",
+      "sections": {
+        "problem": "Final success alone hides where a multi-turn agent made progress or failed.",
+        "gap": "Agent evaluations rarely provide unified process metrics for partially observable multi-turn tasks.",
+        "coreIdea": "Add a progress-rate metric and trajectory-level analytical tooling across partially observable tasks.",
+        "method": "Normalize intermediate task progress and provide a common board for multi-environment agent trajectory analysis.",
+        "evidence": "Applies the framework across diverse multi-turn environments, validates progress scores against human ratings on sampled trajectories, and reports confidence intervals and agent-framework analyses.",
+        "limitation": "Progress construction can require human-annotated subgoals and generic task progress does not directly measure belief calibration or evidence validity.",
+        "inspiration": "Report reconstruction after every turn and diagnose which update or action caused failure.",
+        "knowActUse": "Requires turn-by-turn reconstruction curves, action traces, and failure attribution."
+      }
+    },
+    {
+      "id": "P014",
+      "title": "Understanding Social Reasoning in Language Models with Language Models",
+      "authors": "Kanishk Gandhi; Jan-Philipp Fraenken; Tobias Gerstenberg; Noah Goodman",
+      "year": 2023,
+      "venue": "NeurIPS Datasets and Benchmarks",
+      "depth": "D2",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2023/hash/2b9efb085d3829a2aadffab63ba206de-Abstract-Datasets_and_Benchmarks.html",
+      "sections": {
+        "problem": "Mental-state benchmark results are inconsistent and vulnerable to invalid evaluation designs.",
+        "gap": "Prior Theory-of-Mind tests can be solved or failed because of content effects and uncontrolled cues.",
+        "coreIdea": "Populate causal templates and add control conditions that isolate required inferences.",
+        "method": "Generate scenarios from causal structures, vary provided facts through controls, and validate benchmark quality with humans.",
+        "evidence": "Creates 25 controls and 5,000 evaluations, compares with human performance, and validates item quality with humans.",
+        "limitation": "Evidence is static and supplied; the benchmark does not test active information acquisition or persistent profiles.",
+        "inspiration": "Design alternative-explanation controls for apparent user-modeling and graph-reasoning gains.",
+        "knowActUse": "Requires alternative-explanation controls for apparent Theory-of-Mind and graph-reasoning gains."
+      }
+    }
+  ]
+}

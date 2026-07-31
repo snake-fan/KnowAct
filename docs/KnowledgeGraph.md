@@ -705,7 +705,7 @@ extra fields
 
 Validation 不调用额外 LLM judge，也不对文本做脆弱关键词 blacklist。Prompt 负责避免把逐节点 mastery 写入 `Profile Context`；逐节点状态由后续 map-generation step 生成。
 
-Profile-context authoring step 只读取 benchmark author 提供的粗略用户描述、benchmark-domain identity 和可选 domain summary。它不读取 graph nodes、node rubrics 或 edges，避免在 persona 文本里提前形成一张不可审阅的隐含知识地图。后续 candidate-map generation step 才读取 confirmed `Profile Context` 和完整 reviewed `Authored Knowledge Graph`。
+Profile-context authoring step 只读取 benchmark author 提供的粗略用户描述、benchmark-domain identity，以及 backend 从该 domain 的 versioned source metadata 解析出的 `domain_summary`。Workbench 在粗略描述输入框之前只读展示该介绍，client 不能覆盖。该 step 不读取 graph nodes、node rubrics 或 edges，避免在 persona 文本里提前形成一张不可审阅的隐含知识地图。后续 candidate-map generation step 才读取 confirmed `Profile Context` 和完整 reviewed `Authored Knowledge Graph`。
 
 该输入边界不表示只能生成输入中逐字支持的内容。Profile-context prompt 可以把普通、低风险、领域相关的个人经历与行为细节作为 synthetic authoring choices，并通过因果一致性检查形成一个具体个体；但不得虚构具名真实机构、雇主、人物、证书、奖项、敏感人口属性或重大人生事件，也不得把这些推演伪装成经过外部验证的事实。
 
@@ -920,13 +920,12 @@ Profile-context generation request contract：
 {
   "benchmark_domain": "classical_supervised_ml_algorithms",
   "rough_description": "A beginner who can follow sklearn examples but has weak statistical foundations.",
-  "domain_summary": "Optional limited domain-level summary without node or rubric details.",
   "run_id": "optional",
   "client_provider": "openai"
 }
 ```
 
-`benchmark_domain` 与 `rough_description` 必需；`domain_summary` 与 `run_id` 可选；`client_provider` 与 graph authoring 一样支持 request-level provider selection。首版允许临时 inline 传入 `domain_summary`，后续可迁移到 domain manifest。`domain_summary` 不属于 reviewed benchmark artifact，也不能夹带 node 或 rubric 明细。
+`benchmark_domain` 与 `rough_description` 必需；`run_id` 可选；`client_provider` 与 graph authoring 一样支持 request-level provider selection。`domain_summary` 由 selected domain 的 versioned source metadata 稳定提供，`GET /api/authoring/benchmark-domains` 将其返回给 workbench 展示，生成 endpoint 再由 backend 解析同一字段；request 不能 inline 覆盖。
 
 `Candidate Knowledge Map` 与 candidate graph 的 review 语义不同。Graph 是可由 benchmark author 手工修订后 promotion 的领域资产；map 是一次可丢弃的 synthetic sample。Benchmark author 对 candidate map 做 accept-or-reject review：合格则原样 promotion，不合格则调整 rough description、confirmed `Profile Context` 或 map-authoring workflow 后生成新的 candidate run，不手工 patch 单张地图内容。
 
@@ -1067,7 +1066,7 @@ confirmed Profile Context
 ``` text
 rough user description
 + benchmark-domain identity
-+ optional domain summary
++ metadata-owned domain summary
 → LLM-assisted profile-context authoring
 → reviewable Profile Context
 → benchmark-author edit

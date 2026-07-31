@@ -80,7 +80,7 @@ KnowAct 构造受控的用户画像，并测试 agent 能否通过对话恢复�
 make setup
 ```
 
-只有在运行需要外部模型服务的流程时才需要填写 `.env`，例如 LLM-backed graph authoring 或 simulator turn。仅启动后端健康检查和本地 UI/API 联调时，可以先不填真实密钥。Graph authoring 固定使用三个 filesystem-managed sources：`Economy`、`ISLP` 和 `OSTEP`。把人工预处理的 UTF-8 Markdown 放到 `storage/source_materials/{source_id}/`；版本化的 `metadata.json` 保存同名 domain、aspect、不少于 50 道有参考依据的 representative questions、领域排除项和节点预算。因此生成表单只填写 Source、Run ID 和 Provider。
+只有在运行需要外部模型服务的流程时才需要填写 `.env`，例如 LLM-backed graph authoring 或 simulator turn。仅启动后端健康检查和本地 UI/API 联调时，可以先不填真实密钥。Graph authoring 固定使用三个 filesystem-managed sources：`Economy`、`ISLP` 和 `OSTEP`。把人工预处理的 UTF-8 Markdown 放到 `storage/source_materials/{source_id}/`；版本化的 `metadata.json` 保存同名 domain、面向用户的领域介绍、aspect、不少于 50 道有参考依据的 representative questions、领域排除项和节点预算。User Profile workbench 会在粗略描述输入框之前只读展示这段介绍；graph generation 表单仍只填写 Source、Run ID 和 Provider。
 
 Episode 注册界面从 `KNOWACT_OPENAI_MODELS` 和 `KNOWACT_DEEPSEEK_MODELS`（逗号分隔）加载 provider-scoped model 下拉选项，并分别使用 `KNOWACT_OPENAI_MODEL` 和 `KNOWACT_DEEPSEEK_MODEL` 作为默认值。只有已配置 API key 的 provider 可用。当前持久化 Episode Run Queue 是单进程实现，不要用多个 Uvicorn workers 启动后端。
 
@@ -117,6 +117,9 @@ make build
 make check
 ```
 
+三个可执行研究实验统一由
+[`experiments/README.zh-CN.md`](experiments/README.zh-CN.md) 索引。实验协议、材料、结果模板和生成产物放在该目录；文献证据与方法综述仍保留在 `docs/research/`。
+
 ---
 
 ## 基准设计
@@ -133,12 +136,12 @@ v1 benchmark construction 固定使用三个 source/domain identity：`Economy`�
 
 2. **人工校验**
 
-   人工检查并修订生成的画像，确保其一致性、可信度和可评估性。
+   人工检查并修订生成的画像，确保其一致性、可信度和可评估性。当前 `Economy`、`ISLP` 和 `OSTEP` candidate graph 的内容有效性实验使用 [`experiments/01_kg_scientific_validity/`](experiments/01_kg_scientific_validity/README.zh-CN.md) 下的冻结离线 HTML：独立评审者导出绑定 artifact hashes 的 JSON，随后由单独页面比对两份完整提交并导出确认 JSON，再进入结构验证与显式 promotion。
 
 3. **用户模拟**
 
    基于隐藏知识地图和 evidence 构造 LLM 用户模拟器，使其自然回答诊断问题，但不暴露 mastery label、hidden evidence id 或完整真实知识地图。它可以表现出不确定、部分正确或误解，但回答应与隐藏 map 和 evidence 保持一致。
-   Phase 5 simulator workflow、question grounding、validation、fallback 和 single-turn 边界见 `docs/UserSimulator.md`。
+   Phase 5 SAGE simulator workflow、question grounding、blueprint boundary、fallback 和 single-turn 边界见 `docs/UserSimulator.md`；人类有效性协议与材料见 [`experiments/02_simulator_human_validity/`](experiments/02_simulator_human_validity/README.zh-CN.md)。
 
 4. **agent 交互**
 
@@ -312,6 +315,10 @@ agent 在 episode 约束内随机选择诊断问题。
 ### Simple LLM Agent
 
 agent 可以看到 authored knowledge graph 和对话历史，用简单 prompt 选择下一轮诊断问题，并提交最终重建知识地图。
+
+### 实验性 Evidence-Calibrated Agent
+
+`evidence_calibrated_agent` 将可见回答解释为各 mastery level 的 likelihood，在 working map 中持久化可选的 L0-L5 belief，并用可检查的风险感知效用函数从多个 LLM 候选问题中确定性选出下一问。它与 Simple LLM baseline 共用 visibility、checkpoint、finalization 和 scoring 路径。方法证据见 [`docs/research/tested_agent_knowledge_map_reconstruction/`](docs/research/tested_agent_knowledge_map_reconstruction/README.md)，可执行比较设计见 [`experiments/03_agent_reconstruction/`](experiments/03_agent_reconstruction/README.zh-CN.md)。它是研究候选，而不是已经验证可替代 baseline 的方法。
 
 ### 真实画像基线
 

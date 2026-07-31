@@ -12,6 +12,7 @@ from backend.knowact.agents.protocol import DecisionPhase
 from backend.knowact.agents.working_map import AgentWorkingKnowledgeMap
 from backend.knowact.core.episode import EpisodeExecutionConfiguration
 from backend.knowact.core.interaction import VisibleDialogueContext
+from backend.knowact.runtime.experiment_paths import episode_run_dir
 
 
 CHECKPOINT_FILENAME = "checkpoint.json"
@@ -129,10 +130,10 @@ class EpisodeRunCheckpointRepository:
 
     def path(self, run_id: str) -> Path:
         return (
-            self._workspace_root
-            / "experiments"
-            / "runs"
-            / _safe_id(run_id, "run_id")
+            episode_run_dir(
+                self._workspace_root,
+                _safe_id(run_id, "run_id"),
+            )
             / CHECKPOINT_FILENAME
         )
 

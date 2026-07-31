@@ -1,0 +1,2 @@
+participant_code,graph_version,node_id,node_name,candidate_mastery_level,participant_agreement,participant_correction,researcher_decision,final_mastery_level,misconception_status,misconception_text,unknown_boundary,source_set_a_question_ids,evidence_record_ids,resolution_status,resolution_rationale,reviewer_code,review_date
+,,,,,agree|minor_edit|disagree,,accept|edit|unresolved,,,,,,,resolved|unresolved,,,

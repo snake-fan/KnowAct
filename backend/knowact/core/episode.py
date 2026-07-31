@@ -8,7 +8,7 @@ INTERACTION_RULE_SINGLE_DIAGNOSTIC_QUESTION_PER_TURN = (
     "single_diagnostic_question_per_turn"
 )
 
-EpisodeAgentKind = Literal["simple_llm_agent"]
+EpisodeAgentKind = Literal["simple_llm_agent", "evidence_calibrated_agent"]
 EpisodeClientProvider = Literal["openai", "deepseek"]
 
 

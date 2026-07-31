@@ -6,7 +6,7 @@ import {
   ProfileContextConfirmationResponse,
   confirmProfileContextCandidate,
   generateProfileContextCandidate,
-  listBenchmarkDomains,
+  readBenchmarkDomains,
   saveProfileContextCandidate
 } from "../../api/authoring";
 
@@ -15,9 +15,9 @@ type ListField = "background" | "prior_experience" | "goals" | "preferences";
 
 export function UserProfileWorkbench() {
   const [benchmarkDomains, setBenchmarkDomains] = useState<string[]>([]);
+  const [domainSummaries, setDomainSummaries] = useState<Record<string, string>>({});
   const [benchmarkDomain, setBenchmarkDomain] = useState("");
   const [roughDescription, setRoughDescription] = useState("");
-  const [domainSummary, setDomainSummary] = useState("");
   const [clientProvider, setClientProvider] = useState<ClientProvider>("openai");
   const [candidate, setCandidate] = useState<ProfileContextCandidateResponse | null>(null);
   const [draft, setDraft] = useState<CandidateProfileContext | null>(null);
@@ -35,9 +35,10 @@ export function UserProfileWorkbench() {
 
   async function refreshBenchmarkDomains() {
     await runTask("domains", async () => {
-      const domains = await listBenchmarkDomains();
-      setBenchmarkDomains(domains);
-      setBenchmarkDomain((current) => current || domains[0] || "");
+      const catalog = await readBenchmarkDomains();
+      setBenchmarkDomains(catalog.benchmark_domains);
+      setDomainSummaries(catalog.domain_summaries);
+      setBenchmarkDomain((current) => current || catalog.benchmark_domains[0] || "");
     });
   }
 
@@ -56,7 +57,6 @@ export function UserProfileWorkbench() {
       const response = await generateProfileContextCandidate({
         benchmarkDomain,
         roughDescription: roughDescription.trim(),
-        domainSummary: domainSummary.trim() || undefined,
         clientProvider
       });
       setCandidate(response);
@@ -182,28 +182,26 @@ export function UserProfileWorkbench() {
               </select>
             </label>
 
+            <div className="domain-summary-panel" aria-live="polite">
+              <span className="label-with-hint">
+                Domain Summary
+                <span>From domain metadata</span>
+              </span>
+              <p>
+                {domainSummaries[benchmarkDomain]
+                  ?? "No domain summary is configured for this benchmark domain."}
+              </p>
+            </div>
+
             <label>
               Rough Description
               <textarea
                 className="rough-description-input"
                 value={roughDescription}
                 onChange={(event) => setRoughDescription(event.target.value)}
-                placeholder="Example: A practical beginner who can follow sklearn examples but has weak statistical foundations."
+                placeholder="Example: A practical beginner who has followed a few tutorials but still lacks strong conceptual foundations."
                 disabled={busy !== null}
                 required
-              />
-            </label>
-
-            <label>
-              <span className="label-with-hint">
-                Domain Summary
-                <span>Optional</span>
-              </span>
-              <textarea
-                value={domainSummary}
-                onChange={(event) => setDomainSummary(event.target.value)}
-                placeholder="Add a short subject-area summary when the domain name alone is not enough context."
-                disabled={busy !== null}
               />
             </label>
 

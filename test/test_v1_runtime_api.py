@@ -642,7 +642,10 @@ class V1RuntimeApiTest(unittest.TestCase):
         self.assertTrue(payload["forced_finalization"])
         self.assertFalse(payload["forced_finalization_fallback"])
         self.assertEqual(
-            f"experiments/runs/{payload['run_id']}/scoring_report.json",
+            (
+                "experiments/03_agent_reconstruction/results/"
+                f"runs/{payload['run_id']}/scoring_report.json"
+            ),
             payload["artifacts"]["scoring_report"],
         )
         self.assertEqual(
@@ -652,7 +655,10 @@ class V1RuntimeApiTest(unittest.TestCase):
         self.assertAlmostEqual(18.0, payload["scoring_report"]["episode_mastery_distance"])
         self.assertTrue(transcript_exists)
         self.assertEqual(
-            f"experiments/runs/{payload['run_id']}/turns",
+            (
+                "experiments/03_agent_reconstruction/results/"
+                f"runs/{payload['run_id']}/turns"
+            ),
             payload["artifacts"]["turns"],
         )
         self.assertTrue(turn_log_exists)
@@ -683,9 +689,14 @@ class V1RuntimeApiTest(unittest.TestCase):
     def test_synchronous_episode_run_route_is_not_exposed(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
-            (workspace_root / "experiments" / "runs" / "run_api_001").mkdir(
-                parents=True
-            )
+            (
+                workspace_root
+                / "experiments"
+                / "03_agent_reconstruction"
+                / "results"
+                / "runs"
+                / "run_api_001"
+            ).mkdir(parents=True)
             client = TestClient(create_app(workspace_root=workspace_root))
 
             response = client.post(
@@ -716,6 +727,8 @@ class V1RuntimeApiTest(unittest.TestCase):
             transcript_path = (
                 workspace_root
                 / "experiments"
+                / "03_agent_reconstruction"
+                / "results"
                 / "runs"
                 / "run_bad_transcript"
                 / "transcript.json"

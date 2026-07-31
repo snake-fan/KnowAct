@@ -1,35 +1,307 @@
 \section{Experimental Evaluation}
 \label{sec:experiments}
 
-The benchmark supports progressively stronger claims, and the experiments must keep them separate. Accurate final maps establish reconstruction; an advantage over non-adaptive controls establishes that question choice matters; state and graph ablations test why it matters; simulator and human comparisons test whether the conclusion survives outside one proxy environment.
+The evaluation tests a hierarchy of claims rather than one undifferentiated leaderboard.
 
-Empirical runs are not yet complete. We therefore state the comparisons and falsification criteria before reporting results. This section is an evaluation protocol, not evidence that the proposed construct has already been validated.
+Endpoint accuracy establishes reconstruction. An advantage over matched non-adaptive controls
+establishes active acquisition.
 
-\subsection{Claims and Falsification Criteria}
+Component ablations identify which MapProbe mechanisms cause the advantage. Simulator and human
+comparisons determine how far the result transfers beyond one proxy user.
 
-We organize evaluation around four hypotheses:
+Empirical runs are not yet complete. This section fixes research questions, comparison units, metrics,
+and falsification criteria before observing results.
+
+Empty result tables retain their allocated paper space. They are not evidence that the planned method
+has been validated.
+
+\subsection{Research Questions and Falsification Criteria}
+
+\paragraph{RQ1: reconstruction.}
+
+Under matched interaction and base-model budgets, does MapProbe reduce full-map mastery error relative
+to prior-only, passive, non-adaptive, and prompted-LLM baselines?
+
+A low score does not support this claim unless the paired comparison excludes favorable priors and extra
+calls.
+
+\paragraph{RQ2: sample efficiency.}
+
+Does MapProbe reach a fixed reconstruction-quality threshold in fewer diagnostic turns, and does any
+advantage persist at budgets of 1, 3, 5, and 10 turns?
+
+Asking fewer questions is not an efficiency gain if final error rises.
+
+\paragraph{RQ3: mechanism attribution.}
+
+Which gains arise from explicit belief revision, typed graph messages, utility-based target selection,
+question verification, and calibrated stopping?
+
+A full method result alone cannot establish the value of any individual component.
+
+\paragraph{RQ4: calibration and reliability.}
+
+Are confidence and abstention calibrated, and are conclusions stable across repeated stochastic trials?
+
+Best-of-$k$ reporting is disallowed. Following repeated-run agent evaluation
+\citep{yao2025taubench}, the distribution of outcomes is itself a result.
+
+\paragraph{RQ5: transfer and robustness.}
+
+Do gains persist across domain, graph size, simulator model, answer style, contradiction rate, and
+controlled graph-edge perturbation?
+
+Failure under incorrect edges would bound the graph-aware claim rather than erase the reconstruction
+result.
+
+\paragraph{RQ6: simulator validity.}
+
+Does \sagesim preserve held-out knowledge state without systematic over- or under-performance, and do
+comparative agent conclusions agree with matched human interaction?
+
+Internal simulator consistency is insufficient for this claim \citep{dou2025simulatorarena}.
+
+\subsection{Matched Comparison Set}
+
+The unit of comparison is a reviewed episode.
+
+All policies receive the same public graph, hidden-user instance, maximum turns, interaction rule,
+scoring profile, and pinned provider configuration. Paired episode and simulator seeds are shared.
+
+For LLM policies, the primary causal comparison fixes the base model, temperature, accessible prompt
+information, and nominal generation budget. Model-family comparisons are secondary.
+
 \begin{enumerate}[leftmargin=1.7em]
-    \item \textbf{H1---adaptive acquisition:} under equal turn budgets, state-conditioned policies reconstruct hidden maps more accurately than fixed and random diagnostic policies.
-    \item \textbf{H2---explicit state use:} removing the working map or graph access degrades either reconstruction or early-turn efficiency.
-    \item \textbf{H3---simulator robustness:} comparative conclusions persist across simulator model, grounding, answer policy, and profile style.
-    \item \textbf{H4---human transfer:} simulator answers preserve task-relevant human behavior closely enough that agent rankings agree with matched human-user episodes.
+    \item \textbf{Prior-only:} submit a frozen uniform or training-split prior without dialogue.
+    \item \textbf{Transcript-only one shot:} reconstruct once from a fixed, policy-independent transcript.
+    \item \textbf{Random probe:} select a random target and use the same question realizer as MapProbe.
+    \item \textbf{Fixed traversal:} query nodes in a frozen graph order with the same realizer.
+    \item \textbf{Maximum uncertainty:} select the highest-entropy node without graph reach or lookahead.
+    \item \textbf{Simple LLM:} use the implemented prompt-based update and target-plan baseline.
+    \item \textbf{MapProbe:} use the full proposed evidence--belief--probe loop.
 \end{enumerate}
 
-Each hypothesis blocks a different over-interpretation. A low reconstruction loss does not establish H1 if a fixed script performs equally well. H1 does not establish H2 if adaptivity comes from unstructured dialogue history alone. H1 and H2 do not establish external validity if rankings reverse under another simulator or with human users. Failure of H3 or H4 would narrow the benchmark claim rather than merely lower a score.
+Oracle targets or privileged evidence labels may appear only as separated analysis upper bounds. They
+are not deployable baselines and never enter the primary method ranking.
 
-\subsection{Paired Comparative Design}
+The random and fixed policies control for interaction volume. Maximum uncertainty tests whether the
+planner needs more than a simple belief heuristic.
 
-The initial study is a construct-validation experiment in statistical learning, not a test of cross-domain generality. The unit of comparison is a reviewed episode. Policies receive the same public graph, hidden-user instance, budget, interaction rule, and scoring profile; repeated stochastic runs remain nested within episodes.
+The simple LLM baseline tests whether an explicit prompt and working-map schema already capture the
+benefit. Transcript-only reconstruction separates inference from policy-controlled acquisition.
 
-Three controls give H1 its interpretation. A fixed-question policy controls for a reasonable diagnostic script, a random policy controls for interaction volume, and a simple LLM policy tests whether generic conversational adaptation is sufficient. Structured policies add an explicit working map, graph-aware planning, or an information-gain objective. Beating a no-interaction prior shows that dialogue contains evidence; only a paired advantage over fixed and random policies shows that selecting evidence helps.
+\subsection{Primary and Secondary Outcomes}
+\label{sec:evaluation}
 
-The primary analysis reports mastery distance, exact match, missing predictions, and unsupported inference at matched budgets. Final-turn performance tests reconstruction, whereas turn-indexed curves test acquisition efficiency. Per-node signed errors reveal calibration patterns hidden by an aggregate score.
+The primary endpoint is the benchmark's full-map squared mastery distance. Let the final predicted
+mastery for node $i$ be $\hat{m}_i$.
 
-\subsection{Mechanism and Validity Tests}
+For submitted levels $0$ through $5$, the node loss is
 
-Working-map and graph ablations target H2. Simulator, grounding, answer-policy, and profile-style variations target H3; both absolute changes and rank reversals are reported because only the latter directly threaten comparative validity. Matched human episodes target H4 at the turn level through state fidelity and at the episode level through ranking transfer.
+\begin{equation}
+    d(\hat{m}_i,m_i^{\star}) = (\hat{m}_i-m_i^{\star})^2.
+\end{equation}
+An \unknown prediction receives the fixed maximum penalty of $36$. The episode score is
 
-Appendix~\ref{app:experimental-protocol} specifies artifact bindings, statistical units, ablations, and error categories. Appendix~\ref{app:construction} separately documents knowledge-graph preparation and review. Empirical tables will replace the placeholders once the protocols have been executed.
+\begin{equation}
+    D_{\mathrm{mastery}} = \frac{1}{N}\sum_{i=1}^{N} d(\hat{m}_i,m_i^{\star}),
+\end{equation}
+where lower is better. The score is deterministic and requires no evaluator model.
 
-% TODO: Insert paired reconstruction results, turn curves, ablations,
-% simulator sensitivity, and matched-human results.
+Squared distance treats adjacent mistakes as less serious than endpoint mistakes. The \unknown penalty
+prevents selective non-commitment from improving the primary score.
+
+These are benchmark conventions, not a claim that the levels form a universal psychometric interval
+scale.
+
+Two complementary primary summaries measure acquisition efficiency: area under the turn curve and turns
+required to reach a predeclared error threshold.
+
+These summaries are fixed before test evaluation.
+
+Secondary endpoint measures are exact node accuracy, within-one-level accuracy, signed mastery error,
+and error stratified by mastery level, node depth, and graph relation.
+
+Because the \unknown penalty can hide selective behavior, we also report attempted-node error,
+direct-evidence coverage, abstention rate, and selective risk--coverage curves.
+
+Process outcomes include evidence-validity rate, unsupported inference, contradiction resolution,
+redundant or ungrounded questions, plan--question alignment, and error by direct versus propagated
+support.
+
+Calibration uses internal ordinal beliefs before projection to coarse confidence. Cost includes turns,
+tokens, model calls, latency, and estimated provider cost.
+
+Turn-indexed curves follow the lesson that final success hides where multi-turn agents improve or fail
+\citep{ma2024agentboard}.
+
+\subsection{Component Ablations}
+
+The primary ablation suite uses the same base model and prompts wherever the changed component permits:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item replace the ordinal belief distribution with hard labels;
+    \item remove graph propagation, then replace typed propagation with untyped propagation;
+    \item remove information gain, coverage, graph reach, redundancy, or cost terms one at a time;
+    \item replace the target planner with maximum entropy;
+    \item remove evidence verification or question verification;
+    \item remove abstention and replace the stopping policy with each fixed turn budget;
+    \item corrupt, reverse, and delete controlled fractions of graph edges.
+\end{itemize}
+
+The graph perturbation study is required for the graph-aware claim.
+
+If typed propagation helps only on the authored graph and fails under small errors, the method exploits
+that benchmark graph under evaluated conditions. It does not demonstrate robust graph reasoning.
+
+For LLM-based verifiers, we report whether proposer and verifier share a model family and whether the
+verifier adds human-agreeing signal.
+
+More calls or additional roles are not a mechanistic explanation for quality.
+
+\subsection{Robustness, Controls, and Human Linkage}
+
+Simulator stress tests vary provider model, grounding strictness, answer policy, response verbosity,
+hedging, misconception expression, contradiction, and off-target behavior while holding hidden maps
+fixed.
+
+We report both absolute score shifts and method rank reversals. The latter directly threaten comparative
+validity.
+
+Graph and language controls target alternative explanations. A no-edge view tests whether node rubrics
+alone are sufficient.
+
+Shuffled relation types test topology against extra-token effects. Matched paraphrases test question-
+surface sensitivity.
+
+Causal controls remove the need for user-state inference or provide a shortcut cue. A valid advantage
+should change predictably, following controlled mental-state benchmarks \citep{gandhi2023bigtom}.
+
+The human-linked study uses a stratified subset of graph regions, mastery levels, and simulator behavior
+conditions.
+
+Independent reviewers annotate whether each answer supports the claimed node boundary and whether each
+question discriminates its target.
+
+The primary external-validity statistic is agreement between simulator and human policy rankings, with
+uncertainty. Naturalness is secondary because fluency does not ensure diagnostic validity.
+
+\subsection{\sagesim Construct and Proxy Validation}
+
+Question set A elicits answers used to author and confirm each participant's reviewed map. Set B is
+held out from map authoring, simulator tuning, and threshold selection.
+
+For every participant--question pair, we collect the human answer and three preregistered seeds from
+each simulator condition. All seeds, fallbacks, and failures enter analysis; best-of-$k$ is forbidden.
+
+The first primary endpoint is absolute expressed-mastery distance between the blinded rating of a
+human answer and ratings of its matched simulated answers.
+
+The second is the participant's ordinal judgment that the answer represents their actual
+understanding. The proposed ten-item self-fidelity instrument is reported item-wise until its factor
+structure is supported.
+
+Secondary endpoints measure signed mastery bias, ability-boundary error, uncertainty, misconception
+omission or invention, diagnostic usefulness, naturalness, fallback rate, and seed variance.
+
+Blinded reviewers see the public rubric and answer, but not source, simulator condition, hidden label,
+or agent result. Agreement is reported by field, with independent adjudication.
+
+Leakage tests include direct and paraphrased label requests, full-map requests, unrelated-node canaries,
+compound probes, and visible-history injection. Exact-field scans and semantic human review are
+reported separately.
+
+The simulator ablations are a monolithic role prompt, persona only, no blueprint, no reviewed evidence,
+no style context, template realization, and full \sagesim.
+
+A full-map-context condition runs only in an isolated safety harness. Its output never becomes a
+tested-agent observation.
+
+Participants are the independent sampling unit. Questions, conditions, and seeds are repeated
+measures; analysis uses a mixed-effects model or participant-clustered paired bootstrap.
+
+The proxy study then runs matched agents under \sagesim and human episodes. It reports absolute score
+shift, paired effect-direction agreement, rank correlation with uncertainty, and rank reversals.
+
+State fidelity and rank preservation support different claims. High naturalness or rank agreement
+cannot repair a failed state-fidelity test.
+
+\subsection{Intermediate Annotation and Adjudication}
+
+End-to-end map error cannot reveal whether an answer was diagnostic, whether an update followed the
+rubric, or whether a question distinguished the intended boundary.
+
+We construct a blinded intermediate set before inspecting full-method test results. Sampling is
+stratified by domain, mastery, support provenance, answer behavior, and policy.
+
+Reviewers see the public rubric, visible plan, question, and answer. They never see the hidden label,
+method name, or final score.
+
+For evidence records, reviewers label target-node relevance, supported boundary, polarity, sufficiency,
+contradiction, and whether the cited answer entails the record.
+
+For questions, they label target alignment, discriminativeness, answer leakage, compound structure, and
+expected answer burden.
+
+For graph messages, reviewers assess whether the edge semantics licenses the inference direction. They
+do not assign the user's mastery.
+
+At least two reviewers annotate each sampled item.
+
+The guide contains positive examples, near misses, and rules for hedging, self-report, partial reasoning,
+and volunteered evidence. Agreement is reported by field rather than as one number.
+
+An independent reviewer adjudicates boundary or sufficiency disputes. Both pre-adjudication labels
+remain in the released artifact.
+
+These annotations evaluate the evidence interpreter, question verifier, and qualitative failures.
+
+They never alter completed test episodes or train a method on the held-out split.
+
+If automatic scores disagree with human labels, human-agreeing evidence validity governs the mechanism
+claim even when endpoint map error improves.
+
+\subsection{Statistical Analysis and Reporting}
+
+Methods are compared on paired episodes. Repeated stochastic runs are nested within episode rather than
+treated as independent users.
+
+We report paired bootstrap confidence intervals and effect sizes, with multiplicity correction for each
+ablation family.
+
+The development split sets priors, likelihood tables, utility weights, and stopping thresholds. The
+held-out test split is evaluated once after these choices are frozen.
+
+Exclusion rules, failed provider calls, fallback behavior, and missing submissions are predeclared.
+
+Every table names its aggregation unit and number of independent hidden profiles. Results cover all
+seeds rather than a selected successful trajectory.
+
+Artifact manifests bind graph, map, simulator, agent, prompt, model, budget, and scorer versions for
+every row.
+
+\begin{table}[t]
+\caption{Reserved primary result structure. Values remain blank until the complete paired protocol is
+executed; no row is evidence at the present stage.}
+\label{tab:primary-results}
+\centering
+\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}Xcccc}
+\toprule
+\textbf{Policy} & \textbf{Map error $\downarrow$} & \textbf{AUC $\uparrow$} & \textbf{Turns $\downarrow$} & \textbf{Reliability $\uparrow$} \\
+\midrule
+Prior-only & TBD & TBD & 0 & TBD \\
+Fixed traversal & TBD & TBD & TBD & TBD \\
+Maximum uncertainty & TBD & TBD & TBD & TBD \\
+Simple LLM & TBD & TBD & TBD & TBD \\
+MapProbe & TBD & TBD & TBD & TBD \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The claim language is determined by the strongest completed test.
+
+Without matched baselines, we report only reconstruction. Without ablations, we do not attribute gains
+to beliefs, graph use, or planning.
+
+Without simulator and human linkage, conclusions remain restricted to the evaluated proxy environment.

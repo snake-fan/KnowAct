@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowact.local/schemas/kg_review_submission.schema.json",
+  "title": "KnowAct KG expert review submission",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "submission_id",
+    "exported_at",
+    "graph",
+    "reviewer",
+    "node_reviews",
+    "edge_reviews",
+    "coverage_reviews",
+    "overall_graph_review",
+    "validation"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowact.kg_review_submission.v3"
+    },
+    "status": {
+      "enum": ["draft", "complete"]
+    },
+    "submission_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "exported_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "graph": {
+      "$ref": "#/$defs/graph_binding"
+    },
+    "reviewer": {
+      "type": "object",
+      "required": [
+        "reviewer_id",
+        "role",
+        "experience_band",
+        "introduction"
+      ],
+      "properties": {
+        "reviewer_id": { "type": "string" },
+        "role": { "type": "string" },
+        "experience_band": {
+          "enum": ["", "0-2 years", "3-5 years", "6-10 years", "11+ years"]
+        },
+        "introduction": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "node_reviews": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/node_review"
+      }
+    },
+    "edge_reviews": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/edge_review"
+      }
+    },
+    "coverage_reviews": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/coverage_review"
+      }
+    },
+    "overall_graph_review": {
+      "type": "object",
+      "required": ["decision", "rationale"],
+      "properties": {
+        "decision": {
+          "enum": ["", "approve", "approve_after_edits", "do_not_approve"]
+        },
+        "rationale": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "validation": {
+      "type": "object",
+      "required": ["complete", "issue_count", "issues"],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "issue_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["section", "message"],
+            "properties": {
+              "section": {
+                "enum": ["overview", "nodes", "edges", "coverage", "submit"]
+              },
+              "message": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": { "const": "complete" }
+        }
+      },
+      "then": {
+        "properties": {
+          "validation": {
+            "properties": {
+              "complete": { "const": true },
+              "issue_count": { "const": 0 },
+              "issues": { "maxItems": 0 }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "required": ["repository_path", "sha256"],
+      "properties": {
+        "repository_path": { "type": "string", "minLength": 1 },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifact_binding": {
+      "type": "object",
+      "required": [
+        "domain",
+        "candidate_run_id",
+        "candidate_nodes",
+        "candidate_edges",
+        "source_metadata",
+        "source_content_sha256"
+      ],
+      "properties": {
+        "domain": { "enum": ["Economy", "ISLP", "OSTEP"] },
+        "candidate_run_id": { "type": "string", "minLength": 1 },
+        "candidate_nodes": { "$ref": "#/$defs/artifact" },
+        "candidate_edges": { "$ref": "#/$defs/artifact" },
+        "source_metadata": { "$ref": "#/$defs/artifact" },
+        "source_content_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "graph_binding": {
+      "type": "object",
+      "required": [
+        "domain",
+        "candidate_run_id",
+        "review_package_id",
+        "graph_fingerprint",
+        "node_count",
+        "edge_count",
+        "representative_task_count",
+        "artifact_binding"
+      ],
+      "properties": {
+        "domain": { "enum": ["Economy", "ISLP", "OSTEP"] },
+        "candidate_run_id": { "type": "string", "minLength": 1 },
+        "review_package_id": { "type": "string", "minLength": 1 },
+        "graph_fingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "node_count": { "type": "integer", "minimum": 1 },
+        "edge_count": { "type": "integer", "minimum": 0 },
+        "representative_task_count": { "type": "integer", "minimum": 1 },
+        "artifact_binding": { "$ref": "#/$defs/artifact_binding" }
+      },
+      "additionalProperties": false
+    },
+    "node_review": {
+      "type": "object",
+      "required": [
+        "item_order",
+        "node_id",
+        "scope_fit",
+        "granularity",
+        "diagnostic_usefulness",
+        "rubric_quality",
+        "decision",
+        "proposed_change",
+        "rationale"
+      ],
+      "properties": {
+        "item_order": { "type": "integer", "minimum": 1 },
+        "node_id": { "type": "string", "minLength": 1 },
+        "scope_fit": {
+          "enum": ["", "in_scope", "boundary", "out_of_scope"]
+        },
+        "granularity": {
+          "enum": ["", "appropriate", "too_broad", "too_narrow", "mixed"]
+        },
+        "diagnostic_usefulness": {
+          "enum": ["", "adequate", "minor_issue", "major_issue"]
+        },
+        "rubric_quality": {
+          "enum": ["", "adequate", "minor_issue", "major_issue"]
+        },
+        "decision": {
+          "enum": ["", "accept", "edit", "reject"]
+        },
+        "proposed_change": { "type": "string" },
+        "rationale": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "edge_review": {
+      "type": "object",
+      "required": [
+        "item_order",
+        "edge_id",
+        "relation_validity",
+        "type_correct",
+        "replacement_type",
+        "direction_correct",
+        "provenance_class",
+        "decision",
+        "proposed_change",
+        "rationale"
+      ],
+      "properties": {
+        "item_order": { "type": "integer", "minimum": 1 },
+        "edge_id": { "type": "string", "minLength": 1 },
+        "relation_validity": {
+          "enum": ["", "valid", "uncertain", "invalid"]
+        },
+        "type_correct": {
+          "enum": ["", "yes", "no", "uncertain"]
+        },
+        "replacement_type": {
+          "enum": ["", "part_of", "prerequisite_for", "supports", "contrasts_with"]
+        },
+        "direction_correct": {
+          "enum": ["", "yes", "no", "not_applicable", "uncertain"]
+        },
+        "provenance_class": {
+          "enum": [
+            "",
+            "source_explicit",
+            "source_entailed",
+            "expert_pedagogical_extension",
+            "unsupported"
+          ]
+        },
+        "decision": {
+          "enum": ["", "accept", "edit", "delete"]
+        },
+        "proposed_change": { "type": "string" },
+        "rationale": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "coverage_review": {
+      "type": "object",
+      "required": [
+        "item_order",
+        "task_id",
+        "task_text",
+        "task_coverage",
+        "missing_or_redundant_content",
+        "rationale"
+      ],
+      "properties": {
+        "item_order": { "type": "integer", "minimum": 1 },
+        "task_id": {
+          "type": "string",
+          "pattern": "^task_[0-9]{3}$"
+        },
+        "task_text": { "type": "string", "minLength": 1 },
+        "task_coverage": {
+          "enum": ["", "sufficient", "partial", "insufficient"]
+        },
+        "missing_or_redundant_content": { "type": "string" },
+        "rationale": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

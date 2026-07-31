@@ -1,14 +1,16 @@
-# Workflow 5: Single-Turn User Simulation
+# Workflow 5: SAGE Single-Turn User Simulation
 
 ## 目标与位置
 
-Simulator 把 hidden reviewed map 转换为一个自然、有限且不泄漏的用户回答。当前单轮服务是 runtime 前的可测试边界：无服务端 session，也不读取 episode manifest。
+Simulator 使用 **SAGE（Scoped Answer Generation from Epistemic State）**，
+把 hidden reviewed map 转换为自然、有限、作用域受限的用户回答。当前单轮服务是
+runtime 前的可测试边界：无服务端 session，也不读取 episode manifest。
 
 ```text
 Diagnostic Question + visible dialogue
 -> question grounding on reviewed graph
 -> direct-node hidden context construction
--> answer blueprint -> answer generation -> validation/retry
+-> answer blueprint validation -> answer generation -> parse/retry
 -> visible answer or safe fallback + hidden debug trace
 ```
 
@@ -20,18 +22,28 @@ Diagnostic Question + visible dialogue
 
 ### Blueprint 是推理与自然语言之间的安全契约
 
-Answer Policy 从隐藏状态和证据派生去标识化的结构化 `Simulator Answer Blueprint`，描述 stance、answer shape、content unit 和 overclaim limits。Generation 只接收 blueprint，不接收原始 map；这样自然表达与隐藏推理脱钩，也使 validator 可以检查回答是否忠实表达部分理解、误解或不确定性。
+Answer Policy 从隐藏状态和证据派生去标识化的结构化 `Simulator Answer
+Blueprint`，描述 stance、answer shape、content unit 和 overclaim limits。
+Generation 只接收 blueprint，不接收原始 map；这样自然表达与隐藏推理脱钩，
+也让 policy schema 能在生成前拒绝隐藏字段和越权内容。
 
-### 验证失败闭合
+### 失败闭合
 
-validator 检查 mastery label、hidden evidence id、state table 和 scoring 泄漏，并检查 blueprint coverage。有限重试只传简洁安全的失败反馈；validator 不可用或输出持续不安全时，系统不暴露未验证文本，而返回自然的 Safe Fallback。
+当前实现没有独立的 post-generation semantic validator。Policy 先校验
+blueprint schema 与 forbidden fields；generation 失败、超时、为空或解析异常时
+进行有限重试，随后返回 Safe Fallback。结构隔离减少原始隐藏字段直接进入生成器，
+但语义 fidelity 与对抗性 leakage 仍需实验验证。
 
 ### 调试与可见 transcript 分开
 
-每轮写入只对 benchmark author 可见的 debug trace，可含 grounding、blueprint 和 validator metadata。Tested Agent 只得到回答与粗粒度 observation；正式 transcript 也不得包含 trace id、grounded node id 或 hidden internals。
+每轮写入只对 benchmark author 可见的 debug trace，可含 grounding、blueprint
+和 generator metadata。Tested Agent 只得到回答与粗粒度 observation；正式
+transcript 也不得包含 trace id、grounded node id 或 hidden internals。
 
 ## 关键边界
 
 - Profile Context 只可调整措辞，不得增加用户事实或能力主张。
 - 可见对话用于承接追问，但不能更新 hidden static knowledge state。
 - label-seeking 问题可以得到自然自述，绝不可得到 `L0`–`L5`、evidence id 或整张 state table。
+- “没有直接暴露 raw hidden fields”是代码边界；“回答忠实且无语义泄漏”是由
+  `experiments/02_simulator_human_validity/` 检验的研究假设。
