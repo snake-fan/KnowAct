@@ -1,10 +1,13 @@
 from collections.abc import Callable
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 
 from backend.knowact.api.authoring import build_authoring_router
+from backend.knowact.api.experiments import build_experiments_router
 from backend.knowact.api.simulator import (
     SimulatorServiceFactory,
     build_simulator_router,
@@ -55,12 +58,26 @@ def create_app(
     simulator_service_factory: SimulatorServiceFactory | None = None,
     simple_llm_tested_agent_factory: SimpleLLMTestedAgentFactory | None = None,
     workspace_root: Path | None = None,
+    cors_origins: tuple[str, ...] | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="KnowAct Backend",
         version="0.1.0",
         description="KnowAct benchmark backend API for development and research workflows.",
     )
+    resolved_cors_origins = (
+        _cors_origins_from_env()
+        if cors_origins is None
+        else _validate_cors_origins(cors_origins)
+    )
+    if resolved_cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(resolved_cors_origins),
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+            allow_headers=["Content-Type"],
+        )
 
     app.include_router(
         build_authoring_router(
@@ -105,9 +122,35 @@ def create_app(
         prefix="/api/runtime",
         tags=["runtime"],
     )
+    app.include_router(
+        build_experiments_router(
+            workspace_root=workspace_root,
+            simulator_service_factory=simulator_service_factory,
+        ),
+        prefix="/api/experiments",
+        tags=["experiments"],
+    )
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         return HealthResponse(status="ok", service="knowact-backend")
 
     return app
+
+
+def _cors_origins_from_env() -> tuple[str, ...]:
+    raw_value = os.environ.get("KNOWACT_CORS_ORIGINS", "")
+    return _validate_cors_origins(
+        tuple(item.strip() for item in raw_value.split(",") if item.strip())
+    )
+
+
+def _validate_cors_origins(origins: tuple[str, ...]) -> tuple[str, ...]:
+    normalized = tuple(dict.fromkeys(origin.rstrip("/") for origin in origins))
+    for origin in normalized:
+        if origin == "*" or not origin.startswith(("http://", "https://")):
+            raise ValueError(
+                "KNOWACT_CORS_ORIGINS must contain explicit http(s) origins; "
+                "wildcards are not allowed"
+            )
+    return normalized
