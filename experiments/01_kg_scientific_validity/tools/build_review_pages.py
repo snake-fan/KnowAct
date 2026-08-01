@@ -33,7 +33,7 @@ class GraphSpec:
 GRAPH_SPECS = (
     GraphSpec(
         domain="Economy",
-        candidate_run_id="kg_metadata_v1_economy_20260730_contract_retry_v6",
+        candidate_run_id="20260730T093034765328Z",
         output_filename="economy_kg_review.html",
         review_scope_summary=(
             "这张图谱聚焦《The Economy》前四单元的入门经济学基础，覆盖资本主义制度与长期增长、"
@@ -44,7 +44,7 @@ GRAPH_SPECS = (
     ),
     GraphSpec(
         domain="ISLP",
-        candidate_run_id="kg_metadata_v1_islp_20260730_evidence_v2",
+        candidate_run_id="20260730T085835823437Z",
         output_filename="islp_kg_review.html",
         review_scope_summary=(
             "这张图谱聚焦《An Introduction to Statistical Learning》第 2 章相关小节与第 3 章"
@@ -55,7 +55,7 @@ GRAPH_SPECS = (
     ),
     GraphSpec(
         domain="OSTEP",
-        candidate_run_id="kg_metadata_v1_ostep_20260730_robust_v2",
+        candidate_run_id="20260730T091621837090Z",
         output_filename="ostep_kg_review.html",
         review_scope_summary=(
             "这张图谱聚焦《Operating Systems: Three Easy Pieces》中操作系统与 CPU 虚拟化的"

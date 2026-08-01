@@ -28,9 +28,9 @@ graph exhaustively covers its domain.
 
 | Domain | Candidate run | Nodes | Edges | Representative tasks | Review page |
 | --- | --- | ---: | ---: | ---: | --- |
-| Economy | `kg_metadata_v1_economy_20260730_contract_retry_v6` | 22 | 20 | 50 | [`economy_kg_review.html`](materials/review_pages/economy_kg_review.html) |
-| ISLP | `kg_metadata_v1_islp_20260730_evidence_v2` | 21 | 29 | 50 | [`islp_kg_review.html`](materials/review_pages/islp_kg_review.html) |
-| OSTEP | `kg_metadata_v1_ostep_20260730_robust_v2` | 24 | 28 | 50 | [`ostep_kg_review.html`](materials/review_pages/ostep_kg_review.html) |
+| Economy | `20260730T093034765328Z` | 22 | 20 | 50 | [`economy_kg_review.html`](materials/review_pages/economy_kg_review.html) |
+| ISLP | `20260730T085835823437Z` | 21 | 29 | 50 | [`islp_kg_review.html`](materials/review_pages/islp_kg_review.html) |
+| OSTEP | `20260730T091621837090Z` | 24 | 28 | 50 | [`ostep_kg_review.html`](materials/review_pages/ostep_kg_review.html) |
 
 These are candidate artifacts, not reviewed benchmark graphs. Each page embeds
 its nodes, edges, scope, source metadata, artifact SHA-256 values, and one
