@@ -1,0 +1,1144 @@
+{
+  "schema_version": "knowact.simulator_question_bank.v2",
+  "bank_id": "economy_atomic_v2",
+  "version": "2.0",
+  "benchmark_domain": "Economy",
+  "title": {
+    "en": "CORE Economy Units 1-4 atomic diagnostic question bank",
+    "zh_cn": "CORE 经济学第 1-4 单元原子诊断题库"
+  },
+  "questions": [
+    {
+      "question_id": "ECONOMY_Q001",
+      "target_concept": "gdp_based_income_comparisons",
+      "question_type": "measure_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "A country's nominal GDP rose by 8% while all prices rose by 8%; which GDP measure best indicates whether real output increased?",
+        "zh_cn": "某国名义 GDP 增长 8%，同期所有价格也上涨 8%；应使用哪一种 GDP 指标判断实际产出是否增长？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q002",
+      "target_concept": "gdp_based_income_comparisons",
+      "question_type": "cross_country_comparison",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why is purchasing-power-adjusted GDP per capita preferable to market-exchange-rate GDP per capita for comparing material living standards?",
+        "zh_cn": "为什么比较物质生活水平时，按购买力调整的人均 GDP 通常优于按市场汇率换算的人均 GDP？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q003",
+      "target_concept": "gdp_based_income_comparisons",
+      "question_type": "claim_evaluation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A mayor says rising GDP per capita proves every resident is better off; how strong is that conclusion?",
+        "zh_cn": "某市长称人均 GDP 上升证明每位居民都过得更好；这一结论有多可靠？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q004",
+      "target_concept": "gdp_based_income_comparisons",
+      "question_type": "data_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "Two countries have equal total GDP but populations of 5 million and 50 million; what does this imply about their average output per person?",
+        "zh_cn": "两国 GDP 总量相同，但人口分别为 500 万和 5000 万；这对两国人均产出意味着什么？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q005",
+      "target_concept": "capitalist_institutions_private_property_markets_and_firms",
+      "question_type": "concept_identification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A system protects business assets, permits voluntary exchange, and organizes production through employers; which three capitalist institutions are present?",
+        "zh_cn": "某制度保护企业资产、允许自愿交换，并通过雇主组织生产；其中体现了哪三种资本主义制度？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q006",
+      "target_concept": "capitalist_institutions_private_property_markets_and_firms",
+      "question_type": "institution_boundary",
+      "cognitive_operation": "compare",
+      "prompts": {
+        "en": "What is the main coordination difference between a market exchange and production inside a firm?",
+        "zh_cn": "市场交换与企业内部生产在协调方式上的主要区别是什么？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q007",
+      "target_concept": "capitalist_institutions_private_property_markets_and_firms",
+      "question_type": "counterexample",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A country has private shops but bans most exchange outside state quotas; does private property alone make the system fully capitalist?",
+        "zh_cn": "某国存在私人商店，但多数交换只能按国家配额进行；仅有私人财产是否足以使该制度成为完整的资本主义制度？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q008",
+      "target_concept": "capitalist_institutions_private_property_markets_and_firms",
+      "question_type": "scenario_application",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Workers follow a manager's production plan instead of bargaining over every task; which institution primarily coordinates their activity?",
+        "zh_cn": "工人按照管理者的生产计划工作，而不是逐项协商任务；主要由哪种制度协调这些活动？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q009",
+      "target_concept": "specialization_and_comparative_advantage",
+      "question_type": "opportunity_cost",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Ana sacrifices two shirts to make one table while Bo sacrifices five; who has the comparative advantage in tables?",
+        "zh_cn": "安娜生产一张桌子要放弃两件衬衫，博生产一张桌子要放弃五件；谁在桌子生产上具有比较优势？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q010",
+      "target_concept": "specialization_and_comparative_advantage",
+      "question_type": "concept_boundary",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why can two people gain from specialization even when one is more productive at both tasks?",
+        "zh_cn": "为什么即使一人在两项任务上都更高效，双方仍可能通过专业化获益？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q011",
+      "target_concept": "specialization_and_comparative_advantage",
+      "question_type": "allocation",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "If Mina's opportunity cost of coding falls relative to design, how should her specialization tend to change?",
+        "zh_cn": "如果米娜编程的机会成本相对于设计下降，她的专业化方向通常会如何变化？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q012",
+      "target_concept": "specialization_and_comparative_advantage",
+      "question_type": "claim_evaluation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A team assigns every task to its fastest member; what economic criterion might this rule overlook?",
+        "zh_cn": "一个团队把每项任务都交给完成速度最快的人；这种规则可能忽略什么经济标准？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q013",
+      "target_concept": "technological_progress_and_the_permanent_technological_revolution",
+      "question_type": "trend_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "A productivity series shows repeated upward shifts rather than one isolated jump; what feature makes this a permanent technological revolution?",
+        "zh_cn": "一条生产率序列呈现反复向上跃迁，而不是一次性跳升；什么特征使其体现持续的技术革命？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1",
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q014",
+      "target_concept": "technological_progress_and_the_permanent_technological_revolution",
+      "question_type": "mechanism",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "How can cost-reducing innovation raise labour productivity?",
+        "zh_cn": "降低成本的创新如何提高劳动生产率？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1",
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q015",
+      "target_concept": "technological_progress_and_the_permanent_technological_revolution",
+      "question_type": "incentive",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A patent lets an innovator temporarily sell below rivals' costs; what profit pattern should competition eventually produce?",
+        "zh_cn": "一项专利使创新者暂时能以低于竞争者成本的价格销售；竞争最终通常会带来怎样的利润变化？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1",
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q016",
+      "target_concept": "technological_progress_and_the_permanent_technological_revolution",
+      "question_type": "claim_evaluation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A machine raises output but worsens pollution; does higher productivity alone establish higher overall wellbeing?",
+        "zh_cn": "一台机器提高了产出却加剧污染；仅凭更高生产率能否证明总体福祉提高？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1",
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q017",
+      "target_concept": "general_purpose_technologies_and_the_industrial_revolution",
+      "question_type": "classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Electricity improves factories, transport, and communication while enabling later inventions; what type of technology is it?",
+        "zh_cn": "电力改善工厂、交通和通信，并催生后续创新；它属于哪类技术？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q018",
+      "target_concept": "general_purpose_technologies_and_the_industrial_revolution",
+      "question_type": "concept_boundary",
+      "cognitive_operation": "compare",
+      "prompts": {
+        "en": "What distinguishes a general-purpose technology from a process improvement used in one factory?",
+        "zh_cn": "通用技术与只在一家工厂使用的流程改进有何区别？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q019",
+      "target_concept": "general_purpose_technologies_and_the_industrial_revolution",
+      "question_type": "historical_explanation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Britain had high wages and cheap coal before industrialization; what status should this fact have in an explanation of its early takeoff?",
+        "zh_cn": "工业化前英国工资较高且煤炭便宜；这一事实在解释英国率先起飞时应具有什么地位？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q020",
+      "target_concept": "causality_versus_correlation_in_economic_explanation",
+      "question_type": "causal_inference",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Countries with more factories have higher incomes; does this correlation show that factories alone caused the income difference?",
+        "zh_cn": "工厂更多的国家收入更高；这种相关性是否说明工厂本身造成了收入差异？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1",
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q021",
+      "target_concept": "causality_versus_correlation_in_economic_explanation",
+      "question_type": "confounding",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Students who study longer earn higher grades, but prior preparation affects both; what causal problem does prior preparation create?",
+        "zh_cn": "学习时间更长的学生成绩更高，但既有基础同时影响二者；既有基础造成了什么因果问题？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1",
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q022",
+      "target_concept": "causality_versus_correlation_in_economic_explanation",
+      "question_type": "counterfactual",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why does a causal claim require reasoning about what would have happened without the proposed cause?",
+        "zh_cn": "为什么因果主张需要推理在缺少所提原因时会发生什么？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1",
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q023",
+      "target_concept": "causality_versus_correlation_in_economic_explanation",
+      "question_type": "evidence_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "A city wants to estimate whether a training program raises wages; which comparison is most informative?",
+        "zh_cn": "某城市想估计培训项目是否提高工资；哪种比较最有信息量？"
+      },
+      "source_reference_ids": [
+        "core-economy-u1",
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q024",
+      "target_concept": "economic_models_and_ceteris_paribus_reasoning",
+      "question_type": "model_boundary",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why can omitting realistic details improve an economic model?",
+        "zh_cn": "为什么省略现实细节反而可能改进经济模型？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q025",
+      "target_concept": "economic_models_and_ceteris_paribus_reasoning",
+      "question_type": "assumption_use",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "A model predicts study time effects while holding sleep constant; what does the ceteris paribus condition mean here?",
+        "zh_cn": "一个模型在睡眠时间不变时预测学习时间的影响；这里的其他条件不变意味着什么？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q026",
+      "target_concept": "economic_models_and_ceteris_paribus_reasoning",
+      "question_type": "model_evaluation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A simple model predicts poorly on every tested case; can simplicity alone justify keeping it?",
+        "zh_cn": "一个简单模型在所有测试案例上预测都很差；仅凭简单性是否足以保留它？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q027",
+      "target_concept": "economic_models_and_ceteris_paribus_reasoning",
+      "question_type": "comparative_statics",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A model holds preferences fixed while the wage rises; what kind of model exercise studies the resulting choice change?",
+        "zh_cn": "一个模型在偏好不变时提高工资；研究由此产生的选择变化属于哪种模型分析？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q028",
+      "target_concept": "relative_prices_and_technology_choice",
+      "question_type": "cost_comparison",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Technique A uses much labour and little energy while technique B does the reverse; which becomes more attractive when energy prices fall?",
+        "zh_cn": "技术 A 大量使用劳动而少用能源，技术 B 则相反；能源价格下降时哪种技术会更有吸引力？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q029",
+      "target_concept": "relative_prices_and_technology_choice",
+      "question_type": "isocost_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "Two techniques lie on the same isocost line; what does that imply about their total cost at current input prices?",
+        "zh_cn": "两种技术位于同一条等成本线上；这对它们在当前投入价格下的总成本意味着什么？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q030",
+      "target_concept": "relative_prices_and_technology_choice",
+      "question_type": "innovation_incentive",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A new technique lowers unit cost below the incumbent method; what economic reward initially motivates adoption?",
+        "zh_cn": "一种新技术把单位成本降到旧方法以下；最初推动采用它的经济回报是什么？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q031",
+      "target_concept": "relative_prices_and_technology_choice",
+      "question_type": "claim_evaluation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A superior technique is never adopted because replacing equipment is costly; is this necessarily irrational?",
+        "zh_cn": "一种更先进的技术因设备更换成本高而一直未被采用；这一定是不理性的吗？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q032",
+      "target_concept": "malthusian_trap_and_subsistence_equilibrium",
+      "question_type": "feedback_mechanism",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "How can a temporary productivity gain return income per person toward subsistence in a Malthusian model?",
+        "zh_cn": "在马尔萨斯模型中，暂时的生产率提高如何使人均收入重新趋向生存水平？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q033",
+      "target_concept": "malthusian_trap_and_subsistence_equilibrium",
+      "question_type": "equilibrium",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "At which income level does population stop rising or falling in the simplified Malthusian model?",
+        "zh_cn": "在简化的马尔萨斯模型中，人口在哪一种收入水平上停止增长或下降？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q034",
+      "target_concept": "malthusian_trap_and_subsistence_equilibrium",
+      "question_type": "shock_prediction",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A one-time harvest improvement raises income but not the long-run technology growth rate; what happens to long-run income per person in the model?",
+        "zh_cn": "一次性丰收提高了收入，但没有改变长期技术增长率；模型中的长期人均收入会怎样变化？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q035",
+      "target_concept": "malthusian_trap_and_subsistence_equilibrium",
+      "question_type": "model_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Fertility no longer rises with income in a modern economy; how well does the classic Malthusian feedback apply?",
+        "zh_cn": "在一个现代经济体中，生育率不再随收入上升；经典马尔萨斯反馈的适用性如何？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q036",
+      "target_concept": "escape_from_malthusian_stagnation",
+      "question_type": "growth_condition",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "What must sustained technological progress do relative to population growth for living standards to rise?",
+        "zh_cn": "要使生活水平提高，持续技术进步相对于人口增长必须满足什么条件？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q037",
+      "target_concept": "escape_from_malthusian_stagnation",
+      "question_type": "trend_diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "Both population and real wages rise for many decades; which Malthusian prediction does this pattern contradict?",
+        "zh_cn": "人口与实际工资连续数十年同时上升；这一模式与马尔萨斯模型的哪项预测相冲突？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q038",
+      "target_concept": "escape_from_malthusian_stagnation",
+      "question_type": "mechanism_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Which change most directly weakens the Malthusian trap: faster recurring productivity growth or a one-time increase in land?",
+        "zh_cn": "哪种变化更直接削弱马尔萨斯陷阱：更快的持续生产率增长，还是一次性增加土地？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q039",
+      "target_concept": "production_function",
+      "question_type": "concept_identification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A curve maps each study-hour input to the maximum attainable exam score; what economic object does the curve represent?",
+        "zh_cn": "一条曲线把每种学习小时投入映射到可达到的最高考试分数；这条曲线代表什么经济对象？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2",
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q040",
+      "target_concept": "production_function",
+      "question_type": "boundary",
+      "cognitive_operation": "compare",
+      "prompts": {
+        "en": "What distinguishes a production function from one worker's observed output?",
+        "zh_cn": "生产函数与某位工人的一次实际产出有何区别？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2",
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q041",
+      "target_concept": "production_function",
+      "question_type": "input_change",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A concave production function maps hours to output; what happens to output when hours increase?",
+        "zh_cn": "一条凹形生产函数把工时映射到产出；增加工时时产出会怎样变化？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2",
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q042",
+      "target_concept": "production_function",
+      "question_type": "feasibility",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A point lies above a stated production frontier; how should the model classify it?",
+        "zh_cn": "一个点位于给定生产前沿之上；模型应如何分类它？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2",
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q043",
+      "target_concept": "average_product_marginal_product_and_diminishing_marginal_product",
+      "question_type": "calculation",
+      "cognitive_operation": "calculate",
+      "prompts": {
+        "en": "Output rises from 40 to 46 when labour increases from 5 to 6 units; what is the marginal product of the sixth unit?",
+        "zh_cn": "劳动投入从 5 单位增至 6 单位时，产出从 40 增至 46；第六单位劳动的边际产量是多少？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q044",
+      "target_concept": "average_product_marginal_product_and_diminishing_marginal_product",
+      "question_type": "calculation",
+      "cognitive_operation": "calculate",
+      "prompts": {
+        "en": "A team produces 72 units with 8 workers; what is average product per worker?",
+        "zh_cn": "一个团队用 8 名工人生产 72 单位产品；每名工人的平均产量是多少？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q045",
+      "target_concept": "average_product_marginal_product_and_diminishing_marginal_product",
+      "question_type": "trend_diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "Successive workers add 10, 8, then 5 units of output; what production pattern is present?",
+        "zh_cn": "连续增加的工人分别新增 10、8、5 单位产出；这里出现了什么生产规律？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q046",
+      "target_concept": "average_product_marginal_product_and_diminishing_marginal_product",
+      "question_type": "concept_boundary",
+      "cognitive_operation": "compare",
+      "prompts": {
+        "en": "How can marginal product fall while average product still rises?",
+        "zh_cn": "边际产量下降时，平均产量为何仍可能上升？"
+      },
+      "source_reference_ids": [
+        "core-economy-u2"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q047",
+      "target_concept": "feasible_set_feasible_frontier_and_budget_constraint",
+      "question_type": "classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A bundle costs less than a student's budget; how is it classified relative to the budget constraint?",
+        "zh_cn": "一个组合的成本低于学生预算；相对于预算约束，它应如何分类？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q048",
+      "target_concept": "feasible_set_feasible_frontier_and_budget_constraint",
+      "question_type": "frontier_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "A point lies on a feasible frontier; what does moving beyond it require?",
+        "zh_cn": "一个点位于可行前沿上；要移动到前沿之外需要什么？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q049",
+      "target_concept": "feasible_set_feasible_frontier_and_budget_constraint",
+      "question_type": "constraint_shift",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A student's available time increases while task productivity stays fixed; how does the feasible set change?",
+        "zh_cn": "学生可用时间增加，而任务生产率不变；可行集会如何变化？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q050",
+      "target_concept": "feasible_set_feasible_frontier_and_budget_constraint",
+      "question_type": "efficiency",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A feasible bundle uses resources wastefully and another bundle improves one outcome without reducing the other; is the first bundle efficient?",
+        "zh_cn": "一个可行组合浪费资源，且另一组合能在不降低一个结果的情况下改善另一个结果；前者是否有效率？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q051",
+      "target_concept": "marginal_rate_of_transformation_and_opportunity_cost",
+      "question_type": "slope_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "A frontier's slope is minus two units of leisure per grade point; what is the opportunity cost of one additional grade point?",
+        "zh_cn": "一条前沿的斜率为每增加一分成绩减少两单位闲暇；多一分成绩的机会成本是多少？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q052",
+      "target_concept": "marginal_rate_of_transformation_and_opportunity_cost",
+      "question_type": "concept_boundary",
+      "cognitive_operation": "compare",
+      "prompts": {
+        "en": "What is the relationship between the marginal rate of transformation and opportunity cost on a frontier?",
+        "zh_cn": "在一条前沿上，边际转换率与机会成本是什么关系？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q053",
+      "target_concept": "marginal_rate_of_transformation_and_opportunity_cost",
+      "question_type": "change_prediction",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A frontier becomes steeper at the current bundle; what happens to the opportunity cost of the horizontal-axis outcome?",
+        "zh_cn": "当前组合处的前沿变得更陡；横轴结果的机会成本会怎样变化？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q054",
+      "target_concept": "marginal_rate_of_transformation_and_opportunity_cost",
+      "question_type": "choice_evaluation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A person says an extra hour of leisure is free because no money changes hands; what has been overlooked?",
+        "zh_cn": "有人称多一小时闲暇是免费的，因为没有金钱交易；这种说法忽略了什么？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q055",
+      "target_concept": "preferences_indifference_curves_and_marginal_rate_of_substitution",
+      "question_type": "curve_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "Two bundles lie on the same indifference curve; what does this reveal about the chooser's ranking?",
+        "zh_cn": "两个组合位于同一条无差异曲线上；这说明决策者如何排序它们？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q056",
+      "target_concept": "preferences_indifference_curves_and_marginal_rate_of_substitution",
+      "question_type": "slope_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "An indifference curve has an MRS of three at a bundle; what trade is the chooser locally willing to make?",
+        "zh_cn": "某组合处无差异曲线的边际替代率为 3；决策者局部愿意进行怎样的交换？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q057",
+      "target_concept": "preferences_indifference_curves_and_marginal_rate_of_substitution",
+      "question_type": "concept_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Can the numerical utility assigned to a bundle be read as a direct measurement of happiness?",
+        "zh_cn": "赋予某组合的效用数值能否被直接理解为幸福程度的测量？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q058",
+      "target_concept": "preferences_indifference_curves_and_marginal_rate_of_substitution",
+      "question_type": "preference_prediction",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A chooser strongly values scarce leisure at low leisure levels; how should the local MRS behave there?",
+        "zh_cn": "当闲暇很少时，决策者非常重视稀缺的闲暇；此处局部边际替代率通常会怎样？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q059",
+      "target_concept": "interior_optimum_where_mrs_equals_mrt",
+      "question_type": "optimality",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "At an interior optimum on a smooth frontier, which two marginal rates are equal?",
+        "zh_cn": "在平滑前沿上的内部最优点，哪两个边际率相等？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q060",
+      "target_concept": "interior_optimum_where_mrs_equals_mrt",
+      "question_type": "adjustment",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "At a feasible bundle the MRS exceeds the MRT; which direction can improve the chooser's outcome locally?",
+        "zh_cn": "在一个可行组合处，边际替代率大于边际转换率；局部应朝哪个方向调整才能改善结果？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q061",
+      "target_concept": "interior_optimum_where_mrs_equals_mrt",
+      "question_type": "boundary_case",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "The best feasible choice is a corner with no smooth tangency; does failure of MRS equals MRT prove the choice is suboptimal?",
+        "zh_cn": "最佳可行选择位于不存在平滑切点的角点；边际替代率不等于边际转换率是否证明该选择非最优？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q062",
+      "target_concept": "income_and_substitution_effects",
+      "question_type": "wage_change",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why can a wage increase cause a person to choose more leisure?",
+        "zh_cn": "为什么工资上涨可能使一个人选择更多闲暇？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q063",
+      "target_concept": "income_and_substitution_effects",
+      "question_type": "effect_identification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A higher wage makes each leisure hour more costly in foregone earnings; which effect does this describe?",
+        "zh_cn": "工资上涨使每小时闲暇对应的放弃收入增加；这描述的是哪种效应？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q064",
+      "target_concept": "income_and_substitution_effects",
+      "question_type": "net_prediction",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Can theory determine that every worker supplies more hours after a wage increase?",
+        "zh_cn": "理论能否断定每位劳动者在工资上涨后都会增加工时？"
+      },
+      "source_reference_ids": [
+        "core-economy-u3"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q065",
+      "target_concept": "strategic_interaction_and_game_models",
+      "question_type": "game_representation",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Two drivers independently choose left or right and receive outcomes from the pair of choices; what elements define this game?",
+        "zh_cn": "两名司机分别选择靠左或靠右，并由选择组合获得结果；哪些要素定义了这个博弈？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q066",
+      "target_concept": "strategic_interaction_and_game_models",
+      "question_type": "best_response",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Given the other player's fixed action, which strategy should a self-interested player select?",
+        "zh_cn": "在另一位玩家行动固定时，自利玩家应选择哪种策略？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q067",
+      "target_concept": "strategic_interaction_and_game_models",
+      "question_type": "interdependence",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "What makes a choice strategic rather than an isolated optimization problem?",
+        "zh_cn": "什么使一个选择成为战略选择，而不是孤立的最优化问题？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q068",
+      "target_concept": "strategic_interaction_and_game_models",
+      "question_type": "payoff_change",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A subsidy raises the payoff from one action in every contingency; how can the player's best response change?",
+        "zh_cn": "一项补贴提高某行动在所有情形下的收益；玩家的最佳回应会如何变化？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q069",
+      "target_concept": "social_dilemmas_dominant_strategies_and_prisoners_dilemmas",
+      "question_type": "dominance",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "An action gives a higher payoff regardless of the other player's choice; what kind of strategy is it?",
+        "zh_cn": "无论另一位玩家如何选择，某行动都带来更高收益；它属于哪类策略？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q070",
+      "target_concept": "social_dilemmas_dominant_strategies_and_prisoners_dilemmas",
+      "question_type": "dilemma_diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "Both players choose their dominant actions but both would prefer the mutual alternative; what game structure is present?",
+        "zh_cn": "两位玩家都选择占优行动，但双方都更偏好共同采取另一行动；这里出现了什么博弈结构？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q071",
+      "target_concept": "social_dilemmas_dominant_strategies_and_prisoners_dilemmas",
+      "question_type": "institution_design",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A fine lowers the payoff from defection below cooperation in every contingency; what happens to the dominant strategy?",
+        "zh_cn": "一项罚款使背叛在所有情形下的收益都低于合作；占优策略会怎样变化？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q072",
+      "target_concept": "social_dilemmas_dominant_strategies_and_prisoners_dilemmas",
+      "question_type": "welfare_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Does a dominant-strategy outcome necessarily maximize the players' total payoff?",
+        "zh_cn": "占优策略结果是否必然使玩家总收益最大？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q073",
+      "target_concept": "nash_equilibrium",
+      "question_type": "equilibrium_identification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "At an action profile no player can gain by changing alone; what solution concept describes it?",
+        "zh_cn": "在一个行动组合中，没有玩家能通过单方面改变而获益；这属于哪种解概念？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q074",
+      "target_concept": "nash_equilibrium",
+      "question_type": "stability",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A Nash equilibrium gives both players low payoffs; can it still be an equilibrium?",
+        "zh_cn": "一个纳什均衡给双方的收益都很低；它仍可能是均衡吗？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q075",
+      "target_concept": "nash_equilibrium",
+      "question_type": "rule_change",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A payoff change makes one player's equilibrium action no longer a best response; what happens to the old equilibrium?",
+        "zh_cn": "收益变化使一名玩家的均衡行动不再是最佳回应；旧均衡会怎样？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q076",
+      "target_concept": "public_goods_free_riding_and_cooperation",
+      "question_type": "free_riding",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A resident benefits from a clean park without contributing to maintenance; what behavior is this?",
+        "zh_cn": "一位居民不参与维护却享受整洁公园的好处；这是什么行为？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q077",
+      "target_concept": "public_goods_free_riding_and_cooperation",
+      "question_type": "repetition",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "Contributors can exclude repeated non-contributors from future benefits; how should cooperation incentives change?",
+        "zh_cn": "贡献者可以在未来排除反复不贡献者；合作激励通常会如何变化？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q078",
+      "target_concept": "public_goods_free_riding_and_cooperation",
+      "question_type": "mechanism",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why is voluntary contribution difficult when a public good is non-excludable?",
+        "zh_cn": "当公共品具有非排他性时，为什么自愿贡献很困难？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q079",
+      "target_concept": "social_preferences_and_experimental_games",
+      "question_type": "preference_inference",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A participant rejects an unequal offer once; does this single choice prove a fixed inequality-averse personality?",
+        "zh_cn": "一名参与者拒绝了一次不平等提议；这一选择是否证明其具有固定的厌恶不平等人格？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ECONOMY_Q080",
+      "target_concept": "social_preferences_and_experimental_games",
+      "question_type": "behavior_explanation",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A player sacrifices money to reward a helpful partner; which social preference is most directly expressed?",
+        "zh_cn": "一名玩家牺牲自己的金钱来奖励提供帮助的伙伴；这最直接体现哪种社会偏好？"
+      },
+      "source_reference_ids": [
+        "core-economy-u4"
+      ],
+      "reviewed_target_node_ids": []
+    }
+  ]
+}

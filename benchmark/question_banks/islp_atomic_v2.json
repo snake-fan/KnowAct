@@ -1,0 +1,1212 @@
+{
+  "schema_version": "knowact.simulator_question_bank.v2",
+  "bank_id": "islp_atomic_v2",
+  "version": "2.0",
+  "benchmark_domain": "ISLP",
+  "title": {
+    "en": "ISLP Chapters 2-3 atomic diagnostic question bank",
+    "zh_cn": "ISLP 第 2-3 章原子诊断题库"
+  },
+  "questions": [
+    {
+      "question_id": "ISLP_Q001",
+      "target_concept": "statistical_learning_function_model",
+      "question_type": "component_identification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A model writes recovery time as f(age, treatment, fitness) plus error; what does f represent?",
+        "zh_cn": "一个模型把康复时间写成 f（年龄、治疗、体能）加误差；f 表示什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q002",
+      "target_concept": "statistical_learning_function_model",
+      "question_type": "error_boundary",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why can two patients with identical recorded predictors have different outcomes under Y equals f(X) plus error?",
+        "zh_cn": "在 Y 等于 f(X) 加误差的模型中，为什么记录的预测变量完全相同的两位患者仍可能有不同结果？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q003",
+      "target_concept": "statistical_learning_function_model",
+      "question_type": "estimation_boundary",
+      "cognitive_operation": "compare",
+      "prompts": {
+        "en": "What distinguishes the unknown function f from a fitted estimate of f?",
+        "zh_cn": "未知函数 f 与对 f 的拟合估计有何区别？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q004",
+      "target_concept": "statistical_learning_function_model",
+      "question_type": "scenario_mapping",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A retailer predicts weekly demand from price and weather; which quantity is the response?",
+        "zh_cn": "某零售商根据价格和天气预测每周需求；哪个量是响应变量？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q005",
+      "target_concept": "prediction_versus_inference_objectives",
+      "question_type": "objective_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "A hospital only needs the most accurate readmission forecast; which statistical-learning objective is primary?",
+        "zh_cn": "一家医院只需要最准确的再入院预测；主要的统计学习目标是什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q006",
+      "target_concept": "prediction_versus_inference_objectives",
+      "question_type": "objective_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "A scientist wants to know how pollution relates to lung capacity; which objective is primary?",
+        "zh_cn": "一位科学家想知道污染与肺活量如何相关；主要目标是什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q007",
+      "target_concept": "prediction_versus_inference_objectives",
+      "question_type": "model_choice",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "Interpretability becomes essential while predictive accuracy remains adequate; how should model preference tend to change?",
+        "zh_cn": "在预测准确率仍可接受的前提下，可解释性变得至关重要；模型偏好通常应如何变化？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q008",
+      "target_concept": "prediction_versus_inference_objectives",
+      "question_type": "claim_evaluation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A model predicts sales accurately; does that alone identify the causal effect of advertising?",
+        "zh_cn": "一个模型能准确预测销量；仅凭这一点能否识别广告的因果效应？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q009",
+      "target_concept": "reducible_and_irreducible_prediction_error",
+      "question_type": "error_classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A useful predictor was omitted from a fitted model; which error component can better modeling potentially reduce?",
+        "zh_cn": "一个有用预测变量被拟合模型遗漏；改进建模可能减少哪种误差成分？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q010",
+      "target_concept": "reducible_and_irreducible_prediction_error",
+      "question_type": "error_floor",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why can test error remain positive even if the true function f were known?",
+        "zh_cn": "为什么即使已知真实函数 f，测试误差仍可能为正？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q011",
+      "target_concept": "reducible_and_irreducible_prediction_error",
+      "question_type": "improvement_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A larger model eliminates all prediction error on training data; can it eliminate irreducible test error?",
+        "zh_cn": "一个更大的模型消除了训练数据上的全部预测误差；它能消除不可约测试误差吗？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q012",
+      "target_concept": "reducible_and_irreducible_prediction_error",
+      "question_type": "diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "Repeated model improvements stop lowering test error; which error component may now dominate?",
+        "zh_cn": "反复改进模型后测试误差不再下降；此时哪种误差成分可能占主导？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q013",
+      "target_concept": "parametric_versus_non_parametric_methods",
+      "question_type": "method_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "A small dataset must support a stable, interpretable relationship; which broad method class is usually safer?",
+        "zh_cn": "一个小数据集需要支持稳定且可解释的关系；通常哪类方法更稳妥？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q014",
+      "target_concept": "parametric_versus_non_parametric_methods",
+      "question_type": "method_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "A huge dataset shows a highly irregular response surface; which broad method class can adapt more freely?",
+        "zh_cn": "一个巨大数据集呈现高度不规则的响应曲面；哪类方法能更自由地适应它？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q015",
+      "target_concept": "parametric_versus_non_parametric_methods",
+      "question_type": "workflow",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "What are the two conceptual stages of a parametric approach?",
+        "zh_cn": "参数方法在概念上包含哪两个阶段？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q016",
+      "target_concept": "parametric_versus_non_parametric_methods",
+      "question_type": "tradeoff",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Does avoiding a fixed functional form make a non-parametric method automatically better?",
+        "zh_cn": "避免固定函数形式是否会使非参数方法自动更好？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q017",
+      "target_concept": "model_flexibility_interpretability_and_overfitting",
+      "question_type": "overfit_diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "A complex model has near-zero training error but much larger test error; what is the likely problem?",
+        "zh_cn": "一个复杂模型的训练误差接近零，但测试误差大得多；最可能的问题是什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q018",
+      "target_concept": "model_flexibility_interpretability_and_overfitting",
+      "question_type": "underfit_diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "A simple model performs poorly on both training and test data; what is the likely problem?",
+        "zh_cn": "一个简单模型在训练集和测试集上都表现很差；最可能的问题是什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q019",
+      "target_concept": "model_flexibility_interpretability_and_overfitting",
+      "question_type": "tradeoff",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "Model flexibility increases while sample size stays small; what usually happens to variance?",
+        "zh_cn": "在样本量保持较小时提高模型灵活性；方差通常会怎样变化？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q020",
+      "target_concept": "model_flexibility_interpretability_and_overfitting",
+      "question_type": "claim_evaluation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A black-box model is slightly more accurate but must support a regulatory explanation; is accuracy alone decisive?",
+        "zh_cn": "一个黑箱模型略微更准确，但必须用于监管解释；准确率本身是否具有决定性？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q021",
+      "target_concept": "supervised_versus_unsupervised_learning",
+      "question_type": "setting_classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A dataset contains customer features but no outcome labels; which learning setting applies?",
+        "zh_cn": "一个数据集包含客户特征但没有结果标签；它属于哪种学习设置？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch2",
+        "islp-official-course"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q022",
+      "target_concept": "supervised_versus_unsupervised_learning",
+      "question_type": "setting_classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A dataset pairs images with known species labels; which learning setting applies?",
+        "zh_cn": "一个数据集把图像与已知物种标签配对；它属于哪种学习设置？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch2",
+        "islp-official-course"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q023",
+      "target_concept": "supervised_versus_unsupervised_learning",
+      "question_type": "concept_boundary",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "What role does a response variable play in supervised learning?",
+        "zh_cn": "响应变量在监督学习中起什么作用？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch2",
+        "islp-official-course"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q024",
+      "target_concept": "regression_versus_classification_problems",
+      "question_type": "problem_classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Predicting a patient's recovery time in days is which type of supervised problem?",
+        "zh_cn": "预测患者康复所需天数属于哪类监督学习问题？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q025",
+      "target_concept": "regression_versus_classification_problems",
+      "question_type": "problem_classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Predicting whether a transaction is fraudulent is which type of supervised problem?",
+        "zh_cn": "预测一笔交易是否欺诈属于哪类监督学习问题？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q026",
+      "target_concept": "regression_versus_classification_problems",
+      "question_type": "boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Does using nearest neighbors determine whether a task is regression or classification?",
+        "zh_cn": "使用最近邻方法是否决定一个任务属于回归还是分类？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q027",
+      "target_concept": "training_mse_and_test_mse",
+      "question_type": "calculation",
+      "cognitive_operation": "calculate",
+      "prompts": {
+        "en": "Observed values are 2, 4, and 8 while predictions are 3, 5, and 6; what is the mean squared error?",
+        "zh_cn": "真实值为 2、4、8，预测值为 3、5、6；均方误差是多少？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q028",
+      "target_concept": "training_mse_and_test_mse",
+      "question_type": "metric_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Which error estimate is relevant for performance on unseen cases?",
+        "zh_cn": "哪一种误差估计与未见样本上的表现直接相关？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q029",
+      "target_concept": "training_mse_and_test_mse",
+      "question_type": "claim_evaluation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Model A has lower training MSE than model B; does A necessarily have lower test MSE?",
+        "zh_cn": "模型 A 的训练均方误差低于模型 B；A 的测试均方误差是否必然更低？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q030",
+      "target_concept": "training_mse_and_test_mse",
+      "question_type": "data_leakage",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "A test set was repeatedly used to tune model complexity; what is wrong with its final error estimate?",
+        "zh_cn": "一个测试集被反复用于调整模型复杂度；最终误差估计有什么问题？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q031",
+      "target_concept": "bias_variance_trade_off",
+      "question_type": "error_diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "Predictions remain similarly wrong across many training samples; which error tendency is high?",
+        "zh_cn": "在许多不同训练样本上，预测都以相似方式出错；哪种误差倾向较高？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q032",
+      "target_concept": "bias_variance_trade_off",
+      "question_type": "error_diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "A fitted curve changes dramatically when a few training cases change; which error tendency is high?",
+        "zh_cn": "少量训练样本变化就使拟合曲线剧烈改变；哪种误差倾向较高？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q033",
+      "target_concept": "bias_variance_trade_off",
+      "question_type": "flexibility_effect",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "Flexibility increases from a rigid line to a wiggly curve; how do bias and variance usually change?",
+        "zh_cn": "模型从刚性直线变为波动曲线，灵活性提高；偏差与方差通常如何变化？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q034",
+      "target_concept": "bias_variance_trade_off",
+      "question_type": "model_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Two models have similar test error but one is much simpler; which choice is easier to justify under the trade-off?",
+        "zh_cn": "两个模型测试误差相近，但其中一个简单得多；在偏差—方差权衡下哪种选择更易说明理由？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q035",
+      "target_concept": "k_nearest_neighbors_flexibility",
+      "question_type": "parameter_effect",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "K in K-nearest neighbors decreases from 30 to 1; what happens to flexibility?",
+        "zh_cn": "K 近邻中的 K 从 30 降到 1；模型灵活性会怎样变化？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch2",
+        "islp-official-course"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q036",
+      "target_concept": "k_nearest_neighbors_flexibility",
+      "question_type": "bias_variance",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "K becomes very large in K-nearest neighbors; what happens to bias?",
+        "zh_cn": "K 近邻中的 K 变得很大；偏差通常会怎样变化？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch2",
+        "islp-official-course"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q037",
+      "target_concept": "k_nearest_neighbors_flexibility",
+      "question_type": "noise_sensitivity",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Is K equal to 1 always optimal because it fits the training data closely?",
+        "zh_cn": "K 等于 1 时能紧密拟合训练数据；它是否因此总是最优？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch2",
+        "islp-official-course"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q038",
+      "target_concept": "simple_linear_regression_and_least_squares_fitting",
+      "question_type": "model_formulation",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "In a simple regression of electricity use on temperature, what does the slope represent?",
+        "zh_cn": "在用温度解释用电量的简单回归中，斜率表示什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q039",
+      "target_concept": "simple_linear_regression_and_least_squares_fitting",
+      "question_type": "objective",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "What quantity does ordinary least squares minimize in simple linear regression?",
+        "zh_cn": "普通最小二乘在简单线性回归中最小化什么量？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q040",
+      "target_concept": "simple_linear_regression_and_least_squares_fitting",
+      "question_type": "residual_boundary",
+      "cognitive_operation": "compare",
+      "prompts": {
+        "en": "What distinguishes a residual from the population error term?",
+        "zh_cn": "残差与总体误差项有何区别？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q041",
+      "target_concept": "simple_linear_regression_and_least_squares_fitting",
+      "question_type": "coefficient_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "A cost regression has intercept 20 and slope 3 per hour; what does the slope mean?",
+        "zh_cn": "一个费用回归的截距为 20，斜率为每小时 3；斜率意味着什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q042",
+      "target_concept": "simple_linear_regression_and_least_squares_fitting",
+      "question_type": "extrapolation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A line fitted for ages 20 to 60 predicts at age 100; how trustworthy is that prediction?",
+        "zh_cn": "一条在 20 至 60 岁数据上拟合的直线用于预测 100 岁；该预测有多可靠？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q043",
+      "target_concept": "regression_coefficient_uncertainty_and_hypothesis_tests",
+      "question_type": "hypothesis",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Which null hypothesis tests whether a regression slope has no linear association with the response?",
+        "zh_cn": "检验回归斜率与响应变量无线性关联时，零假设是什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q044",
+      "target_concept": "regression_coefficient_uncertainty_and_hypothesis_tests",
+      "question_type": "standard_error",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "What does a coefficient's standard error quantify?",
+        "zh_cn": "回归系数的标准误衡量什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q045",
+      "target_concept": "regression_coefficient_uncertainty_and_hypothesis_tests",
+      "question_type": "confidence_interval",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "A 95% confidence interval for a slope includes zero; what does this say about a two-sided 5% test?",
+        "zh_cn": "某斜率的 95% 置信区间包含 0；这对双侧 5% 检验意味着什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q046",
+      "target_concept": "regression_coefficient_uncertainty_and_hypothesis_tests",
+      "question_type": "p_value",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A slope has p equals 0.001; does this prove the effect is large?",
+        "zh_cn": "某斜率的 p 值为 0.001；这是否证明效应很大？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q047",
+      "target_concept": "regression_coefficient_uncertainty_and_hypothesis_tests",
+      "question_type": "sample_size",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "Noise stays fixed while sample size grows substantially; what should usually happen to a slope's standard error?",
+        "zh_cn": "噪声不变而样本量大幅增加；斜率标准误通常会怎样变化？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q048",
+      "target_concept": "residual_standard_error",
+      "question_type": "metric_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "What scale does the residual standard error use?",
+        "zh_cn": "残差标准误使用什么量纲？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q049",
+      "target_concept": "residual_standard_error",
+      "question_type": "fit_diagnosis",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A residual standard error of 5 is reported without response units; can its practical size be judged?",
+        "zh_cn": "报告称残差标准误为 5，却未给出响应变量单位；能否判断其实际大小？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q050",
+      "target_concept": "residual_standard_error",
+      "question_type": "comparison",
+      "cognitive_operation": "compare",
+      "prompts": {
+        "en": "Two models use the same response and data but one has lower residual standard error; what does that indicate?",
+        "zh_cn": "两个模型使用相同响应变量和数据，其中一个残差标准误更低；这说明什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q051",
+      "target_concept": "r_squared_statistic",
+      "question_type": "metric_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "An R-squared of 0.70 has what meaning in a fitted linear model?",
+        "zh_cn": "一个拟合线性模型的 R 方为 0.70；这表示什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q052",
+      "target_concept": "r_squared_statistic",
+      "question_type": "causal_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Does an R-squared of 0.95 establish that the predictors cause the response?",
+        "zh_cn": "R 方为 0.95 是否证明预测变量导致响应变量变化？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q053",
+      "target_concept": "r_squared_statistic",
+      "question_type": "generalization_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Can high training R-squared guarantee low future prediction error?",
+        "zh_cn": "训练集上的高 R 方能否保证未来预测误差低？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q054",
+      "target_concept": "multiple_linear_regression_coefficient_interpretation",
+      "question_type": "coefficient_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "In a wage regression with education and experience, what does the education coefficient hold fixed?",
+        "zh_cn": "在包含教育与经验的工资回归中，教育系数把什么保持不变？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q055",
+      "target_concept": "multiple_linear_regression_coefficient_interpretation",
+      "question_type": "confounding",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "Advertising's slope shrinks after season is included; what regression issue may season have addressed?",
+        "zh_cn": "加入季节变量后，广告的斜率减小；季节变量可能处理了什么回归问题？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q056",
+      "target_concept": "multiple_linear_regression_coefficient_interpretation",
+      "question_type": "model_formulation",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A response depends linearly on price, income, and age; how many slope coefficients does the additive model contain?",
+        "zh_cn": "一个响应变量线性依赖价格、收入和年龄；加性模型包含多少个斜率系数？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q057",
+      "target_concept": "multiple_linear_regression_coefficient_interpretation",
+      "question_type": "coefficient_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Can a multiple-regression coefficient be interpreted while holding an omitted confounder fixed?",
+        "zh_cn": "多元回归系数能否被解释为同时保持一个被遗漏的混杂变量不变？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q058",
+      "target_concept": "multiple_linear_regression_coefficient_interpretation",
+      "question_type": "joint_test",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "A global F-test is significant; what is the narrow conclusion?",
+        "zh_cn": "一个总体 F 检验显著；最窄的结论是什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q059",
+      "target_concept": "confidence_intervals_versus_prediction_intervals",
+      "question_type": "interval_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Which interval should quantify uncertainty for the mean response at a specified predictor value?",
+        "zh_cn": "要量化某一预测变量取值下平均响应的不确定性，应使用哪种区间？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q060",
+      "target_concept": "confidence_intervals_versus_prediction_intervals",
+      "question_type": "interval_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Which interval should cover one new person's future outcome at a specified predictor value?",
+        "zh_cn": "要覆盖某一预测变量取值下一个新个体的未来结果，应使用哪种区间？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q061",
+      "target_concept": "confidence_intervals_versus_prediction_intervals",
+      "question_type": "width_comparison",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why is a prediction interval wider than a confidence interval at the same predictor value?",
+        "zh_cn": "为什么同一预测变量取值下，预测区间比置信区间更宽？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q062",
+      "target_concept": "confidence_intervals_versus_prediction_intervals",
+      "question_type": "interval_interpretation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A narrow mean-response confidence interval is reported; does it imply individual outcomes cluster tightly?",
+        "zh_cn": "平均响应的置信区间很窄；这是否意味着个体结果也高度集中？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q063",
+      "target_concept": "qualitative_predictors_and_dummy_variables",
+      "question_type": "coding",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A predictor has north, central, and south categories; how many dummy variables are needed with an intercept?",
+        "zh_cn": "一个预测变量有北部、中部和南部三类；含截距时需要几个虚拟变量？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q064",
+      "target_concept": "qualitative_predictors_and_dummy_variables",
+      "question_type": "reference_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "North is the reference region and the south coefficient is 4; what does that coefficient mean?",
+        "zh_cn": "北部是参照地区，南部系数为 4；该系数表示什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q065",
+      "target_concept": "qualitative_predictors_and_dummy_variables",
+      "question_type": "coding_error",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "All three region dummies and an intercept are included; what linear-model problem results?",
+        "zh_cn": "模型同时包含三个地区虚拟变量和一个截距；会产生什么线性模型问题？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q066",
+      "target_concept": "qualitative_predictors_and_dummy_variables",
+      "question_type": "reference_change",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "The reference category changes but fitted values must stay identical; what changes?",
+        "zh_cn": "参照类别改变但拟合值必须相同；什么会发生变化？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q067",
+      "target_concept": "interaction_effects_and_the_additive_assumption",
+      "question_type": "interaction_identification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A treatment effect grows with baseline risk; which regression term represents this pattern?",
+        "zh_cn": "治疗效果随基线风险增大；哪一种回归项表示这种模式？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q068",
+      "target_concept": "interaction_effects_and_the_additive_assumption",
+      "question_type": "additivity_boundary",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "What assumption does an additive model make about one predictor's effect?",
+        "zh_cn": "加性模型对一个预测变量的效应作出什么假设？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q069",
+      "target_concept": "interaction_effects_and_the_additive_assumption",
+      "question_type": "coefficient_interpretation",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "In Y equals b0 plus b1X plus b2Z plus b3XZ, what does b3 measure?",
+        "zh_cn": "在 Y 等于 b0 加 b1X 加 b2Z 加 b3XZ 中，b3 衡量什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q070",
+      "target_concept": "interaction_effects_and_the_additive_assumption",
+      "question_type": "hierarchy",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "An XZ interaction is included but both main effects are removed; is interpretation straightforward?",
+        "zh_cn": "模型包含 XZ 交互项，却移除了两个主效应；其解释是否直接？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q071",
+      "target_concept": "residual_plot_diagnosis_of_non_linearity",
+      "question_type": "plot_diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "Residuals form a clear U-shape against fitted values; what model problem is indicated?",
+        "zh_cn": "残差相对于拟合值呈明显 U 形；这表明什么模型问题？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q072",
+      "target_concept": "residual_plot_diagnosis_of_non_linearity",
+      "question_type": "plot_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Residuals are randomly scattered around zero; does this prove the linear model is correct?",
+        "zh_cn": "残差在零附近随机散布；这是否证明线性模型正确？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q073",
+      "target_concept": "residual_plot_diagnosis_of_non_linearity",
+      "question_type": "remedy_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "A residual plot shows smooth curvature; which first remedy is most directly motivated?",
+        "zh_cn": "残差图显示平滑弯曲；哪种初步修正最直接？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q074",
+      "target_concept": "outliers_and_high_leverage_observations",
+      "question_type": "case_classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A case has an ordinary predictor value but an unusually large residual; what kind of case is it?",
+        "zh_cn": "一个样本的预测变量取值普通，但残差异常大；它属于哪类样本？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q075",
+      "target_concept": "outliers_and_high_leverage_observations",
+      "question_type": "case_classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A case has extreme predictor values but lies near the fitted line; what property is high?",
+        "zh_cn": "一个样本的预测变量取值极端，但位于拟合线附近；哪种属性较高？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q076",
+      "target_concept": "outliers_and_high_leverage_observations",
+      "question_type": "influence",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "When is an observation likely to be influential in linear regression?",
+        "zh_cn": "在线性回归中，一个观测何时可能具有较大影响力？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q077",
+      "target_concept": "outliers_and_high_leverage_observations",
+      "question_type": "deletion_effect",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "Removing one case changes the fitted slope sharply; what property has been demonstrated?",
+        "zh_cn": "删除一个样本后拟合斜率显著变化；这证明了该样本具有什么属性？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q078",
+      "target_concept": "collinearity_and_variance_inflation",
+      "question_type": "symptom_diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "Two related predictors have large individual standard errors but a strong joint F-test; what is the likely issue?",
+        "zh_cn": "两个相关预测变量的个别标准误很大，但联合 F 检验很强；最可能的问题是什么？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q079",
+      "target_concept": "collinearity_and_variance_inflation",
+      "question_type": "effect",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "Predictor correlation increases while sample size and noise stay fixed; what happens to individual coefficient uncertainty?",
+        "zh_cn": "在样本量与噪声不变时，预测变量相关性增加；个别系数的不确定性会怎样变化？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q080",
+      "target_concept": "collinearity_and_variance_inflation",
+      "question_type": "claim_evaluation",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A collinear predictor has a large p-value; does that prove it has no joint predictive value?",
+        "zh_cn": "一个存在共线性的预测变量 p 值很大；这是否证明它没有联合预测价值？"
+      },
+      "source_reference_ids": [
+        "islp-book-ch3",
+        "islp-python-companion"
+      ],
+      "reviewed_target_node_ids": []
+    }
+  ]
+}

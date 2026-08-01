@@ -1,0 +1,1167 @@
+{
+  "schema_version": "knowact.simulator_question_bank.v2",
+  "bank_id": "ostep_atomic_v2",
+  "version": "2.0",
+  "benchmark_domain": "OSTEP",
+  "title": {
+    "en": "OSTEP CPU virtualization atomic diagnostic question bank",
+    "zh_cn": "OSTEP CPU 虚拟化原子诊断题库"
+  },
+  "questions": [
+    {
+      "question_id": "OSTEP_Q001",
+      "target_concept": "operating_system_virtualization",
+      "question_type": "concept_identification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "One CPU rapidly alternates among programs so each appears to run continuously; which OS technique creates this illusion?",
+        "zh_cn": "一个 CPU 在多个程序间快速切换，使每个程序看似持续运行；哪种操作系统技术创造了这种假象？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q002",
+      "target_concept": "operating_system_virtualization",
+      "question_type": "resource_mapping",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A process sees its own convenient execution resource over a shared physical processor; what is the virtual resource?",
+        "zh_cn": "进程在共享物理处理器之上看到自己的便捷执行资源；这里的虚拟资源是什么？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q003",
+      "target_concept": "operating_system_virtualization",
+      "question_type": "concept_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Does ordinary OS virtualization refer only to running full virtual machines?",
+        "zh_cn": "普通操作系统中的虚拟化是否只指运行完整虚拟机？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q004",
+      "target_concept": "operating_system_virtualization",
+      "question_type": "tradeoff",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "More runnable processes share one CPU while total capacity stays fixed; what happens to each process's apparent execution rate?",
+        "zh_cn": "更多可运行进程共享一个总容量不变的 CPU；每个进程的表观执行速度会怎样变化？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q005",
+      "target_concept": "operating_system_as_standard_interface_provider",
+      "question_type": "interface_role",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why does an OS expose a common file interface over different storage devices?",
+        "zh_cn": "为什么操作系统会在不同存储设备之上提供统一的文件接口？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q006",
+      "target_concept": "operating_system_as_standard_interface_provider",
+      "question_type": "role_boundary",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "An application calls the same read operation on different disks; which OS role is most visible?",
+        "zh_cn": "应用程序对不同磁盘调用相同的读取操作；这里最明显体现了操作系统的哪种角色？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q007",
+      "target_concept": "operating_system_as_resource_manager",
+      "question_type": "allocation_role",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Several ready processes compete for one CPU and the kernel selects one; which OS role is being exercised?",
+        "zh_cn": "多个就绪进程竞争一个 CPU，内核选择其中一个；这里体现了操作系统的哪种角色？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q008",
+      "target_concept": "operating_system_as_resource_manager",
+      "question_type": "policy_goal",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Can one CPU allocation policy minimize response and turnaround time while maximizing fairness for every workload?",
+        "zh_cn": "一种 CPU 分配策略能否在所有工作负载上同时最小化响应时间和周转时间，并最大化公平性？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q009",
+      "target_concept": "protection_and_isolation",
+      "question_type": "protection_need",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why must user processes be prevented from directly changing another process's kernel state?",
+        "zh_cn": "为什么必须阻止用户进程直接修改另一进程的内核状态？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro",
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q010",
+      "target_concept": "protection_and_isolation",
+      "question_type": "privilege_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A user program can disable interrupts indefinitely; what protection property has failed?",
+        "zh_cn": "一个用户程序可以无限期关闭中断；哪项保护属性失效了？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro",
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q011",
+      "target_concept": "mechanism_and_policy_separation",
+      "question_type": "classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Saving registers during a context switch is a mechanism or a policy?",
+        "zh_cn": "上下文切换时保存寄存器属于机制还是策略？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q012",
+      "target_concept": "mechanism_and_policy_separation",
+      "question_type": "classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Choosing the next process by shortest remaining time is a mechanism or a policy?",
+        "zh_cn": "按最短剩余时间选择下一个进程属于机制还是策略？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q013",
+      "target_concept": "mechanism_and_policy_separation",
+      "question_type": "design_value",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why does separating scheduling policy from context-switch mechanism improve OS design?",
+        "zh_cn": "为什么把调度策略与上下文切换机制分离能改进操作系统设计？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q014",
+      "target_concept": "mechanism_and_policy_separation",
+      "question_type": "change_impact",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "The scheduler changes from FIFO to round robin while context-switch code stays fixed; which layer changed?",
+        "zh_cn": "调度器从 FIFO 改为轮转，而上下文切换代码保持不变；哪个层发生了变化？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q015",
+      "target_concept": "process_abstraction",
+      "question_type": "concept_boundary",
+      "cognitive_operation": "compare",
+      "prompts": {
+        "en": "What distinguishes a program file from a process?",
+        "zh_cn": "程序文件与进程有何区别？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q016",
+      "target_concept": "process_abstraction",
+      "question_type": "instance_reasoning",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Can two processes execute the same program file while remaining distinct processes?",
+        "zh_cn": "两个进程能否执行同一个程序文件，同时仍是不同进程？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q017",
+      "target_concept": "process_abstraction",
+      "question_type": "state_identification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A browser currently executing instructions with memory and registers is what OS abstraction?",
+        "zh_cn": "一个正在执行指令并拥有内存与寄存器状态的浏览器属于什么操作系统抽象？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q018",
+      "target_concept": "process_abstraction",
+      "question_type": "lifecycle",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "An executable is loaded and given initialized execution state; what does it become?",
+        "zh_cn": "一个可执行文件被加载并获得初始化执行状态；它变成了什么？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q019",
+      "target_concept": "process_machine_state",
+      "question_type": "component_identification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Which register records the next instruction a process will execute?",
+        "zh_cn": "哪个寄存器记录进程下一条将执行的指令？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q020",
+      "target_concept": "process_machine_state",
+      "question_type": "state_scope",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A process has dynamically allocated objects; which region of its machine state usually stores them?",
+        "zh_cn": "一个进程拥有动态分配的对象；其机器状态中的哪个区域通常存储这些对象？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q021",
+      "target_concept": "process_machine_state",
+      "question_type": "resume_requirement",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why must register values be preserved when a process stops running temporarily?",
+        "zh_cn": "为什么进程暂时停止运行时必须保存寄存器值？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q022",
+      "target_concept": "process_creation_and_loading",
+      "question_type": "creation_step",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Before execution begins, where must executable code be placed?",
+        "zh_cn": "执行开始前，可执行代码必须被放到哪里？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q023",
+      "target_concept": "process_creation_and_loading",
+      "question_type": "initialization",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Which process region is initialized with function arguments and return-address support?",
+        "zh_cn": "进程的哪个区域会用函数参数和返回地址支持进行初始化？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q024",
+      "target_concept": "process_creation_and_loading",
+      "question_type": "loading_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Does creating a process consist only of copying executable bytes into memory?",
+        "zh_cn": "创建进程是否仅仅是把可执行文件字节复制到内存？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q025",
+      "target_concept": "process_states_and_transitions",
+      "question_type": "state_identification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A process can run but is waiting for CPU selection; which state is it in?",
+        "zh_cn": "一个进程可以运行但正在等待 CPU 选择；它处于什么状态？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q026",
+      "target_concept": "process_states_and_transitions",
+      "question_type": "transition_prediction",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A running process starts disk I/O; which state should it enter?",
+        "zh_cn": "一个运行中的进程启动磁盘 I/O；它应进入什么状态？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q027",
+      "target_concept": "process_states_and_transitions",
+      "question_type": "transition_prediction",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A blocked process's I/O completes; which state should it enter next?",
+        "zh_cn": "一个阻塞进程的 I/O 完成；它接下来应进入什么状态？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q028",
+      "target_concept": "process_states_and_transitions",
+      "question_type": "transition_diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "A trace moves a process directly from blocked to running without a scheduling decision; what step is missing?",
+        "zh_cn": "一条轨迹让进程在没有调度决策的情况下从阻塞直接变为运行；缺少了什么步骤？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q029",
+      "target_concept": "process_list_and_process_control_block",
+      "question_type": "data_structure_role",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why does the kernel need a process control block for each process?",
+        "zh_cn": "为什么内核需要为每个进程维护进程控制块？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q030",
+      "target_concept": "process_list_and_process_control_block",
+      "question_type": "field_selection",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Which PCB field lets the OS resume a preempted process at the correct instruction?",
+        "zh_cn": "进程控制块中的哪个字段使操作系统能在正确指令处恢复被抢占进程？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q031",
+      "target_concept": "process_list_and_process_control_block",
+      "question_type": "event_handling",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "How does the process list help when an I/O completion arrives?",
+        "zh_cn": "I/O 完成事件到达时，进程列表如何提供帮助？"
+      },
+      "source_reference_ids": [
+        "ostep-book-intro"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q032",
+      "target_concept": "fork_process_creation",
+      "question_type": "return_value",
+      "cognitive_operation": "interpret",
+      "prompts": {
+        "en": "fork returns zero in one execution path; which process is on that path?",
+        "zh_cn": "fork 在一条执行路径中返回 0；该路径属于哪个进程？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q033",
+      "target_concept": "fork_process_creation",
+      "question_type": "execution_order",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "After fork, can source-code order alone determine whether parent or child prints first?",
+        "zh_cn": "fork 之后，仅凭源代码顺序能否确定父进程或子进程谁先打印？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q034",
+      "target_concept": "fork_process_creation",
+      "question_type": "state_copy",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why can parent and child modify the same variable independently after fork?",
+        "zh_cn": "为什么 fork 后父子进程可以独立修改同名变量？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q035",
+      "target_concept": "fork_process_creation",
+      "question_type": "process_count",
+      "cognitive_operation": "calculate",
+      "prompts": {
+        "en": "A process executes two unconditional fork calls and all calls succeed; how many processes exist afterward?",
+        "zh_cn": "一个进程连续执行两次无条件 fork，且调用均成功；之后共有多少个进程？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q036",
+      "target_concept": "unix_fork_exec_and_wait_process_api",
+      "question_type": "api_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Which UNIX call should a parent use to pause until a child exits?",
+        "zh_cn": "父进程应使用哪个 UNIX 调用暂停，直到子进程退出？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q037",
+      "target_concept": "unix_fork_exec_and_wait_process_api",
+      "question_type": "api_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Which UNIX call starts a new process that initially resembles the caller?",
+        "zh_cn": "哪个 UNIX 调用会启动一个最初与调用者相似的新进程？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q038",
+      "target_concept": "unix_fork_exec_and_wait_process_api",
+      "question_type": "api_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Which UNIX call replaces the current process image with another program?",
+        "zh_cn": "哪个 UNIX 调用会用另一个程序替换当前进程映像？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q039",
+      "target_concept": "unix_fork_exec_and_wait_process_api",
+      "question_type": "ordering",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A parent calls wait immediately after fork; how does this affect parent-child output order?",
+        "zh_cn": "父进程在 fork 后立即调用 wait；这会怎样影响父子进程的输出顺序？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q040",
+      "target_concept": "exec_process_image_replacement",
+      "question_type": "identity_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Does a successful exec create a new process identifier?",
+        "zh_cn": "成功的 exec 是否会创建新的进程标识符？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q041",
+      "target_concept": "exec_process_image_replacement",
+      "question_type": "state_change",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A child successfully calls exec on a compiler; which program executes next in that process?",
+        "zh_cn": "一个子进程成功对编译器调用 exec；该进程接下来执行哪个程序？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q042",
+      "target_concept": "exec_process_image_replacement",
+      "question_type": "return_behavior",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A successful exec call returns to the instruction after exec; is this trace valid?",
+        "zh_cn": "一次成功的 exec 调用返回到 exec 后的指令；这条执行轨迹有效吗？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q043",
+      "target_concept": "fork_and_exec_separation_in_a_shell",
+      "question_type": "shell_design",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why does a shell fork before executing an external foreground command?",
+        "zh_cn": "为什么 shell 在执行外部前台命令前先调用 fork？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q044",
+      "target_concept": "fork_and_exec_separation_in_a_shell",
+      "question_type": "feature_support",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "How does separating fork from exec help a shell redirect output?",
+        "zh_cn": "把 fork 与 exec 分离如何帮助 shell 重定向输出？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q045",
+      "target_concept": "fork_and_exec_separation_in_a_shell",
+      "question_type": "design_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "If the shell execs every command without forking, can it normally return to its command loop?",
+        "zh_cn": "如果 shell 不调用 fork 而直接 exec 每个命令，它通常还能返回命令循环吗？"
+      },
+      "source_reference_ids": [
+        "ostep-book-process-api"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q046",
+      "target_concept": "limited_direct_execution",
+      "question_type": "control_problem",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why is unrestricted direct execution unsafe for CPU virtualization?",
+        "zh_cn": "为什么不受限制的直接执行对 CPU 虚拟化不安全？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q047",
+      "target_concept": "limited_direct_execution",
+      "question_type": "performance_goal",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why does limited direct execution let ordinary instructions run natively?",
+        "zh_cn": "为什么受限直接执行允许普通指令在硬件上原生运行？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q048",
+      "target_concept": "limited_direct_execution",
+      "question_type": "event_reasoning",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "A user process requests a protected service through a controlled entry; which mechanism transfers control?",
+        "zh_cn": "用户进程通过受控入口请求受保护服务；哪种机制转移控制权？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q049",
+      "target_concept": "limited_direct_execution",
+      "question_type": "failure_diagnosis",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "A CPU-bound process never traps and no timer exists; why can the kernel lose control?",
+        "zh_cn": "一个 CPU 密集型进程从不触发陷阱，系统也没有定时器；为什么内核可能失去控制权？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q050",
+      "target_concept": "user_mode_and_kernel_mode",
+      "question_type": "privilege_classification",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Changing the page table is normally permitted in which CPU mode?",
+        "zh_cn": "修改页表通常只允许在哪种 CPU 模式下进行？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q051",
+      "target_concept": "user_mode_and_kernel_mode",
+      "question_type": "protection",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "How do user and kernel modes protect the operating system?",
+        "zh_cn": "用户模式与内核模式如何保护操作系统？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q052",
+      "target_concept": "user_mode_and_kernel_mode",
+      "question_type": "fault_prediction",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A user-mode program executes a privileged instruction; what should the hardware do?",
+        "zh_cn": "用户模式程序执行特权指令；硬件应如何处理？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q053",
+      "target_concept": "system_call_trap_and_return_from_trap",
+      "question_type": "sequence",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Which event begins a system call's controlled transition from user mode to kernel mode?",
+        "zh_cn": "哪个事件开始系统调用从用户模式到内核模式的受控转换？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q054",
+      "target_concept": "system_call_trap_and_return_from_trap",
+      "question_type": "state_preservation",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why must a trap save the user program's execution state?",
+        "zh_cn": "为什么陷阱必须保存用户程序的执行状态？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q055",
+      "target_concept": "system_call_trap_and_return_from_trap",
+      "question_type": "return_path",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "The kernel completes a valid system call; which mechanism restores user execution?",
+        "zh_cn": "内核完成一个有效系统调用；哪种机制恢复用户执行？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q056",
+      "target_concept": "system_call_trap_and_return_from_trap",
+      "question_type": "boundary",
+      "cognitive_operation": "compare",
+      "prompts": {
+        "en": "What distinguishes a system-call trap from an external hardware interrupt?",
+        "zh_cn": "系统调用陷阱与外部硬件中断有何区别？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q057",
+      "target_concept": "trap_table_controlled_kernel_entry",
+      "question_type": "boot_setup",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "Why must the kernel initialize the trap table before user programs run?",
+        "zh_cn": "为什么内核必须在用户程序运行前初始化陷阱表？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q058",
+      "target_concept": "trap_table_controlled_kernel_entry",
+      "question_type": "security_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "A user process can rewrite trap-table entries; what security guarantee is lost?",
+        "zh_cn": "一个用户进程可以改写陷阱表项；哪项安全保证会丧失？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q059",
+      "target_concept": "timer_interrupt_for_preemptive_control",
+      "question_type": "control_mechanism",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Which hardware event lets the OS regain control from a compute-bound process that makes no system calls?",
+        "zh_cn": "哪种硬件事件使操作系统能从不发起系统调用的计算密集型进程手中夺回控制？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q060",
+      "target_concept": "timer_interrupt_for_preemptive_control",
+      "question_type": "scheduling_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Without timer interrupts, can a preemptive scheduler reliably enforce time slices on uncooperative processes?",
+        "zh_cn": "没有定时器中断时，抢占式调度器能否可靠地对不合作进程执行时间片？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q061",
+      "target_concept": "context_switch",
+      "question_type": "state_requirement",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Which state must be saved so a preempted process resumes at the correct instruction?",
+        "zh_cn": "必须保存哪种状态，才能使被抢占进程从正确指令恢复？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q062",
+      "target_concept": "context_switch",
+      "question_type": "sequence",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "What is the central state-transfer operation in a context switch?",
+        "zh_cn": "上下文切换中的核心状态转移操作是什么？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q063",
+      "target_concept": "context_switch",
+      "question_type": "overhead",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "Time slices become extremely short while workload stays fixed; what happens to context-switch overhead?",
+        "zh_cn": "在工作负载不变时，时间片变得极短；上下文切换开销会怎样变化？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q064",
+      "target_concept": "context_switch",
+      "question_type": "concept_boundary",
+      "cognitive_operation": "compare",
+      "prompts": {
+        "en": "What distinguishes a mode switch for a system call from a context switch to another process?",
+        "zh_cn": "系统调用引发的模式切换与切换到另一进程的上下文切换有何区别？"
+      },
+      "source_reference_ids": [
+        "ostep-book-direct-execution"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q065",
+      "target_concept": "scheduling_turnaround_time_and_response_time",
+      "question_type": "metric_calculation",
+      "cognitive_operation": "calculate",
+      "prompts": {
+        "en": "A job arrives at time 3 and finishes at time 11; what is its turnaround time?",
+        "zh_cn": "一个作业在时刻 3 到达，在时刻 11 完成；它的周转时间是多少？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q066",
+      "target_concept": "scheduling_turnaround_time_and_response_time",
+      "question_type": "metric_calculation",
+      "cognitive_operation": "calculate",
+      "prompts": {
+        "en": "A job arrives at time 4 and first runs at time 7; what is its response time?",
+        "zh_cn": "一个作业在时刻 4 到达，在时刻 7 首次运行；它的响应时间是多少？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q067",
+      "target_concept": "scheduling_turnaround_time_and_response_time",
+      "question_type": "metric_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Which metric best captures how quickly an interactive job first receives CPU service?",
+        "zh_cn": "哪项指标最能反映交互作业多快首次获得 CPU 服务？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q068",
+      "target_concept": "scheduling_turnaround_time_and_response_time",
+      "question_type": "tradeoff",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Does minimizing average turnaround guarantee good response for every interactive job?",
+        "zh_cn": "最小化平均周转时间是否保证每个交互作业都有良好响应？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q069",
+      "target_concept": "fifo_scheduling_and_convoy_effect",
+      "question_type": "schedule_prediction",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A long CPU job arrives just before five short jobs under FIFO; what happens to the short jobs?",
+        "zh_cn": "在 FIFO 下，一个长 CPU 作业恰好比五个短作业先到；短作业会怎样？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q070",
+      "target_concept": "fifo_scheduling_and_convoy_effect",
+      "question_type": "policy_property",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Which ordering rule does FIFO use?",
+        "zh_cn": "FIFO 使用哪种排序规则？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q071",
+      "target_concept": "fifo_scheduling_and_convoy_effect",
+      "question_type": "workload_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "All jobs have equal length and arrive together; is FIFO's convoy problem severe here?",
+        "zh_cn": "所有作业长度相同且同时到达；此时 FIFO 的护航效应严重吗？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q072",
+      "target_concept": "shortest_job_scheduling_policies",
+      "question_type": "policy_selection",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "All jobs arrive together and their lengths are known; which non-preemptive policy minimizes average turnaround?",
+        "zh_cn": "所有作业同时到达且长度已知；哪种非抢占策略最小化平均周转时间？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q073",
+      "target_concept": "shortest_job_scheduling_policies",
+      "question_type": "preemption",
+      "cognitive_operation": "identify",
+      "prompts": {
+        "en": "Which policy always runs the job with the least remaining processing time?",
+        "zh_cn": "哪种策略始终运行剩余处理时间最短的作业？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q074",
+      "target_concept": "shortest_job_scheduling_policies",
+      "question_type": "arrival_prediction",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A very short job arrives while a long job runs under STCF; what happens next?",
+        "zh_cn": "在 STCF 下，一个很短的作业在长作业运行时到达；接下来会发生什么？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q075",
+      "target_concept": "shortest_job_scheduling_policies",
+      "question_type": "assumption_boundary",
+      "cognitive_operation": "evaluate",
+      "prompts": {
+        "en": "Can an online scheduler implement perfect SJF without information about future job lengths?",
+        "zh_cn": "在线调度器在不知道未来作业长度时能否实现完美 SJF？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q076",
+      "target_concept": "multi_level_feedback_queue_scheduling",
+      "question_type": "goal",
+      "cognitive_operation": "explain",
+      "prompts": {
+        "en": "What does MLFQ try to infer from a job's observed CPU behavior?",
+        "zh_cn": "MLFQ 试图从作业已观察到的 CPU 行为中推断什么？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework",
+        "ostep-homework-repository"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q077",
+      "target_concept": "multi_level_feedback_queue_scheduling",
+      "question_type": "priority_change",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A job repeatedly consumes its entire allotment; how should its MLFQ priority change?",
+        "zh_cn": "一个作业反复用完整个时间配额；它的 MLFQ 优先级应如何变化？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework",
+        "ostep-homework-repository"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q078",
+      "target_concept": "multi_level_feedback_queue_scheduling",
+      "question_type": "interactive_behavior",
+      "cognitive_operation": "predict",
+      "prompts": {
+        "en": "A job frequently yields for I/O before using its allotment; where should MLFQ tend to keep it?",
+        "zh_cn": "一个作业经常在用完配额前因 I/O 主动让出 CPU；MLFQ 通常应把它保留在哪里？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework",
+        "ostep-homework-repository"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q079",
+      "target_concept": "multi_level_feedback_queue_scheduling",
+      "question_type": "starvation",
+      "cognitive_operation": "diagnose",
+      "prompts": {
+        "en": "A low-priority CPU job never runs because high-priority jobs keep arriving; what failure is present?",
+        "zh_cn": "一个低优先级 CPU 作业因高优先级作业不断到达而始终无法运行；出现了什么故障？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework",
+        "ostep-homework-repository"
+      ],
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "OSTEP_Q080",
+      "target_concept": "multi_level_feedback_queue_scheduling",
+      "question_type": "remedy",
+      "cognitive_operation": "choose",
+      "prompts": {
+        "en": "Which MLFQ rule directly prevents permanent starvation of low-priority jobs?",
+        "zh_cn": "哪条 MLFQ 规则能直接防止低优先级作业永久饥饿？"
+      },
+      "source_reference_ids": [
+        "ostep-book-scheduling",
+        "ostep-official-homework",
+        "ostep-homework-repository"
+      ],
+      "reviewed_target_node_ids": []
+    }
+  ]
+}

@@ -1,0 +1,222 @@
+{
+  "schema_version": "knowact.simulator_question_bank.v1",
+  "bank_id": "islp_bilingual_v1",
+  "version": "1.0",
+  "benchmark_domain": "ISLP",
+  "title": {
+    "en": "Introduction to Statistical Learning bilingual diagnostic bank",
+    "zh_cn": "统计学习导论双语诊断题库"
+  },
+  "questions": [
+    {
+      "question_id": "ISLP_Q001",
+      "target_concept": "statistical_learning_function_model",
+      "question_type": "transfer_scenario",
+      "prompts": {
+        "en": "A city predicts commute time from distance, departure time, and weather. Describe the statistical-learning relationship using predictors, an unknown function, and an error term, and explain why identical predictors can still produce different outcomes.",
+        "zh_cn": "某城市根据距离、出发时间和天气预测通勤时间。请用预测变量、未知函数和误差项描述这个统计学习关系，并解释为什么相同的预测变量仍可能产生不同结果。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q002",
+      "target_concept": "prediction_versus_inference_objectives",
+      "question_type": "decision_scenario",
+      "prompts": {
+        "en": "One team wants to know whether discounts cause higher sales, while another only wants the best forecast for next week. Identify the primary objective in each case and explain why the modeling choices may differ.",
+        "zh_cn": "一个团队想知道折扣是否会导致销量上升，另一个团队只想得到下周最准确的销量预测。请判断两种任务各自的主要目标，并解释为什么建模选择可能不同。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q003",
+      "target_concept": "reducible_and_irreducible_prediction_error",
+      "question_type": "transfer_explanation",
+      "prompts": {
+        "en": "A medical prediction model is improved repeatedly, but its test error stops decreasing. Explain how reducible and irreducible error could account for this pattern and give an example of each.",
+        "zh_cn": "一个医疗预测模型经过反复改进后，测试误差不再下降。请说明可约误差和不可约误差如何解释这一现象，并分别举例。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q004",
+      "target_concept": "parametric_versus_non_parametric_methods",
+      "question_type": "method_choice",
+      "prompts": {
+        "en": "You have a small dataset and need an interpretable relationship, then later receive a much larger dataset with a highly irregular pattern. Compare when a parametric or non-parametric method may be appropriate.",
+        "zh_cn": "起初你只有一个小数据集，并且需要可解释的变量关系；后来你获得了一个更大的数据集，其中模式非常不规则。请比较什么时候更适合使用参数方法或非参数方法。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q005",
+      "target_concept": "model_flexibility_interpretability_and_overfitting",
+      "question_type": "model_selection",
+      "prompts": {
+        "en": "A flexible black-box model is slightly more accurate than a simple model, but the decision must be explained to regulators. Discuss accuracy, interpretability, flexibility, and overfitting in the choice.",
+        "zh_cn": "一个灵活的黑盒模型比简单模型略准确，但决策必须向监管者解释。请从准确率、可解释性、灵活性和过拟合角度讨论如何选择。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q006",
+      "target_concept": "supervised_versus_unsupervised_learning",
+      "question_type": "setup_comparison",
+      "prompts": {
+        "en": "A company first groups customers using only purchase features, then later predicts churn using labeled outcomes. Classify the two learning settings and explain what changed.",
+        "zh_cn": "一家公司先只使用购买特征对客户分组，之后又使用带标签的结果预测客户流失。请判断这两个任务分别属于哪种学习方式，并解释发生了什么变化。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q007",
+      "target_concept": "regression_versus_classification_problems",
+      "question_type": "response_type",
+      "prompts": {
+        "en": "A hospital predicts both the number of recovery days and whether a patient will be readmitted. Which is regression and which is classification, and what property of the response determines the distinction?",
+        "zh_cn": "一家医院既要预测患者康复所需天数，也要预测患者是否会再次入院。哪个是回归问题，哪个是分类问题？这种区分由响应变量的什么性质决定？"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q008",
+      "target_concept": "training_mse_and_test_mse",
+      "question_type": "calculation_interpretation",
+      "prompts": {
+        "en": "For observed values 2, 4, and 8, a model predicts 3, 5, and 6. Compute the mean squared error, then explain why the same number has different implications on training data and unseen test data.",
+        "zh_cn": "真实值为 2、4、8，模型预测值为 3、5、6。请计算均方误差，并解释同一个数值出现在训练数据和未见测试数据上时为什么含义不同。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q009",
+      "target_concept": "bias_variance_trade_off",
+      "question_type": "diagnostic_comparison",
+      "prompts": {
+        "en": "One model is consistently wrong in a similar way across samples; another changes dramatically when the training sample changes. Diagnose their likely bias and variance and explain how flexibility is involved.",
+        "zh_cn": "一个模型在不同样本上总是以相似方式出错，另一个模型在训练样本变化时结果剧烈改变。请判断它们可能具有怎样的偏差和方差，并解释模型灵活性的作用。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q010",
+      "target_concept": "k_nearest_neighbors_flexibility",
+      "question_type": "parameter_reasoning",
+      "prompts": {
+        "en": "In K-nearest neighbors, what happens when K changes from a very small value to a much larger value? Explain the effects on flexibility, bias, variance, and sensitivity to noise.",
+        "zh_cn": "在 K 近邻方法中，当 K 从很小变为很大时会发生什么？请解释它对灵活性、偏差、方差以及噪声敏感性的影响。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q011",
+      "target_concept": "simple_linear_regression_and_least_squares_fitting",
+      "question_type": "formulation",
+      "prompts": {
+        "en": "Formulate a simple linear regression for predicting electricity use from temperature. Distinguish the population relationship from fitted estimates and explain what least squares minimizes.",
+        "zh_cn": "请建立一个用温度预测用电量的简单线性回归模型，区分总体关系与拟合估计，并解释最小二乘法最小化的是什么。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q012",
+      "target_concept": "coefficient_interpretation_and_units",
+      "question_type": "interpretation",
+      "prompts": {
+        "en": "A fitted regression predicts monthly cost from usage hours with an intercept of 20 and a slope of 3. Interpret both coefficients with units and explain when the intercept may lack a practical meaning.",
+        "zh_cn": "一个回归模型用使用小时数预测月度费用，截距为 20，斜率为 3。请结合单位解释这两个系数，并说明为什么截距有时缺乏实际意义。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q013",
+      "target_concept": "standard_error_confidence_interval_and_hypothesis_test",
+      "question_type": "uncertainty_reasoning",
+      "prompts": {
+        "en": "A regression coefficient estimate is positive but has a wide confidence interval containing zero. Explain what the standard error, confidence interval, and hypothesis test each say about the evidence.",
+        "zh_cn": "一个回归系数的估计值为正，但较宽的置信区间包含 0。请解释标准误、置信区间和假设检验分别说明了什么。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q014",
+      "target_concept": "r_squared_and_residual_standard_error",
+      "question_type": "metric_comparison",
+      "prompts": {
+        "en": "Two regression models have similar R-squared values but very different residual standard errors because their response variables use different units. Explain what each metric measures and why direct comparison can mislead.",
+        "zh_cn": "两个回归模型的 R 方接近，但由于响应变量单位不同，残差标准误差差异很大。请解释两个指标各自衡量什么，以及为什么直接比较可能误导。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q015",
+      "target_concept": "multiple_regression_and_confounding",
+      "question_type": "conditional_interpretation",
+      "prompts": {
+        "en": "Advertising spending appears strongly related to sales in simple regression, but the relationship weakens after season is added. Explain how multiple regression and confounding can produce this result.",
+        "zh_cn": "在简单回归中，广告支出与销量关系很强，但加入季节因素后这种关系减弱。请用多元回归和混杂解释这一结果。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q016",
+      "target_concept": "qualitative_predictors_and_dummy_coding",
+      "question_type": "coding_interpretation",
+      "prompts": {
+        "en": "A categorical predictor has three regions: north, central, and south. Explain how dummy variables can represent it in regression and how the choice of reference region affects coefficient interpretation.",
+        "zh_cn": "一个类别预测变量包含北部、中部和南部三个地区。请解释如何在回归中使用虚拟变量表示它，以及参照地区的选择如何影响系数解释。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q017",
+      "target_concept": "polynomial_regression_and_non_linearity",
+      "question_type": "model_extension",
+      "prompts": {
+        "en": "A scatterplot shows a curved relationship between age and risk. Explain how polynomial regression can represent the pattern, what remains linear about the model, and what overfitting risk must be checked.",
+        "zh_cn": "散点图显示年龄与风险之间存在曲线关系。请解释多项式回归如何表示这种模式，模型在哪个意义上仍是线性的，以及需要检查什么过拟合风险。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q018",
+      "target_concept": "interaction_effects_and_the_additive_assumption",
+      "question_type": "transfer_interpretation",
+      "prompts": {
+        "en": "A treatment effect becomes larger as baseline risk increases. Explain how an interaction term can represent this and contrast it with an additive model.",
+        "zh_cn": "某种治疗的效果会随着基线风险上升而增强。请解释交互项如何表示这一现象，并将其与加性模型进行比较。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q019",
+      "target_concept": "residual_plot_diagnosis",
+      "question_type": "alternative_diagnosis",
+      "prompts": {
+        "en": "Residuals fan out as fitted values increase but show no clear curve. Identify the main issue, distinguish it from non-linearity, and explain what part of linear-model reasoning it threatens.",
+        "zh_cn": "残差随着拟合值增大而呈扇形扩散，但没有明显曲线。请判断主要问题，将其与非线性区分，并说明它威胁了线性模型推断的哪个部分。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q020",
+      "target_concept": "outliers_high_leverage_and_influence",
+      "question_type": "case_comparison",
+      "prompts": {
+        "en": "Case A has an unusual predictor value but lies near the fitted line; Case B has ordinary predictors but a very large residual. Classify their leverage and outlier status and discuss possible influence.",
+        "zh_cn": "样本 A 的预测变量取值异常但接近拟合直线；样本 B 的预测变量普通但残差很大。请判断它们的杠杆值和离群状态，并讨论可能的影响力。"
+      },
+      "reviewed_target_node_ids": []
+    },
+    {
+      "question_id": "ISLP_Q021",
+      "target_concept": "collinearity_and_variance_inflation",
+      "question_type": "remedy_reasoning",
+      "prompts": {
+        "en": "A regression gives large standard errors for two related predictors, but their joint F-test is strong. Explain how collinearity can produce this pattern and what should not be concluded about their joint predictive value.",
+        "zh_cn": "回归中两个相关预测变量的标准误很大，但它们的联合 F 检验很强。请解释共线性如何产生这一现象，以及不应对它们的联合预测价值作出什么错误结论。"
+      },
+      "reviewed_target_node_ids": []
+    }
+  ]
+}
