@@ -92,18 +92,39 @@ make dev
 
 The backend listens on `http://127.0.0.1:8000` and the frontend on `http://127.0.0.1:5173` by default. Useful development URLs include `http://127.0.0.1:8000/health` and `http://127.0.0.1:8000/docs`. The frontend proxies `/api` and `/health` to the configured backend URL.
 
+Start the backend and standalone participant app together:
+
+```bash
+make simulator-test
+```
+
+The participant app listens on `http://127.0.0.1:5174` by default.
+
 Use separate terminals when only one service is needed:
 
 ```bash
 make backend
 make frontend
+make simulator-test-frontend
 ```
+
+The standalone participant app reads compatible domains, reviewed graphs, and
+bilingual question banks from [`benchmark/question_banks/`](benchmark/question_banks/)
+directly through the backend. Its optional
+`simulator-test-frontend/.env.local` is needed only for API-origin, title,
+provider, or language overrides.
+
+The catalog currently contains 80 atomic bilingual items for each of Economy,
+ISLP, and OSTEP. Each bank is accepted only with a source audit, per-item roleplay
+screen, and content-hash-bound quality review; expert and psychometric validation
+remain pending.
 
 Startup settings are non-secret Make variables. Inspect them with `make config` and override them from the command line or process environment without editing source files:
 
 ```bash
 make dev BACKEND_PORT=8001 FRONTEND_PORT=5174
 make frontend VITE_API_PROXY_TARGET=http://127.0.0.1:8001
+make simulator-test-frontend VITE_API_PROXY_TARGET=http://127.0.0.1:8001
 ```
 
 Application credentials and model/service settings remain in the root `.env`; Make does not print or parse those secrets. `make env` creates `.env` from `.env.example` only when it is missing and never overwrites an existing file. Run `make help` for the complete command list.
@@ -134,6 +155,8 @@ V1 benchmark construction uses three fixed source/domain identities: `Economy`, 
 
    A project-owned graph authoring agent workflow uses model API calls to generate candidate knowledge graphs and candidate knowledge maps. For graph generation, the request contains only the selected fixed source, optional run id, and provider; the backend validates the source's local Markdown and loads its stable research scope from metadata. Graph authoring then derives Parsed Source Segments, extracts segment-level node drafts with bounded internal parallelism, and reconciles them into source-grounded node skeletons with source locators and concise grounding notes. Later rubric and edge steps consume structured intermediates rather than full source text. The final review output remains two JSON list files, one for nodes and one for edges. Candidate nodes must be extracted from the selected authoritative source and carry source locators; they should not be brainstormed from model memory. Persona, background, preferences, and task goals can guide map generation, but v1 evaluation uses only benchmark-author reviewed authored knowledge graphs and ground-truth knowledge maps for scoring.
 
+   The Knowledge Graph workbench can reload a saved candidate by domain and run id for continued editing. An explicit Confirm saves and revalidates that candidate, publishes a new immutable reviewed graph version, and switches the page to the published read-only snapshot. Reviewed graphs can also be loaded directly by domain and version; evaluation runtime continues to accept reviewed artifacts only.
+
    Each v1 evaluation episode is declared by an explicit immutable manifest that binds the authored graph, hidden map, optional profile context, `max_turns`, interaction rule, fixed `squared_mastery_distance_v1` scoring profile, and pinned agent/provider/model/temperature/retry configuration. The runtime workbench loads eligible episodes into one persistent FIFO run queue for bounded parallel execution, turn-level checkpoint recovery, individual cancellation, and per-episode result inspection; it does not create batch resources.
 
 2. **Human Verification**
@@ -144,6 +167,16 @@ V1 benchmark construction uses three fixed source/domain identities: `Economy`, 
 
    An LLM-based user simulator is conditioned on the hidden knowledge map and evidence, then answers diagnostic questions naturally without revealing mastery labels, hidden evidence ids, or the full map. It may be uncertain, partially correct, or reveal misconceptions, but its answers should remain consistent with the hidden map and evidence.
    See `docs/UserSimulator.md` for the Phase 5 SAGE simulator workflow, grounding, blueprint boundary, fallback, and single-turn boundaries; the human-validity protocol and materials are in [`experiments/02_simulator_human_validity/`](experiments/02_simulator_human_validity/README.md).
+
+   The standalone React app under
+   [`simulator-test-frontend/`](simulator-test-frontend/README.md) automates the
+   initial personal-fidelity study without exposing the internal research
+   workbench. A participant revises and confirms their Profile and node-level
+   Knowledge Map, receives 20 sampled items from an independent bilingual bank,
+   answers before SAGE answers the same item, and rates the two answers side by
+   side. The frontend discovers compatible domain, graph, and bank data from
+   the backend; the backend freezes the selected identities in each resumable
+   private session. Expert blind rating is deferred to a later stage.
 
 4. **Agent Interaction**
 

@@ -9,7 +9,7 @@
 | 编号 | 实验 | 设计 | 材料 | 结果 |
 | --- | --- | --- | --- | --- |
 | 01 | [专家验证知识图谱的科学有效性](01_kg_scientific_validity/README.zh-CN.md) | 已绑定 Economy、ISLP 与 OSTEP candidate graphs | 离线 HTML + JSON 评审与确认包已准备 | 未运行 |
-| 02 | [基于真人数据验证 SAGE Simulator](02_simulator_human_validity/README.zh-CN.md) | 已准备 | 已准备，待专家审核与预测试 | 未运行 |
+| 02 | [SAGE Simulator 个人一致性](02_simulator_human_validity/README.zh-CN.md) | 简化主协议与自动化流程已实现 | 三个领域各 80 道原子双语题，已完成 author-side 审核，待图谱绑定、专家审核与 pilot | 未运行 |
 | 03 | [测试 Agent 的知识地图重建能力](03_agent_reconstruction/README.zh-CN.md) | 已准备 | 目前仅有冻结清单 | 未运行 |
 
 ## 目录约定
@@ -29,7 +29,7 @@
 三个实验支持的主张不同：
 
 1. 实验 01 评估冻结 reviewed graph 的内容有效性。
-2. 实验 02 评估 Simulator 的状态忠实度、安全性，以及相对于留出真人数据的代理有效性。
+2. 实验 02 当前评估参与者确认 Profile/Map 后，Simulator 回答是否代表本人；专家盲评后续接入。
 3. 实验 03 在固定交互预算下，衡量 Tested Agent 重建隐藏用户 Knowledge Map 的准确性。
 
 实验 02 完成前，可以先运行实验 03 的工程冒烟测试。但此时科学结论只能描述合成 benchmark 上的表现，不能外推到真人用户。
@@ -58,6 +58,13 @@ experiments/03_agent_reconstruction/results/runs/{run_id}/
 
 ```text
 experiments/03_agent_reconstruction/runtime/run_queue.json
+```
+
+实验 02 的私有会话与 Map 修订轨迹分别写入：
+
+```text
+experiments/02_simulator_human_validity/results/private/sessions/{session_id}/
+experiments/02_simulator_human_validity/results/private/map_reviews/{map_id}.json
 ```
 
 以上路径取代旧的 `experiments/runs/` 与 `experiments/runtime/` 布局。

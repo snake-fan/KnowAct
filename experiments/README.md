@@ -11,7 +11,7 @@ method evidence remain under `docs/research/`.
 | ID | Experiment | Design | Materials | Results |
 | --- | --- | --- | --- | --- |
 | 01 | Expert validation of Knowledge Graph scientific validity | Prepared for Economy, ISLP, and OSTEP candidate graphs | Offline HTML + JSON review and confirmation packages prepared | Not run |
-| 02 | Human-data validation of SAGE Simulator validity | Prepared | Prepared for expert review and pilot | Not run |
+| 02 | SAGE Simulator personal fidelity | Simplified protocol and automated flow implemented | Three 80-item atomic bilingual banks with author-side reviews; graph binding, expert review, and pilot pending | Not run |
 | 03 | Tested-agent Knowledge Map reconstruction | Prepared | Freeze checklist only | Not run |
 
 ## Directory contract
@@ -38,8 +38,9 @@ analysis, and report are complete.
 The three experiments support different claims:
 
 1. Experiment 01 assesses the content validity of a frozen reviewed graph.
-2. Experiment 02 assesses simulator state fidelity, safety, and proxy validity
-   against held-out human data.
+2. Experiment 02 currently asks whether Simulator answers represent a
+   participant after participant-confirmed Profile and Map review; expert blind
+   rating is deferred.
 3. Experiment 03 measures how accurately tested agents reconstruct hidden user
    Knowledge Maps under a fixed interaction budget.
 
@@ -69,6 +70,13 @@ The persistent queue control file is generated under:
 
 ```text
 experiments/03_agent_reconstruction/runtime/run_queue.json
+```
+
+Private Experiment 02 sessions and Map revision traces are generated under:
+
+```text
+experiments/02_simulator_human_validity/results/private/sessions/{session_id}/
+experiments/02_simulator_human_validity/results/private/map_reviews/{map_id}.json
 ```
 
 These paths replace the legacy `experiments/runs/` and

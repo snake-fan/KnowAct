@@ -38,7 +38,10 @@ Current opened endpoint:
 - `GET /health`: backend process health.
 - `GET /api/authoring/source-materials`: lists the three valid filesystem-managed graph sources (`Economy`, `ISLP`, and `OSTEP`). The benchmark author places each UTF-8 Markdown file directly under `storage/source_materials/{source_id}/`; there is no upload endpoint.
 - `POST /api/authoring/graph-candidates`: accepts only `source_id`, optional `run_id`, and `client_provider`. It requires `benchmark_domain == source_id` and loads the user-facing domain summary, aspect boundary, at least 50 reference-grounded representative questions, domain-specific exclusions, target node count, and maximum node count from the source's versioned `metadata.json`. It derives `Parsed Source Segments`, extracts aspect-relevant drafts with exact source excerpts, mechanically validates excerpt membership, reconciles and selects a representative set near the target without exceeding the maximum, runs an independent skeleton verifier, then authors rubrics and precision-first edges. The initial design target is about 20 nodes with a default maximum of 24; the target is not a quota. It writes candidate node/edge files, the sidecar run log, scope/evidence/reconciliation/verification intermediates, and per-step raw/parser traces. Only the node and edge files are candidate graph review artifacts.
+- `GET /api/authoring/candidate-graphs/{benchmark_domain}` and `GET /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}`: list saved candidate runs and read one candidate node/edge snapshot for workbench review.
+- `PUT /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}`: structurally validates and saves benchmark-author edits to an existing candidate run; it does not create reviewed artifacts.
 - `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`: revalidates one saved candidate graph run, copies its node and edge lists into `graphs/{version}/` as reviewed authored graph artifacts, and generates `graph_manifest.json`. Reviewed graph versions are immutable; corrections publish a new version.
+- `GET /api/authoring/graphs/{benchmark_domain}` and `GET /api/authoring/graphs/{benchmark_domain}/{version}`: list and read immutable reviewed graph snapshots for read-only workbench preview.
 - `POST /api/authoring/map-candidates`: loads one reviewed graph version and one confirmed Profile Context snapshot by identity and generates one evidence-backed Candidate Knowledge Map. It runs one full-graph outline call, partitions evidence authoring into contiguous reviewed-node windows with optional request-level batch-size control, applies one shared sampling temperature, and writes generation-time edge-consistency warnings. Candidate-map run ids cannot overwrite an existing run directory; retry with a new run id.
 - `GET /api/authoring/candidate-maps/{benchmark_domain}/{run_id}`: returns one saved Candidate Knowledge Map and its debug artifact references for benchmark-author inspection.
 - `POST /api/authoring/candidate-maps/{benchmark_domain}/{run_id}/promotion`: revalidates one saved Candidate Knowledge Map with its reviewed graph version and confirmed Profile Context, converts lifecycle `kind` from `candidate` to `ground_truth`, and publishes immutable `map.json` plus minimal `map_manifest.json` under `maps/{map_id}/`. Existing map ids return conflicts; generation-time consistency warnings are ignored, and successful promotion removes the originating run from `candidate_maps/`.
@@ -191,7 +194,7 @@ Resolved `Graph File Layout`:
 Implementation note:
 
 - Implemented promotion slice: `backend/knowact/authoring/review_promotion.py` revalidates saved candidate node/edge files and builds `graph_manifest.json`; `backend/knowact/storage/reviewed_graphs.py` reads and publishes artifact snapshots.
-- Opened review-gated interface: `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`. Read-only inspection of reviewed graphs remains a future stable API addition.
+- Opened workbench interfaces: candidate graph list/read/save, explicit promotion, and reviewed graph list/read. The Knowledge Graph page loads candidates in editable mode; Confirm saves and promotes to a new immutable version, then switches to the published reviewed snapshot in read-only mode.
 - Authoring API boundary: the Phase 2 candidate endpoint may create candidate files for review, but it must not create reviewed `authored_nodes.json` or `authored_edges.json`.
 - Current expert-review execution for the three generated `Economy`, `ISLP`, and
   `OSTEP` candidates lives under `experiments/01_kg_scientific_validity/`.
@@ -375,6 +378,15 @@ Implementation note:
 - Structures to implement: simulator workflow modules under `backend/knowact/simulator/`, aligned with `docs/UserSimulator.md`: `grounding.py` for visible-only question grounding, `context_builder.py` for directly grounded simulator-only context, `policy.py` for the Answer Policy component that outputs a de-identified `Simulator Answer Blueprint`, `generators.py` for Answer Generator interfaces and LLM/rule-based implementations, `templates/common.py` for shared simulator prompt sections, `templates/answer_generation.py` for answer-generation prompt/message helpers, optional `style.py` for content-preserving Profile Context style, `fallbacks.py` for safe fallback text, `debug_trace.py` for local hidden turn trace artifacts, `service.py` for turn orchestration, and `turn.py` for stateless single-turn contracts. `Simulator Answer Blueprint` is the de-identified intermediate artifact produced by policy and consumed directly by generation; do not add a catch-all simulator prompt module or a post-generation validation agent. LLM calls remain behind `backend/knowact/llm/`.
 - Interfaces opened: `POST /api/simulator/turn` selects reviewed artifacts by `benchmark_domain` and `map_id`, accepts request-level `client_provider` with the same provider vocabulary as authoring, derives `graph_version` and `user_id` from the reviewed map manifest, loads confirmed Profile Context when available for content-preserving style only, continues with a non-leaking turn warning if that style context is missing, rejects inline profile-context overrides, accepts one primary diagnostic question plus optional request-carried visible dialogue context per call, writes a local hidden debug trace for every turn request, and returns only the simulator answer plus turn observation metadata. Formal tested-agent-visible observation metadata should not include benchmark-author configuration warnings. If debug trace metadata is requested, the response should include only a trace reference or availability flag, not the full simulator debug trace.
 - Stable formal API exposure should still happen later through episode run endpoints, where simulator answers become visible `Interaction Observations` inside an evaluation run rather than hidden state dumps.
+- Experiment 02 adds a separate participant-facing orchestration under
+  `backend/knowact/runtime/simulator_experiment.py` and
+  `/api/experiments/simulator-tests`. It reuses reviewed graph/map and SAGE
+  contracts but is not an Episode Runtime: the participant confirms Profile
+  and every Map node, the service samples exactly 20 unique items from an
+  independently versioned bilingual bank, saves the human answer before
+  generation, collects five self-ratings per pair, and persists resumable
+  private sessions. Expert blind rating remains a later artifact-producing
+  stage.
 
 ## Phase 6: Episode Runtime Contract
 
@@ -543,6 +555,12 @@ Milestone M10:
 - Backend APIs expose graphs, maps, episode manifests, simulator runs, agent outputs, and reports.
 - A React research interface supports graph inspection, knowledge-map comparison, immutable episode registration, queued parallel execution, transcript review, and report browsing.
 - Runtime navigation is `Simulator -> Episodes -> Run Queue`.
+- A standalone participant React app under `simulator-test-frontend/`
+  automates Experiment 02 without exposing the internal research workbench:
+  Profile confirmation, participant Map review, bilingual twenty-item
+  sampling, human-first paired answers, five-item self-evaluation, and
+  session-code resume. It does not list all sessions or register/run formal
+  episodes.
 - `Episodes` contains registration, reviewed bindings, immutable execution configuration, and legacy compatibility warnings; it contains no formal run trigger.
 - `Run Queue` uses an episode list on the left and selected-episode detail on the right. It has no batch-history or batch-result view.
 - Knowledge graph views distinguish user-independent nodes/edges from user-specific map state.
@@ -563,6 +581,18 @@ Implementation note:
 - Remove the old Run Episode form and its queue-time provider/run-id controls from `Episodes`; run ids are allocated by the backend.
 - Interfaces to open: stable `/api` routes for graph inspection, map inspection with visibility-aware redaction, episode manifests/options, persistent queue admission/status/cancel/concurrency, visible transcript, and report browsing.
 - Development-only endpoints should either be retired or kept explicitly marked after equivalent stable workbench routes exist.
+- Keep participant code in the independently buildable
+  `simulator-test-frontend/` package. Discover compatible domain, reviewed
+  graph, and question bank identities through backend read-only catalogs and
+  persist the chosen identities in the backend session; never add the app back
+  to `frontend/src/App.tsx` navigation or fetch the session collection. Keep
+  question text in `benchmark/question_banks/` rather
+  than embedding it in React.
+- Keep the Economy, ISLP, and OSTEP v2 banks at 80 atomic bilingual questions
+  each. Catalog admission requires one cognitive operation per prompt, an
+  accepted first-party source reference, a concise per-item roleplay answer,
+  and a quality-review artifact bound to the exact bank content hash. These
+  authoring checks do not replace expert or psychometric validation.
 
 Verification for the queue slice should cover manifest option/catalog validation, legacy exclusion, legal status transitions, completed locking, FIFO persistence, dynamic concurrency, per-episode partial admission, queued and cooperative-running cancellation, initial and per-turn checkpoint atomicity, mid-turn replay, same-run resume, corrupt-checkpoint rejection plus explicit new-run restart, startup reconciliation, visibility regression, frontend API typing, and frontend production build. Model-backed tests use fakes and must not call real providers.
 

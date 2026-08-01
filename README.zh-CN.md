@@ -92,18 +92,36 @@ make dev
 
 后端默认监听 `http://127.0.0.1:8000`，前端默认监听 `http://127.0.0.1:5173`。开发时常用地址包括 `http://127.0.0.1:8000/health` 和 `http://127.0.0.1:8000/docs`。前端会把 `/api` 和 `/health` 代理到配置的后端地址。
 
+同时启动后端和独立参与者应用：
+
+```bash
+make simulator-test
+```
+
+独立参与者应用默认监听 `http://127.0.0.1:5174`。
+
 只需要单独运行一个服务时，可以在不同终端使用：
 
 ```bash
 make backend
 make frontend
+make simulator-test-frontend
 ```
+
+独立参与者应用通过后端直接读取兼容的 domain、reviewed graph 和
+[`benchmark/question_banks/`](benchmark/question_banks/) 下的双语题库。只有需要覆盖
+API 地址、实验标题、provider 或语言时，才需要配置可选的
+`simulator-test-frontend/.env.local`。
+
+当前目录为 Economy、ISLP、OSTEP 各提供 80 道原子双语题。每套题库必须同时通过来源
+审核、逐题角色试答和内容哈希绑定审核后才能被后端发现；领域专家和心理测量验证仍未完成。
 
 启动地址属于非敏感 Make 变量。使用 `make config` 查看当前值，也可以通过命令行或进程环境覆盖，无需修改源码：
 
 ```bash
 make dev BACKEND_PORT=8001 FRONTEND_PORT=5174
 make frontend VITE_API_PROXY_TARGET=http://127.0.0.1:8001
+make simulator-test-frontend VITE_API_PROXY_TARGET=http://127.0.0.1:8001
 ```
 
 应用凭据、模型和外部服务配置仍保存在根目录 `.env`；Make 不会打印或解析这些秘密。`make env` 只在 `.env` 不存在时从 `.env.example` 创建文件，不会覆盖已有配置。完整命令可通过 `make help` 查看。
@@ -132,6 +150,8 @@ v1 benchmark construction 固定使用三个 source/domain identity：`Economy`�
 
    项目自写的 graph authoring agent workflow 会通过模型 API 调用生成 candidate knowledge graph 和 candidate knowledge map。Graph generation 请求只包含固定 Source、可选 Run ID 和 Provider；后端校验本地 Markdown，并从 metadata 加载稳定研究 scope。随后 workflow 派生 Parsed Source Segments，用受控并行抽取 segment-level node drafts，再通过 reconciliation 生成带 source locator 和简短 grounding notes 的 source-grounded node skeleton。后续 rubric 与 edge steps 只消费结构化 intermediate artifacts，不再接收完整 source text。最终审阅输出仍是分别存放 nodes 和 edges 的两个 JSON list 文件。Candidate nodes 必须从选定 authoritative source 中抽取并保留 source locator；不应依赖模型记忆现场编写。Persona、background、preferences 和 task goal 可以指导 map 生成，但 v1 evaluation 的评分只使用 benchmark author 审核后的 authored knowledge graph 和 ground-truth knowledge map。
 
+   Knowledge Graph workbench 可以按 domain 和 run id 重新加载已保存的 candidate，继续编辑。显式 Confirm 会先保存并重新校验该 candidate，再发布一个新的不可变 reviewed graph version，并把页面切换到刚发布的只读 snapshot。Reviewed graph 也可按 domain 和 version 直接加载；evaluation runtime 仍然只接受 reviewed artifacts。
+
    每个 v1 evaluation episode 由显式且不可变的 manifest 声明，用于绑定 authored graph、hidden map、可选 profile context、`max_turns`、interaction rule、固定的 `squared_mastery_distance_v1` scoring profile，以及锁定的 agent / provider / model / temperature / retry 配置。Runtime workbench 将可运行 episodes 加载到一个持久化 FIFO run queue，支持受限并行执行、turn-level checkpoint 恢复、单个 episode 取消与结果查看，不创建 batch 资源。
 
 2. **人工校验**
@@ -142,6 +162,14 @@ v1 benchmark construction 固定使用三个 source/domain identity：`Economy`�
 
    基于隐藏知识地图和 evidence 构造 LLM 用户模拟器，使其自然回答诊断问题，但不暴露 mastery label、hidden evidence id 或完整真实知识地图。它可以表现出不确定、部分正确或误解，但回答应与隐藏 map 和 evidence 保持一致。
    Phase 5 SAGE simulator workflow、question grounding、blueprint boundary、fallback 和 single-turn 边界见 `docs/UserSimulator.md`；人类有效性协议与材料见 [`experiments/02_simulator_human_validity/`](experiments/02_simulator_human_validity/README.zh-CN.md)。
+
+   独立 React 应用
+   [`simulator-test-frontend/`](simulator-test-frontend/README.zh-CN.md)
+   已把第一阶段个人一致性实验自动化，并与内部 research workbench 隔离。参与者修订并
+   确认自己的 Profile 和逐节点 Knowledge Map，从独立双语题库抽取 20 题，每题先由
+   参与者回答，再由 SAGE 回答同一题，最后并排完成自评。前端从后端发现兼容的
+   domain、graph 和题库，后端把实际选中的 identity 固定在可恢复的私有会话中；
+   专家盲评留到后续阶段。
 
 4. **agent 交互**
 

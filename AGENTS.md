@@ -29,19 +29,23 @@
 
 新增或调整源码结构、模块边界、runtime wiring、schema、validation、authoring、simulator、agent、scoring、reports 或 frontend workbench 前，agent 必须先阅读 `docs/V1ProjectArchitecture.md` 和 `docs/V1ProjectBreakdown.md`。架构实现应跟随 `docs/V1ProjectArchitecture.md` 的推荐模块边界和数据流；开发顺序应参考 `docs/V1ProjectBreakdown.md` 的阶段拆解。不要在未对齐这两份文档的情况下随意新增平行目录、替代概念或临时架构。若这两份文档与已接受 ADR 或 `CONTEXT.md` 冲突，以 ADR 和 `CONTEXT.md` 为准，并在最终回复中说明冲突点。
 
-- `frontend/`：React 前端，用于 benchmark 配置、交互界面、实验结果查看和知识地图可视化；当前包含 Knowledge Graph、User Profile、User Map、Simulator、Episodes 和 Run Queue workbench modules。Knowledge Graph workbench 可按 domain/version 加载 reviewed graph snapshot 进行只读预览；该功能不编辑 candidate artifacts，也不执行 promotion。
+- `frontend/`：内部 React research workbench，用于 benchmark 配置、交互界面、实验结果查看和知识地图可视化；当前包含 Knowledge Graph、User Profile、User Map、Simulator、Episodes 和 Run Queue。Knowledge Graph workbench 可按 domain/run 加载并编辑 candidate graph，也可按 domain/version 加载 reviewed graph snapshot 进行只读预览；显式 Confirm 会先保存并重新校验 candidate，再将其发布为不可覆盖的 reviewed graph version。
+- `simulator-test-frontend/`：独立的 participant-facing React 应用，只提供 Experiment 02 的 Profile 修订、Map 校验、20 题回答、自评和 session 恢复。它从后端只读目录自动选择兼容的 domain、reviewed graph 与题库，实际 identity 固定在后端 session 中；不得重新引入内部 workbench 导航或全体 session 列表。
 - `backend/`：FastAPI 后端，用于 profile generation、user simulator、agent loop、evaluation API 和实验任务编排。
 - `backend/knowact/api/`：FastAPI routers；当前包含 `/api/authoring` surface。Graph authoring 固定从 `storage/source_materials/{Economy,ISLP,OSTEP}/` 读取 benchmark author 手工放置的 Markdown，并从各自 versioned `metadata.json` 加载 domain、面向用户的 `domain_summary`、aspect、至少 50 道 representative questions、领域 exclusions 和节点预算；User Profile workbench 只读展示 metadata summary，profile-context generation 由 backend 解析该字段，client 不得覆盖。Graph generation 请求只接受 source、run id 与 provider。该 surface 生成 reviewable candidate graph artifacts，通过显式 review confirmation 将校验后的 candidate snapshot promote 为 reviewed authored graph version，并从 reviewed graph 与 confirmed Profile Context snapshot 生成可检查的 Candidate Knowledge Map。
 - `backend/knowact/core/` 和 `backend/knowact/validation/`：当前 V1 已开始实现的 schema 与 validation spine。
 - `backend/knowact/simulator/`：Phase 5 user simulator contracts；当前包含 usable stateless single-turn DTO/API boundary，用于建立 tested-agent-visible request/response 边界。
-- `backend/knowact/runtime/`：Episode manifest registry、tested-agent visibility boundary、turn runner、持久化 FIFO Episode Run Queue、turn-level checkpoint 和单进程并发调度。
+- `backend/knowact/runtime/`：Episode manifest registry、tested-agent visibility boundary、turn runner、持久化 FIFO Episode Run Queue、turn-level checkpoint 和单进程并发调度；另含与 formal Episode Runtime 分离的 Simulator Test session orchestration。
 - `benchmark/fixtures/`：小型 development fixtures，可用于跑通 schema、validation 和 runtime wiring；不要把它们误认为正式 v1 benchmark graph。
+- `benchmark/question_banks/`：独立、版本化的 benchmark 题库 JSON；Economy、ISLP、OSTEP 各保存 80 道单一认知操作的双语题。每道题以稳定 identity 同时保存英文和中文题面，并通过 `reviews/` 下逐题角色试答与内容哈希审核后，供 Experiment 02 和后续 benchmark runtime 读取。
 - `test/`：当前 Python `unittest` 测试入口。
 - `docs/`：研究综述、数据 schema、知识地图、评估指标和 workflow 记录。
 - `experiments/`：三个正式实验的设计、执行材料与结果归档。Episode Run
   产物固定写入
   `experiments/03_agent_reconstruction/results/runs/{run_id}/`，队列状态写入
-  `experiments/03_agent_reconstruction/runtime/run_queue.json`。
+  `experiments/03_agent_reconstruction/runtime/run_queue.json`。Experiment 02
+  从 `benchmark/question_banks/` 读取独立双语题库；参与者 session 与 Map 修订写入
+  被 Git 忽略的 `results/private/`。
 
 如果实际目录结构发生变化，请同步更新 `README.md`、`README.zh-CN.md` 和本文件。
 

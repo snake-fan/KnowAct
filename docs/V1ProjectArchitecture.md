@@ -32,7 +32,8 @@ Authoritative Source
 
 ## Recommended Repository Layout
 
-建议保持三条主线：文档与决策、后端 benchmark core、前端 research workbench。
+建议保持四条主线：文档与决策、后端 benchmark core、内部 research workbench、
+独立 participant frontend。
 
 ```text
 /
@@ -67,9 +68,14 @@ Authoritative Source
 │       ├── features/
 │       ├── components/
 │       └── api/
+├── simulator-test-frontend/
+│   ├── src/
+│   ├── package.json
+│   └── Dockerfile
 ├── benchmark/
 │   ├── domains/
 │   ├── fixtures/
+│   ├── question_banks/
 │   └── runtime/
 ├── experiments/
 │   ├── 01_kg_scientific_validity/
@@ -86,10 +92,14 @@ Authoritative Source
 说明：
 
 - `backend/knowact/` 是 benchmark 的 Python package 主体。
-- `benchmark/` 存放 benchmark artifacts，包括 development fixtures、candidate review data、reviewed graph/map data 和 runtime episode manifests。`benchmark/runtime/episodes/` 是跨 domain 的 `Runtime Episode Registry`。`benchmark/domains/` 可以继续被默认 ignore；只有明确要发布或保留的 reviewed artifacts 才应有意加入版本库。
+- `frontend/` 是内部 research workbench；`simulator-test-frontend/` 是权限面更小、
+  可独立构建部署的参与者应用。两者不共享导航、bundle 或 session-list UI。
+- `benchmark/` 存放 benchmark artifacts，包括 development fixtures、独立版本化题库、candidate review data、reviewed graph/map data 和 runtime episode manifests。双语题库位于 `benchmark/question_banks/`；`benchmark/runtime/episodes/` 是跨 domain 的 `Runtime Episode Registry`。`benchmark/domains/` 可以继续被默认 ignore；只有明确要发布或保留的 reviewed artifacts 才应有意加入版本库。
 - `experiments/` 按三个研究实验分别存放设计、执行材料和结果。Experiment
-  03 的 `results/runs/` 保存 Episode Run outputs，`runtime/` 保存队列控制
-  状态；默认不提交大体积、敏感或可重新识别参与者的输出。
+  02 从 `benchmark/question_banks/` 读取独立双语题库，参与者会话和 Map
+  修订记录位于被 Git 忽略的 `results/private/`；Experiment 03 的
+  `results/runs/` 保存 Episode Run outputs，`runtime/` 保存队列控制状态。
+  默认不提交大体积、敏感或可重新识别参与者的输出。
 - `Reference/` 中的 PDF 或源材料可以作为本地工作资料，但正式 benchmark data 应通过 `Source Locator` 和 source metadata 保持可审计，不依赖把大型原始 PDF 强绑定进 runtime。
 
 ## Backend Architecture
@@ -132,6 +142,8 @@ core
 - `interaction.py`: `DiagnosticQuestion`, simulator answer, transcript turn, interaction observation.
 - `scoring.py`: scoring profile name, mastery levels, score report schemas.
 - `agent.py`: tested-agent protocol input/output schemas.
+- `simulator_experiment.py`: 双语题库、participant-reviewed map revision、
+  20 题会话、回答对和参与者自评 schemas。
 
 原则：
 
@@ -151,6 +163,8 @@ core
 - manifest validation: graph/map/profile/scoring binding 完整，拒绝 per-episode scoring overrides。
 - visibility validation: hidden evidence 不进入 tested-agent-visible context。
 - reconstruction validation: final reconstructed map 引用 visible evidence，缺失项标记为 `Missing Prediction`。
+- question-bank validation: v2 双语题只包含一个认知操作，审核逐题完整覆盖，来源引用
+  可解析，且 quality-review hash 与题库原文一致。
 
 ### `storage/`
 
@@ -163,6 +177,8 @@ core
 - `EpisodeRepository`: 读取 episode manifests。
 - `RunRepository`: 写入 transcripts、agent outputs、scoring reports。
 - `ArtifactPathResolver`: 统一处理 development fixture、reviewed benchmark、experiment run output 的路径。
+- `SimulatorExperimentRepository`: 只读取通过 source/roleplay/hash review 的版本化双语
+  题库，并原子保存私有 Simulator Test session 与 Map review provenance。
 
 原则：
 
@@ -324,6 +340,12 @@ data or bypass structural validation and explicit non-overwriting promotion.
 - `debug_trace.py`: local hidden turn trace writing, filesystem-safe trace ids, repeated question-directory overwrite behavior, and request-scoped raw/parser artifact capture for LLM-backed simulator steps.
 - `service.py`: simulator turn orchestration; wires grounding, context building, answer policy, generation, fallback, and hidden debug trace production.
 - `turn.py`: stateless single-turn DTO/API boundary. The formal turn response selects reviewed artifacts by identity and exposes only visible answer data, coarse turn metadata, non-leaking warnings, and optional debug trace handles. A separate workbench/test response may add only directly grounded node ids for map highlighting.
+
+`runtime/simulator_experiment.py` 组合现有 authoring、reviewed-artifact storage
+与 Simulator service，负责 Experiment 02 的 participant-facing 自动化会话。它与
+formal Episode Runtime 分离：不注册 episode、不调用 Tested Agent、不执行 scoring，
+只发布参与者确认的 reviewed map、抽取固定 20 题、保证真人先答、逐题保存自评并支持
+断点恢复。
 
 边界：
 
@@ -529,6 +551,10 @@ The initial scheduler runs in one FastAPI process with a thread pool capped at 8
 - `GET /api/authoring/graphs/{benchmark_domain}`
 - `GET /api/authoring/graphs/{benchmark_domain}/{version}`
 - `POST /api/authoring/graph-candidates`
+- `GET /api/authoring/candidate-graphs/{benchmark_domain}`
+- `GET /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}`
+- `PUT /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}`
+- `POST /api/authoring/candidate-graphs/{benchmark_domain}/{run_id}/promotion`
 - `GET /api/authoring/users/{benchmark_domain}`
 - `GET /api/authoring/users/{benchmark_domain}/{user_id}`
 - `POST /api/authoring/profile-context-candidates`
@@ -555,6 +581,14 @@ The initial scheduler runs in one FastAPI process with a thread pool capped at 8
 - `GET /api/runtime/run-queue/episodes/{episode_id}`
 - `GET /api/runtime/runs/{run_id}/transcript`
 - `POST /api/tested-agents/simple-llm/turn-test`
+- `GET /api/experiments/simulator-tests/question-banks`
+- `POST /api/experiments/simulator-tests/participant-maps/{benchmark_domain}/{candidate_map_run_id}/confirmation`
+- `GET /api/experiments/simulator-tests/sessions`
+- `POST /api/experiments/simulator-tests/sessions`
+- `GET /api/experiments/simulator-tests/sessions/{session_id}`
+- `POST /api/experiments/simulator-tests/sessions/{session_id}/questions/{question_id}/answer`
+- `PUT /api/experiments/simulator-tests/sessions/{session_id}/questions/{question_id}/self-evaluation`
+- `POST /api/experiments/simulator-tests/sessions/{session_id}/completion`
 - `GET /runs/{run_id}`
 - `GET /runs/{run_id}/report`
 
@@ -572,12 +606,27 @@ Phase 7 的 development/test surface 允许 `POST /api/tested-agents/simple-llm/
 
 `GET /api/authoring/benchmark-domains` 返回可用 domain identities 及其由 versioned source/domain metadata 提供的 `domain_summary`。`POST /api/authoring/profile-context-candidates` 接收 required `benchmark_domain`、required `rough_description`、optional `run_id` 和 request-level `client_provider`；backend 根据 `benchmark_domain` 解析同一份 metadata summary 并传给 profile-context workflow，client 不得 inline 覆盖。
 
+Experiment 02 API 是 participant-facing orchestration，而不是 formal evaluation
+runtime。Map confirmation 要求参与者对 reviewed graph 的每个节点提交完整修订，
+随后发布新的不可变 reviewed map，并把修订 provenance 写入私有结果目录。Session
+creation 从 Economy、ISLP、OSTEP 各 80 道的独立版本化双语题库中，按持久化 seed
+抽取 20 个不重复 `question_id`。v2 题目只允许一个明确的认知操作；后端加载时同时
+校验来源审核、逐题简短角色试答和题库内容哈希。每题必须
+先保存 participant answer，才调用 SAGE 并返回 Simulator answer；全部题目完成五项
+自评后才允许 completion。专家盲评只保留 `pending` 状态，后续用独立 artifact 接入。
+
 ## Benchmark Data Layout
 
-建议把 benchmark data 分为 fixtures、candidate、reviewed、runtime registry 和 runs。
+建议把 benchmark data 分为 question banks、fixtures、candidate、reviewed、runtime
+registry 和 runs。
 
 ```text
 benchmark/
+├── question_banks/
+│   ├── economy_atomic_v2.json
+│   ├── islp_atomic_v2.json
+│   ├── ostep_atomic_v2.json
+│   └── reviews/
 ├── fixtures/
 │   └── statistical_learning_with_python_dev/
 │       ├── graph_manifest.json
@@ -646,6 +695,9 @@ experiments/
 │   ├── design/
 │   ├── materials/
 │   └── results/
+│       └── private/
+│           ├── map_reviews/
+│           └── sessions/
 └── 03_agent_reconstruction/
     ├── design/
     ├── materials/
@@ -674,6 +726,14 @@ Artifact policy:
 - `runtime/episodes/` 是 `Runtime Episode Registry`；它可以收集跨 benchmark domain 的 runnable episodes，但每个 manifest 仍只绑定一个 benchmark domain、一个 reviewed graph version 和一个 hidden reviewed map。
 - Phase 3 graph promotion 将重新校验后的 candidate snapshot 复制到 `graphs/{version}/`，保留原 candidate run，并生成只绑定 metadata 与 node/edge 文件引用的 `graph_manifest.json`。Reviewed graph version 不允许覆盖；修订必须发布新的 version。
 - `experiments/03_agent_reconstruction/runtime/run_queue.json` 是 generated runtime control state，原子保存 global concurrency、stable FIFO order、episode execution status、current/prior run references、cooperative-cancel request 和 safe failure summary。它不是 benchmark authored data，也不建模为 batch history。
+- `benchmark/question_banks/` 保存可审计、版本化的独立双语题库 JSON；每个题目使用
+  稳定 identity，并在同一条目中分别保存英文和中文题面。v2 每题只能有一个
+  `cognitive_operation`，并至少引用一条审核来源；`reviews/` 保存逐题角色试答、预期
+  认知信号、source transfer limits 和题库内容 SHA-256。审核 artifact 不进入参与者或
+  tested-agent 可见边界。每个会话保存 bank version、抽样 seed 和 20 题顺序。
+- `experiments/02_simulator_human_validity/results/private/` 保存参与者 Map 修订和
+  可恢复 session。它包含受限参与者数据并默认被 Git 忽略；后续专家盲评必须派生新的
+  去标识化 artifact，不能覆盖 source session。
 - `experiments/03_agent_reconstruction/results/runs/` 是 generated output，应避免混入人工 authored ground truth。
 - Episode Run 在任何 model/provider call 前创建 `experiments/03_agent_reconstruction/results/runs/{run_id}/`，保存 manifest snapshot、初始 `working_map.json` 和 initial `checkpoint.json`。一个 runtime turn 包含 diagnostic question、simulator answer 和随后基于该回答执行的 working-map update；只有这三部分全部完成才 commit 该 turn，原子写入 `turns/{turn_id}.json`、顶层 `working_map.json` 与新 checkpoint。不默认复制完整 per-turn map snapshot。
 - `checkpoint.json` 是 resume-only transient state；它保存 visible context、working map、runner phase、remaining turn budget、trace progress 和 immutable execution configuration。中断在 turn 中间时丢弃未 commit turn，从上一个 checkpoint 重放，因此 provider call 是 at-least-once，不保证 exactly-once。
@@ -714,11 +774,26 @@ frontend/src/
 - Report viewer: 展示 per-node distances、missing prediction、unsupported inference、episode mastery distance。
 - Review helper: 辅助 benchmark author 检查 candidate nodes/edges/maps，但不自动 promote。
 
+当前 Knowledge Graph workbench 同时提供 candidate 与 reviewed 两条加载路径。Candidate
+graph 按 `benchmark_domain + run_id` 加载后保持可编辑，Save 只覆盖该 candidate run；
+Confirm 要求新的 graph version，先保存并重新校验当前 candidate，再执行显式 promotion，
+成功后页面切换到刚发布的 reviewed snapshot 只读预览。Reviewed graph 按
+`benchmark_domain + version` 直接加载且不提供编辑、保存或再次 promotion 操作。
+
 当前 `Episodes` frontend module 属于 Runtime navigation，排在 `Simulator` 之后。Create Episode 入口执行 **Episode Manifest Registration**：用户选择 `benchmark_domain` 和一个 reviewed `map_id`，前端从 reviewed map manifest 派生 `graph_version`，并从 `GET /api/runtime/episode-options` 返回的 provider-scoped options 选择 `agent_kind`、tested-agent provider/model、simulator provider/model、tested-agent temperature 和 `max_tool_retries`。Model 必须使用 dropdown，不允许 free text。前端将这些字段与 `episode_id`、`benchmark_domain`、`graph_version`、`hidden_map_id` 和 `max_turns` 一起提交到 `POST /api/runtime/episodes`。`interaction_rule = single_diagnostic_question_per_turn` 与 `scoring_profile = squared_mastery_distance_v1` 仍为固定 v1 contract。缺少 execution configuration 的 legacy manifest 只读显示 warning，不提供编辑或运行入口。
 
 Runtime navigation 顺序是 `Simulator -> Episodes -> Run Queue`。`Run Queue` 是唯一 formal run entry：左侧列表仅对 `ready | failed | cancelled` 显示 checkbox，不可入队状态不渲染勾选交互；行中同时显示 status 与 queue position 或 completed-turn progress。顶部提供 3-8 的 global concurrency 选项、enqueue 按钮和 per-episode admission result。右侧 detail 在 `running` 时显示 run id、turn progress 与 recovery state，在 `failed` 时显示 safe error code/message 与必要的 explicit restart action，在 `completed` 时复用现有 metrics、transcript、per-node comparison 和 artifact result panel。Running/queued 中的 episode 可单独 cancel，不提供 cancel-all。
 
 Frontend 通过 `frontend/src/api/runtime.ts` 调用 queue APIs，在当前可见数据中存在 `queued` 或 `running` 时约每 2 秒 polling，不使用 WebSocket/SSE，进入 terminal/no-active state 后停止。结果展示组件从原 `Episodes` workbench 抽离为可复用 runtime result component；原 synchronous Run Episode form 和 route 不再从正式 workbench 触发。
+
+Experiment 02 不进入内部 frontend 导航。独立的
+`simulator-test-frontend/` 复用 Profile/Map authoring 与 experiment APIs，但只呈现
+参与者确认、问题抽样、answer ordering、自评和恢复码。启动时从后端只读目录自动选择
+第一组题数不少于 20 且具有 reviewed graph 的 domain、graph 和 question bank；创建
+session 后由后端持久化实际 identity。provider 可由可选的部署配置覆盖。它不请求全体
+session 列表，不注册 formal episode，也不产生 agent scoring report。跨域部署只允许显式
+`KNOWACT_CORS_ORIGINS`；公网部署仍必须在 gateway 层限制 route allowlist，因为 CORS
+不是鉴权。
 
 UI 边界：
 
