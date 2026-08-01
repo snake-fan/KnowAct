@@ -456,6 +456,11 @@ label {
   font-weight: 700;
 }
 
+.candidate-graph-notice {
+  color: #9a5b16;
+  font-weight: 700;
+}
+
 .dialog-backdrop {
   position: fixed;
   inset: 0;

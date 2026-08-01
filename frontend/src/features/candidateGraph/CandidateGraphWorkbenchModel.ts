@@ -1,7 +1,8 @@
 import type {
   CandidateGraphPayload,
   KnowledgeEdge,
-  KnowledgeNode
+  KnowledgeNode,
+  ReviewedGraphPayload
 } from "../../api/authoring.js";
 
 export type Selection =
@@ -11,8 +12,43 @@ export type Selection =
 
 export type NodePosition = { x: number; y: number };
 export type NodePositionMap = Record<string, NodePosition>;
+export type GraphMode = "candidate" | "reviewed";
+
+export type CandidateGraphLoadState = {
+  graph: CandidateGraphPayload;
+  graphMode: GraphMode;
+  selection: Selection;
+};
 
 export const LEVEL_KEYS = ["L0", "L1", "L2", "L3", "L4", "L5"];
+
+export function candidateGraphLoadState(graph: CandidateGraphPayload): CandidateGraphLoadState {
+  return {
+    graph,
+    graphMode: "candidate",
+    selection: firstNodeSelection(graph)
+  };
+}
+
+export function reviewedGraphLoadState(reviewed: ReviewedGraphPayload): CandidateGraphLoadState {
+  const graph: CandidateGraphPayload = {
+    benchmark_domain: reviewed.benchmark_domain,
+    run_id: `reviewed:${reviewed.graph_manifest.version}`,
+    candidate_nodes: reviewed.authored_nodes,
+    candidate_edges: reviewed.authored_edges,
+    artifact_paths: {
+      output_dir_uri: reviewed.artifact_paths.output_dir_uri,
+      candidate_nodes_uri: reviewed.artifact_paths.authored_nodes_uri,
+      candidate_edges_uri: reviewed.artifact_paths.authored_edges_uri,
+      workflow_log_uri: reviewed.artifact_paths.graph_manifest_uri
+    }
+  };
+  return {
+    graph,
+    graphMode: "reviewed",
+    selection: firstNodeSelection(graph)
+  };
+}
 
 export function addCandidateNodeAtPosition(
   graph: CandidateGraphPayload,
@@ -105,6 +141,11 @@ function selectEdgeSource(graph: CandidateGraphPayload, selection: Selection) {
     return selection.id;
   }
   return graph.candidate_nodes[0]?.id ?? "";
+}
+
+function firstNodeSelection(graph: CandidateGraphPayload): Selection {
+  const firstNode = graph.candidate_nodes[0];
+  return firstNode ? { kind: "node", id: firstNode.id } : null;
 }
 
 function nextId(prefix: string, existingIds: string[]) {

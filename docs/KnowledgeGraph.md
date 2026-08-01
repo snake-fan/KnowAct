@@ -613,6 +613,14 @@ Phase 3 使用轻量 `Graph File Layout`：reviewed graph version 发布到 `ben
 
 `graph_manifest.json` 只负责绑定元数据和文件引用，不内联 nodes / edges，也不承载 scoring override。Phase 3 中，candidate run 缺少可读取的 `workflow_log.json` 时可以省略可选 source metadata，不阻止人工确认后的 promotion。
 
+Knowledge Graph workbench 通过两条显式加载路径保持该生命周期边界：按
+`benchmark_domain + run_id` 加载 candidate graph 时，benchmark author 可以继续编辑
+nodes / edges 并保存回原 candidate run；按 `benchmark_domain + version` 加载 reviewed
+graph 时只允许预览。Candidate 上的 Confirm 会要求一个新的 version，先保存并重新校验
+当前内容，再执行 promotion；成功后页面立即切换到刚发布的 reviewed snapshot 只读状态。
+该交互不会让 candidate graph 进入 evaluation runtime，runtime loader 仍只读取
+`graphs/{version}/` 下的 reviewed artifacts。
+
 v1 的 primary authoritative source 选定为：
 
 ``` text

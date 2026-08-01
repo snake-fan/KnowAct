@@ -1,9 +1,15 @@
 import {
   addCandidateEdgeFromSelection,
   addCandidateNodeAtPosition,
-  deleteCandidateGraphSelection
+  candidateGraphLoadState,
+  deleteCandidateGraphSelection,
+  reviewedGraphLoadState
 } from "../src/features/candidateGraph/CandidateGraphWorkbenchModel.js";
-import type { CandidateGraphPayload, KnowledgeNode } from "../src/api/authoring.js";
+import type {
+  CandidateGraphPayload,
+  KnowledgeNode,
+  ReviewedGraphPayload
+} from "../src/api/authoring.js";
 
 const baseGraph: CandidateGraphPayload = {
   benchmark_domain: "classical_supervised_ml_algorithms",
@@ -28,6 +34,47 @@ function assertEqual<T>(actual: T, expected: T, message: string) {
   if (actual !== expected) {
     throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);
   }
+}
+
+{
+  const graph: CandidateGraphPayload = {
+    ...baseGraph,
+    candidate_nodes: [node("candidate_first"), node("candidate_second")]
+  };
+  const loaded = candidateGraphLoadState(graph);
+
+  assertEqual(loaded.graphMode, "candidate", "saved candidate loads in editable candidate mode");
+  assertEqual(loaded.graph, graph, "saved candidate payload remains the displayed graph");
+  assertEqual(loaded.selection?.kind, "node", "saved candidate selects a node");
+  assertEqual(loaded.selection?.id, "candidate_first", "saved candidate selects its first node");
+}
+
+{
+  const reviewed: ReviewedGraphPayload = {
+    benchmark_domain: "ISLP",
+    graph_manifest: {
+      graph_id: "kg_ISLP_v1",
+      domain: "ISLP",
+      version: "v1",
+      promoted_from_candidate_run: "candidate_run",
+      nodes_file: "authored_nodes.json",
+      edges_file: "authored_edges.json",
+      source: []
+    },
+    authored_nodes: [node("reviewed_first")],
+    authored_edges: [],
+    artifact_paths: {
+      output_dir_uri: "benchmark/domains/ISLP/graphs/v1",
+      graph_manifest_uri: "benchmark/domains/ISLP/graphs/v1/graph_manifest.json",
+      authored_nodes_uri: "benchmark/domains/ISLP/graphs/v1/authored_nodes.json",
+      authored_edges_uri: "benchmark/domains/ISLP/graphs/v1/authored_edges.json"
+    }
+  };
+  const loaded = reviewedGraphLoadState(reviewed);
+
+  assertEqual(loaded.graphMode, "reviewed", "published graph loads in reviewed mode");
+  assertEqual(loaded.graph.run_id, "reviewed:v1", "reviewed display identity uses its version");
+  assertEqual(loaded.selection?.id, "reviewed_first", "reviewed graph selects its first node");
 }
 
 {

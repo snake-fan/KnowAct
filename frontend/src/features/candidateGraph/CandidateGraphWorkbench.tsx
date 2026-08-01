@@ -3,15 +3,18 @@ import {
   ApiRequestError,
   CandidateGraphPayload,
   CandidateGraphPromotionResponse,
+  CandidateGraphRunSummary,
   KnowledgeEdge,
   KnowledgeNode,
   ReviewedGraphVersionSummary,
   SourceMaterialRecord,
   generateCandidateGraph,
   listBenchmarkDomains,
+  listCandidateGraphRuns,
   listReviewedGraphs,
   listSourceMaterials,
   promoteCandidateGraph,
+  readCandidateGraph,
   readReviewedGraph,
   saveCandidateGraph
 } from "../../api/authoring";
@@ -20,7 +23,11 @@ import {
   LEVEL_KEYS,
   addCandidateEdgeFromSelection,
   addCandidateNodeAtPosition,
+  candidateGraphLoadState,
   deleteCandidateGraphSelection,
+  reviewedGraphLoadState,
+  type CandidateGraphLoadState,
+  type GraphMode,
   type NodePosition,
   type NodePositionMap,
   type Selection
@@ -41,11 +48,14 @@ export function CandidateGraphWorkbench() {
   const [layoutVersion, setLayoutVersion] = useState(0);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [graphVersion, setGraphVersion] = useState("");
-  const [reviewedDomains, setReviewedDomains] = useState<string[]>([]);
+  const [benchmarkDomains, setBenchmarkDomains] = useState<string[]>([]);
+  const [candidateDomain, setCandidateDomain] = useState("");
+  const [candidateRuns, setCandidateRuns] = useState<CandidateGraphRunSummary[]>([]);
+  const [candidateRunId, setCandidateRunId] = useState("");
   const [reviewedDomain, setReviewedDomain] = useState("");
   const [reviewedVersions, setReviewedVersions] = useState<ReviewedGraphVersionSummary[]>([]);
   const [reviewedVersion, setReviewedVersion] = useState("");
-  const [graphMode, setGraphMode] = useState<"candidate" | "reviewed">("candidate");
+  const [graphMode, setGraphMode] = useState<GraphMode>("candidate");
 
   useEffect(() => {
     void initializeWorkbench();
@@ -73,14 +83,42 @@ export function CandidateGraphWorkbench() {
       if (nextMaterials.length > 0) {
         setSelectedSourceId(nextMaterials[0].source_id);
       }
-      setReviewedDomains(nextDomains);
+      setBenchmarkDomains(nextDomains);
       const initialDomain = nextDomains[0] ?? "";
+      setCandidateDomain(initialDomain);
       setReviewedDomain(initialDomain);
       if (initialDomain) {
-        const versions = await listReviewedGraphs(initialDomain);
+        const [candidateRunResponse, versions] = await Promise.all([
+          listCandidateGraphRuns(initialDomain),
+          listReviewedGraphs(initialDomain)
+        ]);
+        setCandidateRuns(candidateRunResponse.runs);
+        setCandidateRunId(candidateRunResponse.runs[0]?.run_id ?? "");
         setReviewedVersions(versions);
         setReviewedVersion(versions[0]?.version ?? "");
       }
+    });
+  }
+
+  async function handleCandidateDomainChange(domain: string) {
+    setCandidateDomain(domain);
+    setCandidateRuns([]);
+    setCandidateRunId("");
+    if (!domain) return;
+    await runTask("candidate graphs", async () => {
+      const response = await listCandidateGraphRuns(domain);
+      setCandidateRuns(response.runs);
+      setCandidateRunId(response.runs[0]?.run_id ?? "");
+    });
+  }
+
+  async function handleLoadCandidateGraph() {
+    if (!candidateDomain || !candidateRunId) return;
+    await runTask("candidate graph", async () => {
+      const candidateGraph = await readCandidateGraph(candidateDomain, candidateRunId);
+      displayGraph(candidateGraphLoadState(candidateGraph));
+      setRunId(candidateGraph.run_id);
+      setNotice(`Loaded candidate graph ${candidateGraph.run_id} for editing and confirmation.`);
     });
   }
 
@@ -100,24 +138,7 @@ export function CandidateGraphWorkbench() {
     if (!reviewedDomain || !reviewedVersion) return;
     await runTask("reviewed graph", async () => {
       const reviewedGraph = await readReviewedGraph(reviewedDomain, reviewedVersion);
-      const nextGraph: CandidateGraphPayload = {
-        benchmark_domain: reviewedGraph.benchmark_domain,
-        run_id: `reviewed:${reviewedGraph.graph_manifest.version}`,
-        candidate_nodes: reviewedGraph.authored_nodes,
-        candidate_edges: reviewedGraph.authored_edges,
-        artifact_paths: {
-          output_dir_uri: reviewedGraph.artifact_paths.output_dir_uri,
-          candidate_nodes_uri: reviewedGraph.artifact_paths.authored_nodes_uri,
-          candidate_edges_uri: reviewedGraph.artifact_paths.authored_edges_uri,
-          workflow_log_uri: reviewedGraph.artifact_paths.graph_manifest_uri
-        }
-      };
-      setGraph(nextGraph);
-      setGraphMode("reviewed");
-      setConfirmDialogOpen(false);
-      setNodePositions({});
-      setSelection(nextGraph.candidate_nodes[0] ? { kind: "node", id: nextGraph.candidate_nodes[0].id } : null);
-      setLayoutVersion((version) => version + 1);
+      displayGraph(reviewedGraphLoadState(reviewedGraph));
       setNotice(`Loaded reviewed graph ${reviewedGraph.graph_manifest.version}.`);
     });
   }
@@ -141,12 +162,12 @@ export function CandidateGraphWorkbench() {
         candidate_edges: response.candidate_edges,
         artifact_paths: response.artifact_paths
       };
-      setGraph(nextGraph);
-      setGraphMode("candidate");
-      setNodePositions({});
+      displayGraph(candidateGraphLoadState(nextGraph));
       setRunId(nextGraph.run_id);
-      setSelection(nextGraph.candidate_nodes[0] ? { kind: "node", id: nextGraph.candidate_nodes[0].id } : null);
-      setLayoutVersion((version) => version + 1);
+      const candidateRunResponse = await listCandidateGraphRuns(nextGraph.benchmark_domain);
+      setCandidateDomain(nextGraph.benchmark_domain);
+      setCandidateRuns(candidateRunResponse.runs);
+      setCandidateRunId(nextGraph.run_id);
       setNotice(`Generated ${nextGraph.candidate_nodes.length} nodes and ${nextGraph.candidate_edges.length} edges.`);
     });
   }
@@ -191,8 +212,27 @@ export function CandidateGraphWorkbench() {
       }
       setConfirmDialogOpen(false);
       setGraphVersion("");
-      setNotice(`Published to ${promotion.artifact_paths.output_dir_uri}`);
+      const [reviewedGraph, versions] = await Promise.all([
+        readReviewedGraph(saved.benchmark_domain, promotion.graph_manifest.version),
+        listReviewedGraphs(saved.benchmark_domain)
+      ]);
+      setReviewedDomain(saved.benchmark_domain);
+      setReviewedVersions(versions);
+      setReviewedVersion(promotion.graph_manifest.version);
+      displayGraph(reviewedGraphLoadState(reviewedGraph));
+      setNotice(
+        `Confirmed candidate ${saved.run_id} as reviewed graph ${promotion.graph_manifest.version}.`
+      );
     });
+  }
+
+  function displayGraph(loaded: CandidateGraphLoadState) {
+    setGraph(loaded.graph);
+    setGraphMode(loaded.graphMode);
+    setConfirmDialogOpen(false);
+    setNodePositions({});
+    setSelection(loaded.selection);
+    setLayoutVersion((version) => version + 1);
   }
 
   async function runTask(label: string, task: () => Promise<void>) {
@@ -269,7 +309,7 @@ export function CandidateGraphWorkbench() {
       <section className="topbar">
         <div>
           <h1>Knowledge Graph Workbench</h1>
-          <p>Generate and review candidate graphs, or load a reviewed graph for read-only preview.</p>
+          <p>Generate or load candidate graphs for review, then confirm immutable reviewed snapshots.</p>
         </div>
         <div className="status-strip" aria-live="polite">
           {busy && <span className="status busy">Working: {busy}</span>}
@@ -281,6 +321,40 @@ export function CandidateGraphWorkbench() {
       <section className="workspace">
         <aside className="left-panel">
           <div className="panel-block">
+            <h2>Load Candidate Graph</h2>
+            <label>
+              Domain
+              <select
+                value={candidateDomain}
+                onChange={(event) => void handleCandidateDomainChange(event.target.value)}
+              >
+                <option value="">Select domain</option>
+                {benchmarkDomains.map((domain) => (
+                  <option key={domain} value={domain}>{domain}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Run
+              <select value={candidateRunId} onChange={(event) => setCandidateRunId(event.target.value)}>
+                <option value="">Select candidate run</option>
+                {candidateRuns.map((run) => (
+                  <option key={run.run_id} value={run.run_id}>
+                    {run.run_id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={handleLoadCandidateGraph}
+              disabled={busy !== null || !candidateDomain || !candidateRunId}
+            >
+              Load Candidate Graph
+            </button>
+          </div>
+
+          <div className="panel-block">
             <h2>Load Reviewed Graph</h2>
             <label>
               Domain
@@ -289,7 +363,7 @@ export function CandidateGraphWorkbench() {
                 onChange={(event) => void handleReviewedDomainChange(event.target.value)}
               >
                 <option value="">Select domain</option>
-                {reviewedDomains.map((domain) => (
+                {benchmarkDomains.map((domain) => (
                   <option key={domain} value={domain}>{domain}</option>
                 ))}
               </select>
@@ -368,6 +442,7 @@ export function CandidateGraphWorkbench() {
               </h2>
               {graph && <p>{graph.candidate_nodes.length} nodes / {graph.candidate_edges.length} edges</p>}
               {graph && isReviewedGraph && <p className="reviewed-graph-notice">Reviewed snapshot · read-only</p>}
+              {graph && !isReviewedGraph && <p className="candidate-graph-notice">Candidate snapshot · editable</p>}
             </div>
             <div className="button-row">
               <button type="button" onClick={() => setLayoutVersion((version) => version + 1)} disabled={!graph}>
