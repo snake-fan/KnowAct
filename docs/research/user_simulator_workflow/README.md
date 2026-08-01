@@ -1,7 +1,7 @@
 # SAGE User-Simulator Workflow Research Package
 
 > Status: literature audit and preregistration-oriented design package.
-> Last updated: 2026-07-31.
+> Last updated: 2026-08-01.
 
 This package supports the design and validation of the KnowAct user simulator.
 It does not claim that the simulator is already human-faithful.
@@ -30,9 +30,11 @@ current implementation
   transfer limits, and concrete design uses.
 - [`03_evidence_synthesis_and_sage.md`](03_evidence_synthesis_and_sage.md):
   evidence synthesis, formal workflow, alternatives, and ablations.
+- [`04_final_method.md`](04_final_method.md) / [`04_final_method.zh-CN.md`](04_final_method.zh-CN.md):
+  consolidated final method contract in English and Simplified Chinese.
 - [`../../../experiments/02_simulator_human_validity/`](../../../experiments/02_simulator_human_validity/README.md):
-  canonical held-out human validation, proxy-validity protocol, and execution
-  materials.
+  canonical participant-fidelity protocol and execution materials; expert
+  blind rating and proxy-validity studies remain later stages.
 
 ## Reading Rule
 
