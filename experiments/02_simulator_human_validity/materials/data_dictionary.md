@@ -2,72 +2,74 @@
 
 [中文](data_dictionary.zh-CN.md)
 
-## Identifier hierarchy
+## Identifiers
 
 | Field | Meaning | Release class |
 | --- | --- | --- |
-| `study_id` | Frozen protocol instance | Public |
-| `participant_code` | Pseudonymous participant identifier | Restricted |
-| `linkage_key` | Identity-to-code mapping stored separately | Private; never model input |
-| `question_id` | Frozen Set A or Set B item | Public after release approval |
-| `condition_id` | Frozen simulator condition | Public |
-| `seed` | Repeated-generation seed or schedule index | Restricted until unblinding |
-| `answer_artifact_id` | Internal human or simulator answer identifier | Restricted |
-| `presentation_id` | Blinded rating item identifier | Restricted until unblinding |
-| `rater_code` | Pseudonymous expert-rater identifier | Restricted |
+| `participant_code` | pseudonymous participant code | restricted |
+| `profile_id` | participant-confirmed Profile Context | restricted |
+| `map_id` | participant-confirmed reviewed Knowledge Map | restricted |
+| `session_id` | one resumable Simulator Test session | restricted |
+| `question_bank_id` / `question_bank_version` | frozen bank identity | public |
+| `question_id` | stable bilingual-item identity | public after approval |
+| `sampling_seed` | reproducible twenty-item sample and order | restricted |
+| `blind_review_status` | later expert-rating workflow status | restricted |
 
-## Core tables
+## Session-level data
 
-### Participant profile
+A session stores participant, domain, confirmed graph/profile/map identities,
+language, provider, bank version, sampling seed, twenty sampled questions in
+fixed order, timestamps, and completion status.
 
-Contains questionnaire responses and the participant-confirmed Profile Context.
-It must not contain names, contact details, or exact institution/employer data.
+Profile, Map, and raw answers are participant data. Names, contact details,
+precise institutional identity, and linkage keys must not enter the session.
 
-### Human answers
+## Question-level data
 
-One row per participant-question attempt. Record verbatim text, timing,
-skip/refusal state, and collection order. Set A and Set B remain distinguishable.
+Each `question_result` stores:
 
-### Human Reviewed Map
+- question identity, displayed text, and sampled order;
+- the human answer and submission time;
+- Simulator answer, coarse observation, warnings, generation error, and hidden
+  trace reference;
+- five 1--5 self-ratings;
+- an overall `direct_use | minor_bias | major_revision |
+  not_representative` judgement;
+- an optional free-text comment;
+- `blind_review_status = pending` until a later rating stage.
 
-Contains reviewed node states, evidence references to Set A only, correction
-history, and unresolved status. Set B data must never enter this table.
+The five ratings cover core content, expressed knowledge level, capability
+boundary, expression style, and overall representativeness. They must not be
+silently collapsed into one scale before instrument validation.
 
-### Simulator answers
+## Map-review data
 
-One row per participant-question-condition-seed. Keep failure and fallback rows.
-Raw hidden context, blueprints, and debug traces remain separate restricted
-artifacts and are not sent to raters.
+`map_reviews/{map_id}.json` stores Candidate Map identity, node-level
+participant revisions, and final reviewed-map identity. The final Map's
+Simulator `self_report` evidence is `simulator_only` and must not enter an
+expert-rating package.
 
-### Ratings
+## Missingness and failure
 
-Participant self-fidelity ratings and expert ratings use separate tables. The
-unblinding key is joined only after both rating datasets are frozen.
+- An unanswered human item remains incomplete and does not trigger generation.
+- A Simulator failure retains the human answer and `simulator_error` and may be
+  retried.
+- A missing rating leaves the session `in_progress`.
+- The session becomes `completed` only when all twenty items are complete.
 
-## Missing-value vocabulary
+Do not convert a skipped human answer to L0 or a generation failure to a low
+rating.
 
-Use explicit values rather than empty strings in analysis exports:
+## Visibility and release
 
-- `not_applicable`;
-- `not_asked`;
-- `participant_skipped`;
-- `participant_withdrew`;
-- `technical_failure`;
-- `generation_failure`;
-- `fallback_answer`;
-- `unratable`;
-- `unresolved_map_state`.
+- **Public:** protocol, bank definition, blank instruments, aggregate
+  statistics, and approved de-identified excerpts.
+- **Restricted:** participant code, Profile, Map, raw answers, sessions,
+  ratings, and sampling seed.
+- **Private:** consent, contact information, identity linkage, and withdrawal
+  records.
+- **Simulator only:** hidden Map/evidence, blueprints, and hidden debug traces.
 
-Do not convert a skipped answer to L0 or a generation failure to a low
-self-fidelity score unless the preregistration explicitly defines that rule.
-
-## Visibility and release classes
-
-- **Public:** protocol, blank instruments, frozen question text, aggregate
-  statistics, approved de-identified excerpts.
-- **Restricted:** participant codes, raw answers, Profile Context, Reviewed Map,
-  ratings, randomization, and unblinding keys.
-- **Private:** consent records, contact details, linkage key, withdrawal log.
-- **Simulator-only:** hidden map/evidence, blueprints, raw hidden debug traces.
-
-Private and restricted raw data must not be committed to this repository.
+Restricted and private raw data must not be committed. An expert-rating package
+must use new presentation IDs and exclude participant code, Profile, Map,
+self-evaluations, and debug traces.

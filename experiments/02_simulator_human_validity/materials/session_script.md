@@ -1,71 +1,67 @@
-# Simulator Validation Session Script
+# Simulator Test Automated Session Script
 
 [中文](session_script.zh-CN.md)
 
-## Before the participant arrives
+## Before the session
 
-- confirm consent version and ethics approval;
-- allocate a pseudonymous participant code;
-- verify that Set A and Set B are frozen and disjoint;
-- verify that the condition manifest and randomization seed are frozen;
-- open a private data location outside the Git worktree;
-- ensure the researcher cannot see future simulator outputs during Human
-  Reviewed Map adjudication.
+- confirm the consent version and ethics approval;
+- assign a pseudonymous participant code and do not enter names or contact
+  details in the system;
+- confirm the reviewed graph, bilingual bank, provider/model, and sampling rule
+  are frozen;
+- verify access control and resume behavior for the private result directory;
+- explain that the study evaluates the Simulator, not the participant, and that
+  incorrect, partial, and "I do not know" answers are valid data.
 
-## Opening
+## Phase 1: Profile
 
-Explain that the study evaluates a simulator, not the participant. There is no
-requirement to answer every question correctly. Uncertainty, partial knowledge,
-and explicit "I do not know" answers are useful data.
+In the standalone participant Simulator Test app, enter relevant background,
+experience, goals, and expression preferences. Generate the Profile Context,
+let the participant revise every field, and confirm it only when accurate.
 
-Obtain consent before collecting any study response.
+A confirmed Profile is not overwritten in place. Use a new pseudonymous user
+ID if the Profile must be substantially recreated.
 
-## Phase 1: Profile Context
+## Phase 2: Knowledge Map
 
-Administer `profile_context_questionnaire.csv`. Ask only the listed follow-ups.
-Show the generated Profile Context to the participant and allow factual edits.
+Generate a Candidate Map from the confirmed Profile and reviewed graph. The
+participant reviews every node and may revise mastery, misconceptions,
+uncertainty boundaries, and an optional note. Confirmation publishes a new
+immutable participant-reviewed map and saves the revision trace separately.
 
-Do not ask the participant to assign L0-L5 mastery labels in this phase.
+The facilitator must not choose a more favourable mastery level for the
+participant.
 
-## Phase 2: Set A and map review
+## Phase 3: twenty questions and ratings
 
-Present Set A in its frozen order or preregistered random order. Record answers
-verbatim except for clearly marked transcription corrections.
+Choose a language and bilingual bank, then create the session. The system saves
+the sampling seed and selects twenty unique questions.
 
-Generate the Candidate Knowledge Map only from allowed Set A data. Review each
-state using `human_map_review_form.csv`.
+For every question:
 
-If the participant and researcher cannot resolve a state with a recorded
-rationale, mark it `unresolved`. Do not force a favorable label.
+1. the participant answers independently;
+2. submission saves the human answer first;
+3. SAGE answers the same question;
+4. the UI shows both answers side by side;
+5. the participant completes five 1--5 ratings, a replacement judgement, and
+   an optional comment;
+6. saving advances to the next item.
 
-## Phase 3: held-out human answers
+Never show a Simulator answer before the participant submits their answer.
+Never show the participant hidden Maps, evidence IDs, blueprints, or debug
+traces.
 
-Present Set B before the participant sees any simulator response. Remind the
-participant not to search externally unless the protocol explicitly allows it.
+## Interruption and technical failure
 
-Record skipped, timed-out, and "do not know" responses as outcomes rather than
-deleting them.
-
-## Phase 4: simulator generation
-
-Run generation from the frozen condition manifest. Include every seed, fallback,
-empty answer, refusal, and parse failure.
-
-The participant is not present while hidden conditions are prepared. Never show
-raw maps, evidence IDs, blueprints, or debug traces.
-
-## Phase 5: self-fidelity rating
-
-Use the frozen randomization manifest. Show only the question, the participant's
-own answer when preregistered, and one anonymized candidate answer.
-
-Collect all ten items, the overall replacement judgment, bias flags, and an
-optional comment. Do not reveal the condition until all ratings are complete.
+Resume the saved session after an interruption; do not create a replacement
+session. If generation fails, retain the human answer and error record, repair
+the provider, and retry the current item. Do not invent a Simulator answer.
 
 ## Closing
 
-Ask whether the participant wants to withdraw any free-text comment before the
-session closes. Re-explain the withdrawal deadline and compensation process.
+The system permits completion only after all twenty items contain a human
+answer, Simulator answer, and self-evaluation. Re-explain withdrawal procedures
+and keep consent or identity-linkage data separate from experiment responses.
 
-Store consent/linkage data separately from response data. Record deviations,
-technical failures, and early withdrawal without inventing missing responses.
+Expert blind rating does not occur in the participant session. A later stage
+must derive a separate de-identified rating package from the saved answer pairs.

@@ -14,19 +14,21 @@ Validation of a Knowledge-State User Simulator for AI-Agent Evaluation
 You are invited to help evaluate whether an AI-generated answer represents a
 person's actual understanding of statistical-learning concepts.
 
-The study compares your held-out answers with answers generated from a
-researcher-reviewed summary of your knowledge state. It does not evaluate your
-academic performance and does not provide a clinical or educational diagnosis.
+The study compares your answers to twenty sampled items with answers generated
+from a Profile Context and Knowledge Map that you personally revised and
+confirmed. It does not evaluate your academic performance and does not provide
+a clinical or educational diagnosis.
 
 ## What participation involves
 
 You will:
 
 1. complete a short background and communication-style questionnaire;
-2. answer diagnostic questions used to build a reviewed Knowledge Map;
-3. review the resulting state descriptions with a researcher;
-4. answer a separate held-out question set;
-5. rate anonymized simulator answers for how well they represent you.
+2. revise and confirm the generated Profile Context;
+3. revise and confirm your Knowledge Map node by node;
+4. answer twenty items sampled from an independent English-Chinese bank;
+5. after each answer, compare the Simulator answer to yours and rate how well
+   it represents you.
 
 Expected duration: `[minutes]`. Compensation: `[amount and method]`.
 
@@ -52,8 +54,10 @@ your name, contact details, consent record, or linkage key to the model.
 Possible risks include mild discomfort when answering unfamiliar questions,
 privacy risk from distinctive text, and inaccurate AI representation.
 
-You may skip a question, request a break, correct your Profile Context or
-Reviewed Map, or withdraw according to the rule below.
+You may stop answering, request a break, correct your Profile Context or
+Knowledge Map before confirmation, or withdraw under the rule below. Confirmed
+Profile and Map artifacts are not overwritten in place; later changes follow
+the study's withdrawal or reconstruction procedure.
 
 ## Voluntary participation and withdrawal
 

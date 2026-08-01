@@ -1,32 +1,59 @@
-# 实验 02：Simulator 真人有效性
+# 实验 02：Simulator 个人一致性
 
 [English](README.md)
 
 ## 目的
 
-本实验使用留出的真人回答，验证 SAGE Simulator 是否忠实表达参与者的知识水平、误解、不确定性与能力边界，同时避免泄漏隐藏状态。
+本实验验证：参与者亲自确认 Profile Context 和 Knowledge Map 后，SAGE
+Simulator 对相同问题的回答在多大程度上代表参与者本人。
 
-实验进一步检验：以 Simulator 代替真人比较 Tested Agents 时，能否保持相同的效应方向与排序。
+当前主实验只收集参与者自评。专家盲评将在问答对保存后作为独立阶段执行；
+泄漏挑战、复杂消融以及 agent 排名迁移不进入当前参与者流程。
+
+## 自动化流程
+
+```text
+个人 Profile 输入、生成、修订与确认
+  -> Knowledge Map 生成、逐节点修订与确认
+  -> 从独立双语题库抽取 20 道题
+  -> 每题先提交参与者回答，再生成 Simulator 回答
+  -> 对照两份回答完成五项自评
+  -> 保存可恢复的私有实验会话
+  -> 后续导出独立专家盲评包
+```
+
+参与者入口是独立应用
+[`simulator-test-frontend/`](../../simulator-test-frontend/README.zh-CN.md)。
+它可以独立部署，不包含内部 research workbench；每题完成后立即保存，可使用恢复码
+继续未完成会话。
 
 ## 状态
 
 | 组成部分 | 状态 |
 | --- | --- |
-| 实验设计 | 已准备，为中文主文 |
-| 参与者材料 | 草案已准备，须经伦理审查 |
-| 题集 | A/B 草案已准备，待绑定 reviewed graph 节点 |
-| 评分材料 | 已准备，待专家内容审核与预测试 |
-| 数据收集 | 未开始 |
-| 实验结果 | 仅有空白模板 |
-
-题集与量表未完成专家审核、认知访谈和预测试前，不得用于正式确证性数据收集。
+| 简化主协议 | 已实现 |
+| 前后端自动化流程 | 已实现 |
+| 独立双语题库 | Economy、ISLP、OSTEP 各含 80 道原子配对题，并有内容哈希绑定的逐题角色试答审核 |
+| 每人抽取 20 题 | 已实现，保存抽样 seed 与顺序 |
+| 参与者五项自评 | 已集成，尚待认知访谈与 pilot |
+| 专家盲评 | 后续阶段，尚未接入主流程 |
+| 真人数据与实验结果 | 尚未收集 |
 
 ## 内容
 
-- [`design/experimental_design.md`](design/experimental_design.md)：中文主协议，包括状态忠实度、安全性和代理有效性；
-- [`materials/README.zh-CN.md`](materials/README.zh-CN.md)：参与者、主持人、题集、评分与随机化材料；
-- [`results/README.zh-CN.md`](results/README.zh-CN.md)：结果状态、数据发布边界和中文报告模板。
+- [`design/experimental_design.md`](design/experimental_design.md)：简化后的中文主协议；
+- [`materials/README.zh-CN.md`](materials/README.zh-CN.md)：题库、参与者材料和遗留材料说明；
+- [`results/README.zh-CN.md`](results/README.zh-CN.md)：私有会话位置、结果状态和发布边界。
 
-## 关键执行门槛
+## 正式收集门槛
 
-正式收集前，必须绑定图谱版本与节点 ID，完成伦理审批，进行专家审核与认知访谈，冻结预测试/正式样本划分，并生成可复现的条件与随机化清单。
+当前实现可以用于开发联调和 pilot。正式收集前仍须：
+
+1. 完成伦理审批或等效本地审查；
+2. 将题库概念绑定到当前 reviewed graph，并由领域专家审核内容和中英文等价性；当前
+   来源与角色试答筛选仍只是 author-side screening；
+3. 对 Profile、Map 修订和五项自评界面做认知访谈及 pilot；
+4. 冻结题库版本、graph 版本、provider/model、抽样规则和排除规则。
+
+在真人数据分析完成前，只能声称实验流程已经实现，不能声称 Simulator 已获得
+真人有效性支持。

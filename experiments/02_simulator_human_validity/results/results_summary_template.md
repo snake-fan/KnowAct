@@ -1,112 +1,120 @@
-# SAGE Simulator Human-Validity Results
+# Simulator Personal-Fidelity Result Template
 
-[中文模板](results_summary_template.zh-CN.md)
+> Do not prefill results. Mark analyses that have not run as "not run" rather
+> than inserting expected values.
 
-> Status: unfilled result template. No human-validity result is claimed.
+## 1. Frozen configuration
 
-## Frozen study
+| Field | Value |
+| --- | --- |
+| Protocol version |  |
+| Question-bank ID / version |  |
+| Reviewed graph domain / version |  |
+| Simulator provider / model |  |
+| Language |  |
+| Questions per participant | 20 |
+| Data-freeze time |  |
+| Exclusion-rule version |  |
 
-- Study ID: `[id]`
-- Protocol version: `[version]`
-- Ethics approval: `[identifier]`
-- Domain and graph version: `[binding]`
-- SAGE code/prompt revision: `[revision]`
-- Conditions and seeds: `[manifest reference]`
-- Pilot/final split: `[rule]`
-- Collection dates: `[range]`
+## 2. Participants and flow completion
 
-## Participants and data flow
-
-| Quantity | Count |
-| --- | ---: |
+| Metric | Value |
+| --- | --- |
 | Consented |  |
-| Completed Set A |  |
-| Completed map review |  |
-| Completed Set B |  |
-| Completed self-fidelity ratings |  |
-| Included in primary analysis |  |
-| Withdrawn |  |
-| Excluded by preregistered rule |  |
+| Created Profile |  |
+| Confirmed Knowledge Map |  |
+| Created twenty-item session |  |
+| Completed all answers and ratings |  |
+| Withdrew early |  |
+| Sessions with technical failure |  |
+| Included in analysis |  |
 
-Report recruitment strata, compensation, missingness, unresolved map states,
-technical failures, and protocol deviations without identifying participants.
+Report every exclusion and failure reason. Twenty item responses are not twenty
+independent participants.
 
-## Instrument checks
+## 3. Item and generation completeness
 
-- Expert content review: `[result]`
-- Cognitive interviews: `[result]`
-- Missing-item rate: `[value]`
-- Floor/ceiling patterns: `[result]`
-- Factor or reliability analysis, if justified: `[result]`
-- Decision on item-level versus scale reporting: `[decision]`
+| Metric | Count | Proportion |
+| --- | ---: | ---: |
+| Sampled items |  |  |
+| Human answers saved |  |  |
+| Simulator answers generated |  |  |
+| Fallbacks |  |  |
+| Warnings |  |  |
+| Generation failures |  |  |
+| Self-evaluations completed |  |  |
 
-## Primary endpoint A: state-fidelity error
+Report missingness and failures by question type, language, and participant.
 
-| Condition | Participants | Questions | Seeds | Mean absolute mastery error | 95% CI | Signed error |
-| --- | ---: | ---: | ---: | ---: | --- | ---: |
-| Human reference |  |  |  | 0 |  | 0 |
-| Full SAGE |  |  |  |  |  |  |
-| Baselines/ablations |  |  |  |  |  |  |
+## 4. Five participant ratings
 
-State how repeated seeds and questions were aggregated within participants.
+Report the complete 1--5 distribution for each item. Do not silently collapse
+the items into one score.
 
-## Primary endpoint B: participant representation
+| Item | 1 | 2 | 3 | 4 | 5 | Median | IQR |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Core-content similarity |  |  |  |  |  |  |  |
+| Knowledge-level similarity |  |  |  |  |  |  |  |
+| Capability-boundary similarity |  |  |  |  |  |  |  |
+| Expression-style similarity |  |  |  |  |  |  |  |
+| Overall representativeness |  |  |  |  |  |  |  |
 
-Report the full ordinal distribution of SF10 and the participant-level
-proportion rated `direct_use` or `minor_bias`. Do not report an unvalidated
-ten-item mean as the primary result.
+Also report participant-level and question-level distributions so participants
+with more usable responses do not receive unintended extra weight.
 
-## Secondary endpoints
+## 5. Overall replacement judgement
 
-| Outcome | Full SAGE | Comparator | Paired effect | 95% CI |
-| --- | ---: | ---: | ---: | --- |
-| Ability-boundary error |  |  |  |  |
-| Uncertainty omission |  |  |  |  |
-| Misconception omission |  |  |  |  |
-| Invented misconception |  |  |  |  |
-| Diagnostic usefulness |  |  |  |  |
-| Style authenticity |  |  |  |  |
-| Fallback rate |  |  |  |  |
-| Seed variance |  |  |  |  |
+| Judgement | Count | Proportion |
+| --- | ---: | ---: |
+| Direct use |  |  |
+| Minor bias |  |  |
+| Major revision required |  |  |
+| Not representative |  |  |
 
-## Blinded-rating reliability
+Primary descriptive proportion:
 
-Report agreement separately for expressed mastery, correctness, ability
-boundary, uncertainty, misconception, diagnostic usefulness, naturalness, and
-profile consistency.
+```text
+(direct_use + minor_bias) / all valid self-evaluations
+```
 
-## Leakage study
+## 6. Biases and free text
 
-| Category | Challenges | Exact forbidden hits | Semantic leaks | Fallbacks | Failures |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Direct fields |  |  |  |  |  |
-| Cross-node scope |  |  |  |  |  |
-| Prompt/history injection |  |  |  |  |  |
-| Internal artifacts |  |  |  |  |  |
+Report predefined or derived bias categories, participants affected, answer
+pairs affected, and a small number of consented de-identified examples. Do not
+release re-identifying detail.
 
-Zero observed hits is bounded evidence on this challenge suite, not a universal
-non-leakage proof.
+## 7. Descriptive strata
 
-## Proxy-validity study
+Possible descriptive strata include:
 
-- Agents and matched episodes: `[set]`
-- Rank correlation and interval: `[result]`
-- Paired effect-direction agreement: `[result]`
-- Rank reversals: `[result]`
-- Absolute score shift: `[result]`
+- mastery level;
+- question type;
+- language;
+- Simulator warning or fallback;
+- participant.
 
-## Claim decision
+Do not make strong causal claims from sparse strata.
 
-| Claim | Evidence threshold met? | Supported scope or reason withheld |
-| --- | --- | --- |
-| Structural access isolation |  |  |
-| Output safety |  |  |
-| State fidelity |  |  |
-| Style authenticity |  |  |
-| Proxy validity |  |  |
+## 8. Later expert blind rating
 
-## Deviations and limitations
+| Item | Status |
+| --- | --- |
+| De-identified rating package | Not generated / generated |
+| Expert rating | Not run / running / completed |
+| Rating-result artifact |  |
 
-List every preregistration deviation, unresolved bias, provider drift, excluded
-condition, and scope limitation. Naturalness cannot substitute for a failed
-state-fidelity or proxy-validity endpoint.
+Expert results remain separate from participant self-evaluations. If the stage
+has not run, do not insert anticipated results.
+
+## 9. Limitations and claim boundary
+
+At minimum, discuss:
+
+- participant-revised Profile and Map as operational ground truth rather than
+  external objective truth;
+- question-bank graph binding, content-validity, and instrument-validity status;
+- circularity when Simulator and Profile/Map authoring share model or prompt
+  structure;
+- sample, domain, and provider/model transfer limits;
+- why the current result does not support claims about agent ranking, effect
+  direction, or rank reversal.
