@@ -1,5 +1,9 @@
 # Final Direction
 
+For the canonical implementation-aligned method description, see [Final Method: KnowAct Knowledge Graph Generation](./final_kg_generation_method.md) and its [Chinese version](./final_kg_generation_method.zh-CN.md).
+
+This file records the proposed EDGA research direction. It does not describe the current production workflow as an empirically validated EDGA implementation.
+
 ## Recommended framing
 
 Use the descriptive name **Evidence-Grounded Diagnostic Graph Authoring (EDGA)**. The contribution is a reliable adaptation and evaluation protocol, not a claim that a novel multi-agent topology solves KG construction.
@@ -28,4 +32,3 @@ For a fixed source corpus and diagnostic graph specification, EDGA creates a rev
 3. Node, edge, canonicalization, rubric, provenance, reliability, cost, and review-effort metrics.
 4. At least two independent domain experts and one adjudicator.
 5. Complete source-to-promotion traces for every reported graph.
-
